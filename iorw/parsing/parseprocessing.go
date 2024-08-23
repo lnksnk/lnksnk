@@ -11,8 +11,6 @@ import (
 	"github.com/lnksnk/lnksnk/iorw"
 )
 
-//TEST COMMIT
-
 type ArgsEventReader struct {
 	*iorw.ReplaceRuneReader
 	preposts    map[string]string
