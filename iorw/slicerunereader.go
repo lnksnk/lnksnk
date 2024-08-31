@@ -20,6 +20,16 @@ func (rnrdrsslce *RuneReaderSlice) Length() (ln int) {
 	return
 }
 
+func (rnrdrsslce *RuneReaderSlice) Empty() bool {
+	if rnrdrsslce == nil {
+		return true
+	}
+	if crntrdr, rnrdrs := rnrdrsslce.crntrdr, rnrdrsslce.rnrdrs; crntrdr == nil && len(rnrdrs) == 0 {
+		return true
+	}
+	return false
+}
+
 func (rnrdrsslce *RuneReaderSlice) PreAppend(rdrs ...io.RuneReader) {
 	if rnrdrsslce != nil {
 		if len(rdrs) > 0 {
