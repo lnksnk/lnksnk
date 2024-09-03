@@ -24,6 +24,14 @@ type Buffer struct {
 	OnMaxWritten  func(int64) bool
 }
 
+func NewBufferError(a ...interface{}) (buff *Buffer, err error) {
+	buff = &Buffer{lck: &sync.RWMutex{}, maxwrttnl: -1, MaxLenToWrite: -1, buffer: [][]byte{}, bytesi: 0, bytes: make([]byte, 8192), bufrs: map[*BuffReader]*BuffReader{}, insertedbuffs: map[int64]*Buffer{}}
+	if len(a) > 0 {
+		err = buff.Print(a...)
+	}
+	return
+}
+
 // NewBuffer -
 func NewBuffer(a ...interface{}) (buff *Buffer) {
 	buff = &Buffer{lck: &sync.RWMutex{}, maxwrttnl: -1, MaxLenToWrite: -1, buffer: [][]byte{}, bytesi: 0, bytes: make([]byte, 8192), bufrs: map[*BuffReader]*BuffReader{}, insertedbuffs: map[int64]*Buffer{}}
