@@ -391,6 +391,7 @@ func (rscngepnt *ResourcingEndpoint) fsmkdir(path string) bool {
 }
 
 func (rscngepnt *ResourcingEndpoint) fsabs(path ...string) (abspath string, err error) {
+	rsroot := rscngepnt.rsngmngr.rsngendpaths[rscngepnt]
 	if rscngepnt.isLocal {
 		lklpath := rscngepnt.path + strings.TrimSpace(strings.Replace(path[0], "\\", "/", -1))
 		if strings.LastIndex(lklpath, "/") > 0 && strings.HasSuffix(lklpath, "/") {
@@ -416,7 +417,7 @@ func (rscngepnt *ResourcingEndpoint) fsabs(path ...string) (abspath string, err 
 				if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
 					lkppath := embdrspth
 					if pthl == 1 {
-						if finfo := fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), lkppath, lkppath, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener); finfo != nil {
+						if finfo := fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), lkppath, lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener); finfo != nil {
 							abspath = finfo.AbsolutePath()
 							finfo = nil
 							break
@@ -430,7 +431,7 @@ func (rscngepnt *ResourcingEndpoint) fsabs(path ...string) (abspath string, err 
 						} else {
 							lkppath = path[1][:len(path[1])-len(embdrspth)] + embdrspth
 						}
-						if finfo := fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), lkppath, lkppath, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener); finfo != nil {
+						if finfo := fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), lkppath, lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener); finfo != nil {
 							abspath = finfo.AbsolutePath()
 							finfo = nil
 							break
@@ -444,6 +445,7 @@ func (rscngepnt *ResourcingEndpoint) fsabs(path ...string) (abspath string, err 
 }
 
 func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutils.FileInfo) {
+	rsroot := rscngepnt.rsngmngr.rsngendpaths[rscngepnt]
 	path := []string{}
 	a := []interface{}{}
 	for _, d := range paths {
@@ -480,7 +482,7 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 				if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
 					lkppath := embdrspth
 					if pthl == 1 {
-						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
+						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 					} else if pthl == 2 {
 						if path[0] == "" {
 							if strings.HasSuffix(path[1], "/") {
@@ -491,7 +493,7 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 						} else {
 							lkppath = path[1][:len(path[1])-len(embdrspth)] + embdrspth
 						}
-						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
+						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 					}
 				}
 			}
@@ -590,6 +592,7 @@ func (rscngepnt *ResourcingEndpoint) fsopener(path string, a ...interface{}) (r 
 }
 
 func (rscngepnt *ResourcingEndpoint) fsfind(paths ...interface{}) (finfos []fsutils.FileInfo, err error) {
+	rsroot := rscngepnt.rsngmngr.rsngendpaths[rscngepnt]
 	path := []string{}
 	a := []interface{}{}
 	for _, d := range paths {
@@ -629,7 +632,7 @@ func (rscngepnt *ResourcingEndpoint) fsfind(paths ...interface{}) (finfos []fsut
 				if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
 					lkppath := embdrspth
 					if pthl == 1 {
-						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
+						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 					} else if pthl == 2 {
 						if path[0] == "" {
 							lkppath = path[1] + "/" + lkppath
@@ -639,7 +642,7 @@ func (rscngepnt *ResourcingEndpoint) fsfind(paths ...interface{}) (finfos []fsut
 						if strings.HasPrefix(lkppath, addpth) {
 							lkppath = lkppath[len(addpth):]
 						}
-						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
+						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 					}
 				}
 			}
