@@ -2,6 +2,7 @@ package parsing
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -172,7 +173,9 @@ func (ctntelm *contentelem) ReadRune() (r rune, size int, err error) {
 			}
 			return
 		}
-		prepairContentElem(ctntelm)
+		if err = prepairContentElem(ctntelm); err != nil {
+			return
+		}
 		if ctntelm.runerdr != nil {
 			if ctntelm.rawBuf == nil {
 				ctntelm.rawBuf = iorw.NewBuffer()
@@ -195,7 +198,7 @@ func (ctntelm *contentelem) ReadRune() (r rune, size int, err error) {
 	return
 }
 
-func prepairContentElem(ctntelm *contentelem) {
+func prepairContentElem(ctntelm *contentelem) (err error) {
 	if ctntelm != nil && ctntelm.runerdr == nil && ctntelm.fi != nil {
 		cntntbuf := ctntelm.ctntbuf
 		ctntelm.ctntbuf = nil
@@ -208,29 +211,44 @@ func prepairContentElem(ctntelm *contentelem) {
 		ctntstngs := map[string]interface{}{}
 		attrs := ctntelm.attrs
 
-		agrsevtrdr := NewArgsEventReader(iorw.NewReplaceRuneReader(rdr))
-		agrsevtrdr.SetPrePostFix(func(argsevtr *ArgsEventReader, prefix, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{}) {
-			if prefix == "[#" && postfix == "#]" {
-				if fndval, val = argsevtr.MatchPhrase(phrsbuf, attrs); fndval {
-					return
+		var prpbf *iorw.Buffer
+		prpbuffer := func() *iorw.Buffer {
+			if prpbf != nil {
+				return prpbf
+			}
+			prpbf = iorw.NewBuffer()
+			return prpbf
+		}
+		preprdr := iorw.ReadRunesUntil(rdr, func(prasefnd string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, prpflushrdr *iorw.RuneReaderSlice) (prperr error) {
+			if prasefnd == "[#" {
+				if !prpbf.Empty() {
+					prpbf.Clear()
 				}
-				return fndval, ""
+				if prperr = prpbuffer().Print(untilrdr); prperr != nil {
+					if prperr.Error() == "#]" {
+						prperr = nil
+						if !prpbf.Empty() {
+							for attk, attv := range attrs {
+								if eql, _ := prpbf.Equals(attk); eql {
+									prpflushrdr.PreAppend(valToRuneReader(attv, false))
+									return
+								}
+							}
+						}
+						return
+					}
+					if prperr == io.EOF {
+						prperr = nil
+					}
+				}
+				return
+			}
+			if prasefnd == "#]" {
+				return fmt.Errorf("%s", prasefnd)
 			}
 			return
 		}, "[#", "#]")
 
-		if len(attrs) > 0 {
-			agrsevtrdr.SetPrePostFix(func(argsevtr *ArgsEventReader, prefix, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{}) {
-				if prefix == "#" && postfix == "#" {
-					if fndval, val = argsevtr.MatchPhrase(phrsbuf, attrs); fndval {
-						return
-					}
-					return fndval, ""
-				}
-				return
-			}, "#", "#")
-		}
-		rdr = agrsevtrdr
 		path := ctntelm.fi.Path()
 		pathroot := path
 		pthexti, pathpthi := strings.LastIndex(pathroot, "."), strings.LastIndex(pathroot, "/")
@@ -250,11 +268,7 @@ func prepairContentElem(ctntelm *contentelem) {
 		if strings.HasSuffix(ctntelm.elemname, ":") {
 			path = ""
 		}
-		prebuf := ctntelm.prebuf
 		coresttngs := map[string]interface{}{}
-		coresttngs["pre"] = prebuf.String()
-		postbuf := ctntelm.postbuf
-		coresttngs["post"] = postbuf.String()
 		coresttngs["pathroot"] = pathroot
 		coresttngs["root"] = root
 		coresttngs["elemroot"] = func() (elmroot string) {
@@ -294,23 +308,107 @@ func prepairContentElem(ctntelm *contentelem) {
 			}
 			return
 		}()
-
-		agrsevtrdr.SetPrePostFix(func(argsevtr *ArgsEventReader, prefix, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{}) {
-			if prefix == "<:_:" && postfix == ":/>" {
-				fndval, val = argsevtr.MatchPhrase(phrsbuf, coresttngs)
+		corefnd := false
+		preprdr = iorw.ReadRunesUntil(preprdr, func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr *iorw.RuneReaderSlice, prporgerr error, prpflush *iorw.RuneReaderSlice) (prperr error) {
+			if prpphrase == "<:_:" {
+				corefnd = true
+				defer func() {
+					corefnd = false
+				}()
+				tmbbf := iorw.NewBuffer()
+				if prperr = tmbbf.Print(prpuntilrdr); prperr != nil {
+					if prperr.Error() == ":/>" {
+						prperr = nil
+						if !tmbbf.Empty() {
+							for crk, crv := range coresttngs {
+								if eql, _ := tmbbf.Equals(crk); eql {
+									prpflush.PreAppend(valToRuneReader(crv, false))
+									return
+								}
+							}
+						}
+						prperr = nil
+					}
+					if prperr == io.EOF {
+						prperr = nil
+					}
+					return
+				}
+				return
 			}
+			if corefnd {
+				return fmt.Errorf("%s", prpphrase)
+			}
+			prpflush.PreAppend(strings.NewReader(prpphrase))
 			return
 		}, "<:_:", ":/>")
+		if !cntntbuf.Empty() {
+			if err = cntntbuf.Print(iorw.ReadRunesUntil(cntntbuf.Clone(true).Reader(true), "[:", func(cntphrase string, cntuntilrdr io.RuneReader, cntorgrdr *iorw.RuneReaderSlice, cntorgerr error, cntflushrdr *iorw.RuneReaderSlice) (cnterr error) {
+				if cntphrase == "[:" {
+					cntbf, cntbferr := iorw.NewBufferError(iorw.ReadRunesUntil(cntuntilrdr), "::", func(tplphrase string, tpluntilrdr io.RuneReader, tplorgrdr *iorw.RuneReaderSlice, tplorgerr error, tplflushrdr *iorw.RuneReaderSlice) (tplerr error) {
 
+						return
+					})
+					if cntbferr != nil {
+						if !cntbf.Empty() {
+
+						}
+					}
+					return
+				}
+				if cntphrase == ":]" {
+					return fmt.Errorf("%s", cntphrase)
+				}
+				return
+			})); err != nil {
+				fmt.Println("cntnt-err" + err.Error())
+			}
+		}
 		ctntstngs["cntnt"] = cntntbuf
-		agrsevtrdr.SetPrePostFix(func(argsevtr *ArgsEventReader, prefix, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{}) {
-			if prefix == "<:" && postfix == ":/>" {
-				fndval, val = argsevtr.MatchPhrase(phrsbuf, ctntstngs)
+		fndctnt := false
+		preprdr = iorw.ReadRunesUntil(preprdr, "<:", ":/>", func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr *iorw.RuneReaderSlice, prporgerr error, prpflushrdr *iorw.RuneReaderSlice) (prperr error) {
+			if prpphrase == "<:" {
+				fndctnt = true
+				defer func() {
+					fndctnt = false
+				}()
+				tmpbf := iorw.NewBuffer()
+				if prperr = tmpbf.Print(prpuntilrdr); prperr != nil {
+					if prperr.Error() == ":/>" {
+						prperr = nil
+						for ctntk, ctntv := range ctntstngs {
+							if eql, _ := tmpbf.Equals(ctntk); eql {
+								prpflushrdr.PreAppend(valToRuneReader(ctntv, false))
+								return
+							}
+						}
+						return
+					}
+					if prperr == io.EOF {
+						prperr = nil
+						return
+					}
+				}
+				return
+			}
+			if prpphrase == ":/>" {
+				if fndctnt {
+					return fmt.Errorf("%s", prpphrase)
+				}
+				prpflushrdr.PreAppend(strings.NewReader(prpphrase))
 			}
 			return
-		}, "<:", ":/>")
-		ctntelm.runerdr = agrsevtrdr
+		})
+
+		/*bf := iorw.NewBuffer(preprdr)
+		if ctntelm.elemname == ":heading" {
+			fmt.Println(bf)
+		}
+		preprdr = bf.Reader(true)*/
+		//ctntelm.runerdr = agrsevtrdr
+		ctntelm.runerdr = preprdr
 	}
+	return
 }
 
 // Close implements io.Closer
@@ -366,6 +464,27 @@ func (ctntelmlvl ctntelemlevel) String() string {
 	return "unknown"
 }
 
+type codeReadMode int
+
+const (
+	codeReadingCode codeReadMode = iota
+	codeReadingContent
+)
+
+func valToRuneReader(val interface{}, clear bool) io.RuneReader {
+	if s, _ := val.(string); s != "" {
+		return strings.NewReader(s)
+	}
+	if int32s, _ := val.([]int32); len(int32s) > 0 {
+		rns := make([]rune, len(int32s))
+		copy(rns, int32s)
+		return iorw.NewRunesReader(rns...)
+	}
+	if bf, _ := val.(*iorw.Buffer); bf != nil {
+		return bf.Clone(clear).Reader(true)
+	}
+	return nil
+}
 func internalProcessParsing(
 	capturecache func(fullpath string, pathModified time.Time, cachedpaths map[string]time.Time, prsdpsv, prsdatv *iorw.Buffer, preppedatv interface{}) (cshderr error),
 	pathModified time.Time,
@@ -378,8 +497,7 @@ func internalProcessParsing(
 	fullpath := pathroot + path
 	validelempaths := map[string]time.Time{}
 	invalidelempaths := map[string]bool{}
-	var codeEventReader *codeeventreader = nil
-	tmpphrasebuf := iorw.NewBuffer()
+
 	root := pathroot
 	if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
@@ -426,43 +544,43 @@ func internalProcessParsing(
 		}
 		return
 	}()
-	ctntEventReader := newContentEventReader("<", ">", iorw.NewReplaceRuneReader(iorw.NewRuneReaderSlice(rnrdrs...), "<:_:", func(matchedphrase string, rplcrdr *iorw.ReplaceRuneReader) (nxtrdr interface{}) {
-		if matchedphrase == "<:_:" {
-			rnsuntil := rplcrdr.ReadRunesUntil(":/>")
-			tmpphrasebuf.Clear()
-			tmpphrasebuf.ReadRunesFrom(rnsuntil)
-			if !tmpphrasebuf.Empty() {
-				defer tmpphrasebuf.Clear()
-				if fnd, _ := rplcrdr.FoundEOF(); fnd {
-					for fndk, fndv := range tmpmatchthis {
-						if equals, _ := tmpphrasebuf.Equals(fndk); equals {
-							if fnds, _ := fndv.(string); fnds != "" {
-								nxtrdr = fnds
-							}
-							return
+
+	var rnsrdrslcrdr = iorw.NewRuneReaderSlice(rnrdrs...)
+	var phrsbf *iorw.Buffer = nil
+
+	var ctntinitrplcrdr = iorw.ReadRunesUntil(rnsrdrslcrdr, "<:_:", ":/>", iorw.RunesUntilSliceFlushFunc(func(phrasefnd string, untilrdr io.RuneReader, orgrd *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) error {
+		if phrasefnd == "<:_:" {
+			if phrsbf == nil {
+				phrsbf = iorw.NewBuffer()
+			}
+			phrsbf.Clear()
+			if _, phrserr := phrsbf.ReadRunesFrom(untilrdr); phrserr != nil {
+				if phrserr.Error() == ":/>" {
+					for thisk, thisv := range tmpmatchthis {
+						if qkl, _ := phrsbf.Equals(thisk); qkl {
+							flushrdr.PreAppend(valToRuneReader(thisv, true))
+							return nil
 						}
 					}
+					return nil
+				}
+				if phrserr == orgerr {
+
+					return orgerr
 				}
 			}
-			return
+			return nil
 		}
-		return
-	}))
+		if phrasefnd == ":/>" {
+			return fmt.Errorf("%s", phrasefnd)
+		}
+		return nil
+	}), func() {
+
+	})
+
 	var crntnextelm *contentelem = nil
 	var elemlevels = []*contentelem{}
-
-	ctntEventReader.PreRunesEvent = func(resetlbl bool, rnsl int, rns ...rune) (rnserr error) {
-		if crntnextelm != nil {
-			if crntnextelm.rawBuf == nil {
-				crntnextelm.content().WriteRunes(rns...)
-				return
-			}
-			crntnextelm.rawBuf.WriteRunes(rns...)
-			return
-		}
-		rnserr = codeEventReader.parseRunes(rns...)
-		return
-	}
 
 	var addelemlevel = func(fi fsutils.FileInfo, elemname string, elemext string) (elmnext *contentelem) {
 		elmnext = &contentelem{
@@ -496,17 +614,364 @@ func internalProcessParsing(
 		return elempath + elemname
 	}
 
-	ctntEventReader.ValidElemEvent = func(elmlvl ctntelemlevel, elemname string, elmbuf *iorw.Buffer, args *contentargsreader) (evtvalid bool, vlerr error) {
-		if fs != nil {
-			var fi fsutils.FileInfo = nil
+	if addelemlevel != nil && nextfullname != nil {
 
-			fullelemname := nextfullname(elemname, elmlvl)
-			if invalidelempaths[fullelemname] {
-				if !elmbuf.Empty() && crntnextelm != nil {
-					prepInvalidElemBuf(elmbuf, crntnextelm)
+	}
+
+	//mainrnsslcrdr := iorw.NewRuneReaderSlice(ctntinitrplcrdr)
+	//ctntrmianrd := iorw.NewRuneReaderSlice()
+	chkrns := make([]rune, 1)
+	chkrnsl := 0
+	chkng := false
+	rdngval := false
+	var argbf *iorw.Buffer
+	argbuffer := func() *iorw.Buffer {
+		if argbf != nil {
+			return argbf
+		}
+		argbf = iorw.NewBuffer()
+		return argbf
+	}
+	ctntprsrdr := iorw.ReadRunesUntil(iorw.NewRuneReaderSlice(ctntinitrplcrdr), "<", ">", func(phrase string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) (fnderr error) {
+		if rdngval {
+			orgrdr.PreAppend(strings.NewReader(phrase))
+			return
+		}
+		if phrase == "<" {
+			var chkbf *iorw.Buffer
+			var elmargs map[string]interface{}
+			defer func() {
+				for ark, arv := range elmargs {
+					if arbv, _ := arv.(*iorw.Buffer); arbv != nil {
+						arbv.Close()
+						arbv = nil
+					}
+					delete(elmargs, ark)
+				}
+			}()
+			formatElmArgVal := func(val *iorw.Buffer) *iorw.Buffer {
+				var eofargs []interface{}
+				for elmk := range func() map[string]interface{} {
+					if crntnextelm != nil {
+						return crntnextelm.attrs
+					}
+					return nil
+				}() {
+					eofargs = append(eofargs, "#"+elmk+"#")
+				}
+				if len(eofargs) > 0 {
+					eofargs = append(eofargs, "#")
+					srchng := false
+					eofargs = append(eofargs, func(rplcphrase string, rplcuntilrdr, rplcorgrdr io.RuneReader, rplcorgerr error, rplcflushrdr *iorw.RuneReaderSlice) (rplcfnderr error) {
+						if rplcphrase == "#" {
+							if srchng {
+								return fmt.Errorf("%s", rplcphrase)
+							}
+							srchng = true
+							var srchbf *iorw.Buffer
+							if srchbf, rplcfnderr = iorw.NewBufferError(rplcuntilrdr); rplcfnderr != nil {
+								if rplcfnderr.Error() == "#" {
+									rplcfnderr = nil
+									srchbf.Clear()
+									return
+								}
+								if rplcfnderr != io.EOF {
+									return
+								}
+								rplcfnderr = nil
+							}
+							if !srchbf.Empty() {
+								rplcflushrdr.PreAppend(srchbf.Reader(true))
+							}
+							return
+						}
+						if rplcval, rplcok := crntnextelm.attrs[rplcphrase[1:len(rplcphrase)-2]]; rplcok {
+							rplcflushrdr.PreAppend(valToRuneReader(rplcval, true))
+							return
+						}
+
+						return
+					})
+					val.Print(iorw.ReadRunesUntil(val.Clone(true).Reader(true), eofargs...))
+				}
+				return val
+			}
+			setElmArgVal := func(argk string, argv interface{}) {
+			setargv:
+				if elmargs != nil {
+					elmargs[argk] = argv
+					return
+				}
+				elmargs = map[string]interface{}{}
+				goto setargv
+			}
+			chkng = true
+			defer func() {
+				chkng = false
+			}()
+			chkbfrns := append([]rune{}, []rune(phrase)...)
+			rdngval = false
+			elmname := ""
+			elmlvl := ctntElemUnknown
+			prvr := rune(0)
+			var argnmerns []rune
+			var ctntargsrdr io.RuneReader
+			for fnderr == nil {
+				if chkrnsl, fnderr = iorw.ReadRunes(chkrns, untilrdr); chkrnsl == 1 && (fnderr == nil || fnderr == io.EOF) {
+					chkbfrns = append(chkbfrns, chkrns...)
+					if elmlvl != ctntElemSingle {
+						if chkrns[0] == '/' {
+							if elmlvl == ctntElemUnknown {
+								elmlvl = ctntElemEnd
+								prvr = 0
+								continue
+							}
+							if elmlvl == ctntElemStart {
+								elmlvl = ctntElemSingle
+								prvr = 0
+								continue
+							}
+							flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+							return nil
+						}
+						if iorw.IsSpace(chkrns[0]) {
+							if elmlvl == ctntElemUnknown {
+								flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+								return nil
+							}
+							goto prepeof
+						}
+						if validElemChar(prvr, chkrns[0]) {
+							if elmlvl == ctntElemUnknown {
+								elmlvl = ctntElemStart
+							}
+							elmname += string(chkrns)
+							prvr = chkrns[0]
+							continue
+						}
+					}
+					flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+					return nil
+				}
+				if fnderr != nil && fnderr.Error() == ">" {
+					chkbfrns = append(chkbfrns, []rune(fnderr.Error())...)
+					fnderr = nil
+					if elmlvl == ctntElemUnknown {
+						flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+						return nil
+					}
+					goto fndeof
+				}
+				flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+				return nil
+			}
+			flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+			return nil
+		prepeof:
+			if crntnextelm == nil && invalidelempaths[nextfullname(elmname, elmlvl)] {
+				flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+				return nil
+			}
+			if !chkbf.Empty() {
+				chkbf.Clear()
+			}
+
+			prvr = 0
+			ctntargsrdr = iorw.ReadRunesUntil(iorw.ReadRuneFunc(func() (ar rune, asize int, aerr error) {
+				ar, asize, aerr = orgrdr.ReadRune()
+				if asize > 0 && (aerr == nil || aerr == io.EOF) {
+					if chkbf != nil {
+						chkbf.WriteRune(ar)
+						return
+					}
+					chkbf = iorw.NewBuffer()
+					chkbf.WriteRune(ar)
 				}
 				return
+			}), "/", ">", "=", `='`, `="`, `=[$`, `[$`, func(argsphrase string, argsuntilrdr, argsorgrdr io.RuneReader, argsorgerr error, argsflushrdr *iorw.RuneReaderSlice) (argserr error) {
+				if argsphrase == `='` || argsphrase == `="` {
+					rdngval = true
+					defer func() {
+						rdngval = false
+					}()
+					argtxtpar := func() string {
+						if argsphrase == `='` {
+							return `'`
+						}
+						return `"`
+					}()
+					if len(argnmerns) == 0 {
+						return fmt.Errorf("%s", "failed")
+					}
+					if !argbf.Empty() {
+						argbf.Clear()
+					}
+					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, argtxtpar, iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd *iorw.RuneReaderSlice, txtorgerr error, txtflushrdr *iorw.RuneReaderSlice) error {
+						if txtphrasefnd == argtxtpar {
+							return fmt.Errorf("%s", txtphrasefnd)
+						}
+						return nil
+					}))); argserr != nil {
+						if argserr.Error() == argtxtpar {
+							argserr = nil
+							if argbf.Empty() {
+								setElmArgVal(string(argnmerns), "")
+								argnmerns = nil
+								return
+							}
+							setElmArgVal(string(argnmerns), formatElmArgVal(argbf.Clone(true)))
+							argnmerns = nil
+							return
+						}
+						return fmt.Errorf("failed")
+					}
+					return
+				}
+				if argsphrase == "=" {
+					if len(argnmerns) == 0 {
+						return fmt.Errorf("%s", "failed")
+					}
+					return fmt.Errorf("%s", "failed")
+				}
+				if argsphrase == `[$` {
+					if rdngval || len(argnmerns) > 0 {
+						argsflushrdr.PreAppend(strings.NewReader(`[$`))
+						return
+					}
+					rdngval = true
+					defer func() {
+						rdngval = false
+					}()
+					if !argbf.Empty() {
+						argbf.Clear()
+					}
+					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, "$]", iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd *iorw.RuneReaderSlice, txtorgerr error, txtflushrdr *iorw.RuneReaderSlice) error {
+						if txtphrasefnd == "$]" {
+							return fmt.Errorf("%s", txtphrasefnd)
+						}
+						return nil
+					}))); argserr != nil {
+						if argserr.Error() == "$]" {
+							argserr = nil
+							if !argbf.Empty() {
+								setElmArgVal("pre", formatElmArgVal(argbf.Clone(true)))
+							}
+							return
+						}
+						return fmt.Errorf("failed")
+					}
+					return
+				}
+				if argsphrase == `=[$` {
+					if len(argnmerns) == 0 {
+						return fmt.Errorf("%s", "failed")
+					}
+					rdngval = true
+					defer func() {
+						rdngval = false
+					}()
+					if !argbf.Empty() {
+						argbf.Clear()
+					}
+					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, "$]", iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd *iorw.RuneReaderSlice, txtorgerr error, txtflushrdr *iorw.RuneReaderSlice) error {
+						if txtphrasefnd == "$]" {
+							return fmt.Errorf("%s", txtphrasefnd)
+						}
+						return nil
+					}))); argserr != nil {
+						if argserr.Error() == "$]" {
+							argserr = nil
+							if argbf.Empty() {
+								setElmArgVal(string(argnmerns), "")
+								argnmerns = nil
+								return
+							}
+							setElmArgVal(string(argnmerns), formatElmArgVal(argbf.Clone(true)))
+							argnmerns = nil
+							return
+						}
+						return fmt.Errorf("failed")
+					}
+					return
+				}
+				if argsphrase == "/" {
+					if len(argnmerns) > 0 {
+						return fmt.Errorf("%s", "failed")
+					}
+					if elmlvl == ctntElemStart {
+						elmlvl = ctntElemSingle
+						return
+					}
+					return fmt.Errorf("%s", "failed")
+				}
+				if argsphrase == ">" {
+					if len(argnmerns) > 0 {
+						return fmt.Errorf("%s", "failed")
+					}
+					return fmt.Errorf("%s", argsphrase)
+				}
+				return
+			})
+			for fnderr == nil {
+				if chkrnsl, fnderr = iorw.ReadRunes(chkrns, ctntargsrdr); chkrnsl == 1 && (fnderr == nil || fnderr == io.EOF) {
+					if rdngval {
+						continue
+					}
+					if iorw.IsSpace(chkrns[0]) {
+						if len(argnmerns) != 0 {
+							if !chkbf.Empty() {
+								flushrdr.PreAppend(chkbf.Clone(true).Reader(true))
+							}
+							flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+							return nil
+						}
+						continue
+					}
+					if validElemChar(prvr, chkrns[0]) {
+						argnmerns = append(argnmerns, chkrns...)
+						prvr = chkrns[0]
+						continue
+					}
+					if !chkbf.Empty() {
+						flushrdr.PreAppend(chkbf.Clone(true).Reader(true))
+					}
+					flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+					return nil
+				}
+				if fnderr != nil {
+					if fnderr.Error() == "failed" {
+						if !chkbf.Empty() {
+							flushrdr.PreAppend(chkbf.Clone(true).Reader(true))
+						}
+						flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+						return nil
+					}
+					if fnderr == io.EOF {
+
+						if !chkbf.Empty() {
+							flushrdr.PreAppend(chkbf.Clone(true).Reader(true))
+						}
+						flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+						return nil
+					}
+					if fnderr.Error() == ">" {
+						fnderr = nil
+						break
+					}
+					return fnderr
+				}
 			}
+		fndeof:
+			var fi fsutils.FileInfo = nil
+			fullelemname := nextfullname(elmname, elmlvl)
+			if invalidelempaths[fullelemname] {
+				if !chkbf.Empty() {
+					flushrdr.PreAppend(formatElmArgVal(chkbf.Clone(true)).Reader(true))
+				}
+				flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+				return nil
+			}
+
 			if elmlvl == ctntElemStart || elmlvl == ctntElemSingle {
 				testpath := strings.Replace(fullelemname, ":", "/", -1)
 				testext := filepath.Ext(testpath)
@@ -527,54 +992,61 @@ func internalProcessParsing(
 								if fios := fs.LS(testpath + "index" + nextpth); len(fios) == 1 {
 									return fios[0]
 								}
+								if testpath[0] == '/' && !strings.HasPrefix(testpath, pathroot) {
+									if fios := fs.LS(pathroot + testpath[1:] + "index" + nextpth); len(fios) == 1 {
+										return fios[0]
+									}
+								}
 							}
 						}
 					}
 					if fios := fs.LS(testpath + testext); len(fios) == 1 {
 						return fios[0]
 					}
+					if testpath[0] == '/' && !strings.HasPrefix(testpath, pathroot) {
+						if fios := fs.LS(pathroot + testpath[1:] + testext); len(fios) == 1 {
+							return fios[0]
+						}
+					}
 					return nil
 				}(); fi == nil {
 					invalidelempaths[fullelemname] = true
-					if !elmbuf.Empty() && crntnextelm != nil {
-						prepInvalidElemBuf(elmbuf, crntnextelm)
+					if !chkbf.Empty() {
+						flushrdr.PreAppend(formatElmArgVal(chkbf.Clone(true)).Reader(true))
+					}
+					flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+					return nil
+				}
+				crntnextelm = addelemlevel(fi, fullelemname, fi.PathExt())
+
+				/*prevargs := func() (prvsttngs map[string]interface{}) {
+					if len(elemlevels) > 0 {
+						prvsttngs = elemlevels[len(elemlevels)-1].attrs
 					}
 					return
-				}
-				evtvalid = true
-				crntnextelm = addelemlevel(fi, fullelemname, fi.PathExt())
-				if !args.Done() {
-					crntnextelm.prebuf = elmbuf
-				} else {
-					prevargs := func() (prvsttngs map[string]interface{}) {
-						if len(elemlevels) > 0 {
-							prvsttngs = elemlevels[len(elemlevels)-1].attrs
-						}
-						return
-					}()
-					for argk, argv := range args.args {
-						if crntnextelm.attrs == nil {
-							crntnextelm.attrs = map[string]interface{}{}
-						}
-						if len(prevargs) > 0 {
-							arvbf := iorw.NewBuffer()
-							arvbf.Print(argv)
-							arvrplcrdr := iorw.NewReplaceRuneReader(arvbf.Clone(true).Reader(true))
-							for prvk, prvv := range prevargs {
-								arvrplcrdr.ReplaceWith(prvk, prvv)
-							}
-							arvbf.ReadRunesFrom(arvrplcrdr)
-							argv = arvbf.Clone(true)
-						}
-						crntnextelm.attrs[argk] = argv
-						delete(args.args, argk)
+				}()*/
+				for argk, argv := range elmargs {
+					if crntnextelm.attrs == nil {
+						crntnextelm.attrs = map[string]interface{}{}
 					}
+					/*if len(prevargs) > 0 {
+						arvbf := iorw.NewBuffer()
+						arvbf.Print(argv)
+						arvrplcrdr := iorw.NewReplaceRuneReader(arvbf.Clone(true).Reader(true))
+						for prvk, prvv := range prevargs {
+							arvrplcrdr.ReplaceWith(prvk, prvv)
+						}
+						arvbf.ReadRunesFrom(arvrplcrdr)
+						argv = arvbf.Clone(true)
+					}*/
+					crntnextelm.attrs[argk] = argv
+					delete(elmargs, argk)
 				}
 				if elmlvl == ctntElemSingle {
 					crntnextelm.eofevent = func(crntelm *contentelem, elmerr error) {
 						if elmerr == nil {
-							if !crntelm.rawBuf.Empty() {
-								ctntEventReader.PreAppend(crntelm.rawBuf.Clone(true).Reader(true))
+							if rawBuf := crntelm.rawBuf; !rawBuf.Empty() {
+								orgrdr.PreAppend(rawBuf.Clone(true).Reader(true))
 							}
 							crntelm.Close()
 							crntnextelm = nil
@@ -587,30 +1059,18 @@ func internalProcessParsing(
 							}
 							return
 						}
-						vlerr = elmerr
+						fnderr = elmerr
 					}
-					ctntEventReader.PreAppend(crntnextelm)
-					return
+					orgrdr.PreAppend(crntnextelm)
 				}
 				return
 			}
 			if elmlvl == ctntElemEnd {
 				if crntnextelm != nil && crntnextelm.elemname == fullelemname {
-					evtvalid = true
-					if !args.Done() {
-						crntnextelm.prebuf = elmbuf
-					} else {
-						for argk, argv := range args.args {
-							if crntnextelm.attrs == nil {
-								crntnextelm.attrs = map[string]interface{}{}
-							}
-							crntnextelm.attrs[argk] = argv
-						}
-					}
 					crntnextelm.eofevent = func(crntelm *contentelem, elmerr error) {
 						if elmerr == nil {
-							if !crntelm.rawBuf.Empty() {
-								ctntEventReader.PreAppend(crntnextelm.rawBuf.Clone(true).Reader(true))
+							if rawBuf := crntelm.rawBuf; !rawBuf.Empty() {
+								orgrdr.PreAppend(rawBuf.Clone(true).Reader(true))
 							}
 							crntelm.Close()
 							crntnextelm = nil
@@ -623,124 +1083,128 @@ func internalProcessParsing(
 							}
 							return
 						}
-						vlerr = elmerr
+						fnderr = elmerr
 					}
-					ctntEventReader.PreAppend(crntnextelm)
+					orgrdr.PreAppend(crntnextelm)
 					return
 				}
 			}
+			return
+		}
+		if chkng {
+			return fmt.Errorf("%s", phrase)
+		}
+		//return fmt.Errorf("%s", phrase)
+		flushrdr.PreAppend(strings.NewReader(phrase))
+		return nil
+	}, func() {})
+
+	var mainrdr io.RuneReader = iorw.ReadRuneFunc(func() (r rune, size int, err error) {
+	reread:
+		r, size, err = ctntprsrdr.ReadRune()
+		if size > 0 && (err == nil || err == io.EOF) {
+			if crntnextelm != nil {
+				crntnextelm.writeRune(r)
+				goto reread
+			}
 		}
 		return
-
+	})
+	var cdebuf *iorw.Buffer = nil
+	var codebuffer = func() *iorw.Buffer {
+		if cdebuf != nil {
+			return cdebuf
+		}
+		cdebuf = iorw.NewBuffer()
+		return cdebuf
 	}
-
-	codeEventReader = newCodeEventReader("<@", "@>", ctntEventReader)
-	cdebuf := iorw.NewBuffer()
 	defer cdebuf.Close()
-	codeEventReader.AddCommentsEventReader(true, "//", "\n", true, "/*", "*/", func(imprtbuf *iorw.Buffer, prelbl, postlbl string) (poserr error) {
-		if !imprtbuf.Empty() {
-			imports := imprtbuf.String()
-			importsl := len(imports)
-			if strings.Index(imports, "\"") == 0 && strings.LastIndex(imports, "\"") == importsl-1 {
-				cdebuf.Println("require(", imports, ");")
+	var ctntbuf *iorw.Buffer
+	var ctntbuffer = func() *iorw.Buffer {
+		if ctntbuf != nil {
+			return ctntbuf
+		}
+		ctntbuf = iorw.NewBuffer()
+		return ctntbuf
+	}
+	defer ctntbuf.Close()
+	var chdctntbuf *iorw.Buffer
+	var chdctntbuffer = func() *iorw.Buffer {
+		if chdctntbuf != nil {
+			return chdctntbuf
+		}
+		chdctntbuf = iorw.NewBuffer()
+		return chdctntbuf
+	}
+	cdelstr := rune(0)
+	fncode := false
+	cderdmode := func() codeReadMode {
+		if invertActive {
+			return codeReadingCode
+		}
+		return codeReadingContent
+	}()
+
+	cdetxtr := rune(0)
+
+	coderunsrdr := iorw.ReadRunesUntil(mainrdr, "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) error {
+		if phrase == "<@" {
+			if cderdmode == codeReadingContent {
+				cderdmode = codeReadingCode
+			}
+			return nil
+		}
+		if phrase == "@>" {
+			if cderdmode == codeReadingCode {
+				cderdmode = codeReadingContent
+			}
+		}
+		return nil
+	}, func() {
+
+	}, func(prvr, r rune) bool {
+		if cderdmode == codeReadingCode {
+			if cdetxtr == 0 {
+				if prvr != '\\' && iorw.IsTxtPar(r) {
+					cdetxtr = r
+					cdelstr = 0
+					return false
+				}
+				if !iorw.IsSpace(r) {
+					cdelstr = func() rune {
+						if validLastCdeRune(r) {
+							return r
+						}
+						return 0
+					}()
+				}
+				return true
+			}
+			if prvr != '\\' && cdetxtr == r {
+				cdetxtr = 0
+				return false
+			}
+			return false
+		}
+		return true
+	})
+
+	writecderns := func(rns ...rune) {
+		for _, r := range rns {
+			if cderdmode == codeReadingCode {
+				codebuffer().WriteRune(r)
 				return
 			}
-			if imprts := strings.Split(imports, "from"); len(imprts) == 2 {
-				if modname := strings.TrimFunc(imprts[1], iorw.IsSpace); modname != "" {
-					if imprtlne := strings.TrimFunc(imprts[0], iorw.IsSpace); imprtlne != "" {
-						lstdfltimprt := "_defltrqr"
-						cdebuf.Println("var _defltrqr=require(", modname, ");")
-						defltimprts := []string{}
-						nmedimprts := map[string][]string{}
-						for {
-							if imprtlne := strings.TrimFunc(imprtlne, iorw.IsSpace); imprtlne != "" {
-								brsi, cmai := strings.Index(imprtlne, "{"), strings.Index(imprtlne, ",")
-								if brsi > -1 && (cmai == -1 || cmai > brsi) {
-									if brsei := strings.Index(imprtlne, "}"); brsei > -1 {
-										if brsei > brsi {
-											if cmai == -1 || brsi < cmai {
-												if nmprts := strings.Split(strings.TrimFunc(imprtlne[brsi+1:brsei-brsi], iorw.IsSpace), ","); len(nmprts) > 0 {
-													for _, nmprt := range nmprts {
-														if nmprt = strings.TrimFunc(nmprt, iorw.IsSpace); nmprt != "" {
-															if len(nmedimprts[lstdfltimprt]) == 0 {
-																nmedimprts[lstdfltimprt] = []string{nmprt}
-																continue
-															}
-															nmedimprts[lstdfltimprt] = append(nmedimprts[lstdfltimprt], nmprt)
-														}
-													}
-												}
-											}
-										}
-										if imprtlne = imprtlne[brsei+1:]; imprtlne == "" {
-											break
-										}
-										continue
-									}
-								}
-								if cmai > -1 {
-									if cmaimprt := strings.TrimFunc(imprtlne[:cmai+1], iorw.IsSpace); cmaimprt != "" {
-										defltimprts = append(defltimprts, cmaimprt)
-										lstdfltimprt = cmaimprt
-									}
-									imprtlne = imprtlne[cmai+1:]
-									continue
-								}
-								defltimprts = append(defltimprts, imprtlne)
-								imprtlne = ""
-								break
-							}
-							break
-						}
-						lstdfltimprt = "_defltrqr"
-						if len(nmedimprts[lstdfltimprt]) > 0 {
-							defltimprts = append([]string{lstdfltimprt}, defltimprts...)
-						}
-						for dfltn, dfltport := range defltimprts {
-							if dltprts := strings.Split(dfltport, "as "); len(dltprts) == 2 {
-								dltprts[0], dltprts[1] = strings.TrimFunc(dltprts[0], iorw.IsSpace), strings.TrimFunc(dltprts[1], iorw.IsSpace)
-								if dltprts[1] == "" {
-									continue
-								}
-								if dltprts[0] == "*" {
-									cdebuf.Println("var ", dltprts[1], "=", lstdfltimprt, ";")
-								} else {
-									cdebuf.Println("var ", dltprts[0], "=", lstdfltimprt, ";")
-									cdebuf.Println("var ", dltprts[1], "=", dltprts[0], ";")
-								}
-								dfltport = dltprts[1]
-							} else if dfltport != "_defltrqr" {
-								cdebuf.Println("var ", dfltport, "=", lstdfltimprt, ";")
-							}
-							for _, nmdprt := range nmedimprts[defltimprts[dfltn]] {
-								if strings.Contains(nmdprt, "as ") {
-									if nmdprts := strings.Split(nmdprt, "as "); len(nmdprts) == 2 {
-										if nmdprts[0], nmdprts[1] = strings.TrimFunc(nmdprts[0], iorw.IsSpace), strings.TrimFunc(nmdprts[1], iorw.IsSpace); nmdprts[1] != "" && nmdprts[0] != "" {
-											if nmdprtsl := len(nmdprts[0]); nmdprts[0][0] == '"' && nmdprts[0][nmdprtsl-1] == '"' {
-												if nmdprtsl > 2 {
-													cdebuf.Println("var ", nmdprts[1], "=", dfltport, "[", nmdprts[0], "];")
-												}
-												continue
-											}
-											cdebuf.Println("var ", nmdprts[1], "=", dfltport, ".", nmdprts[0], ";")
-										}
-									}
-									continue
-								}
-								cdebuf.Println("var ", nmdprt, "=", dfltport, ".", nmdprt, ";")
-							}
-						}
-					}
+			if cderdmode == codeReadingContent {
+				if fncode {
+					ctntbuffer().WriteRune(r)
+					return
 				}
+				chdctntbuffer().WriteRune(r)
+				return
 			}
 		}
-		return
-	}, "import", ";")
-	//ctntbuf := iorw.NewBuffer()
-	ctntbuf := iorw.NewBuffer()
-	defer ctntbuf.Close()
-	chdctntbuf := iorw.NewBuffer()
-	cdelstr := rune(0)
+	}
 
 	ctntflush := func() (flsherr error) {
 		if cdepsvs := ctntbuf.Size(); cdepsvs > 0 {
@@ -760,81 +1224,49 @@ func internalProcessParsing(
 			if cdelstr > 0 {
 				cdelstr = 0
 				if hstmpltfx {
-					cdebuf.Print(psvrdr)
+					codebuffer().Print(psvrdr)
 					return
 				}
 				if cntsinlinebraseortmpl {
-					cdebuf.Print("`", psvrdr, "`")
+					codebuffer().Print("`", psvrdr, "`")
 					return
 				}
-				cdebuf.Print("`", psvrdr, "`")
+				codebuffer().Print("`", psvrdr, "`")
 				return
 			}
 			if hstmpltfx {
-				cdebuf.Print("print(", psvrdr, ");")
+				codebuffer().Print("print(", psvrdr, ");")
 				return
 			}
 			if cntsinlinebraseortmpl {
-				cdebuf.Print("print(`", psvrdr, "`);")
+				codebuffer().Print("print(`", psvrdr, "`);")
 				return
 			}
-			cdebuf.Print("print(`", psvrdr, "`);")
-		}
-		return
-	}
-	codeEventReader.CodePreRunesEvent = func(foundcode bool, rnsl int, rns ...rune) (prerr error) {
-		if foundcode {
-			ctntbuf.WriteRunes(rns...)
-			return
-		}
-		chdctntbuf.WriteRunes(rns...)
-		return
-	}
-
-	codeEventReader.CodeFoundEvent = func(foundcode bool) (fnderr error) {
-		if foundcode {
-			fnderr = ctntflush()
-			return
+			codebuffer().Print("print(`", psvrdr, "`);")
 		}
 		return
 	}
 
-	codeEventReader.CodePreResetEvent = func(foundcode bool, prel, postl int, prelbl, postlbl []rune, lbli []int) (rseterr error) {
-		if foundcode {
-			ctntflush()
-		}
-		return
-	}
-	codeEventReader.CodePostRunesEvent = func(rnsl int, rns ...rune) (preerr error) {
-		if codeEventReader.PostTxtr == 0 {
-			cdelstr = 0
-			for rn := range rns {
-				lsrn := rnsl - (rn + 1)
-				if !iorw.IsSpace(rns[lsrn]) {
-					cdelstr = func() rune {
-						if validLastCdeRune(rns[lsrn]) {
-							return rns[lsrn]
-						}
-						return 0
-					}()
-					break
+	for {
+		cr, csize, cerr := coderunsrdr.ReadRune()
+		if csize > 0 && (cerr == nil || cerr == io.EOF) {
+			if cderdmode == codeReadingCode {
+				ctntflush()
+				if !fncode {
+					fncode = true
 				}
 			}
-			cdebuf.WriteRunes(rns...)
-			return
+			writecderns(cr)
+			continue
 		}
-		if cdelstr > 0 {
-			cdelstr = 0
+		if cerr == io.EOF {
+
 		}
-		cdebuf.WriteRunes(rns...)
-		return
+		break
 	}
-	if invertActive {
-		codeEventReader.SwapParseState()
-	}
-	if prsngerr = codeEventReader.DummyEOFRead(); prsngerr != nil {
-		return
-	}
+
+	//flscdrrdrns()
+
 	ctntflush()
 	var chdpgrm interface{} = nil
 	if !chdctntbuf.Empty() && cdebuf.Empty() {
@@ -880,7 +1312,9 @@ func internalProcessParsing(
 					}
 					return
 				}
-				iorw.Fbprint(out, evalresult)
+				if out != nil {
+					iorw.Fbprint(out, evalresult)
+				}
 			}
 		}
 		if prsngerr != nil {
