@@ -37,7 +37,7 @@ func Open(datasource string) (db *sql.DB, err error) {
 
 func OpenPool(datasource string) (db *sql.DB, err error) {
 	if !strings.Contains(datasource, "pool_max_conn_lifetime") {
-		datasource += "pool_max_conn_lifetime=10s"
+		datasource += " pool_max_conn_lifetime=10s"
 	}
 	pxcnfg, pxerr := pgxpool.ParseConfig(datasource)
 	if pxerr != nil {
