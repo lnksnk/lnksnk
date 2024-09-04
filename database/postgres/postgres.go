@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/lnksnk/lnksnk/database"
 
@@ -35,13 +36,15 @@ func Open(datasource string) (db *sql.DB, err error) {
 }
 
 func OpenPool(datasource string) (db *sql.DB, err error) {
+	if !strings.Contains(datasource, "pool_max_conn_lifetime") {
+		datasource += "pool_max_conn_lifetime=10s"
+	}
 	pxcnfg, pxerr := pgxpool.ParseConfig(datasource)
 	if pxerr != nil {
 		err = pxerr
 		return
 	}
 	ctx := context.Background()
-
 	pool, err := pgxpool.NewWithConfig(ctx, pxcnfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "create db conn pool")
