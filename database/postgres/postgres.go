@@ -36,8 +36,11 @@ func Open(datasource string) (db *sql.DB, err error) {
 }
 
 func OpenPool(datasource string) (db *sql.DB, err error) {
-	if !strings.Contains(datasource, "pool_max_conn_lifetime") {
+	if !strings.Contains(datasource, "pool_max_conn_lifetime=") {
 		datasource += " pool_max_conn_lifetime=10s"
+	}
+	if !strings.Contains(datasource, "sslmode=") {
+		datasource += " sslmode=disable"
 	}
 	pxcnfg, pxerr := pgxpool.ParseConfig(datasource)
 	if pxerr != nil {
