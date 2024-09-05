@@ -436,9 +436,7 @@ func (strmrdr *StreamReader) Next() (next bool, err error) {
 			if clsl > 0 {
 				eventprepdata()
 				dtal := len(strmrdr.data)
-				if next = dtal > 0; next {
-
-				}
+				next = dtal > 0
 			}
 		}
 	}
