@@ -30,9 +30,7 @@ func (argsevtr *ArgsEventReader) ReadRune() (r rune, size int, err error) {
 	if argsevtr != nil && argsevtr.ReplaceRuneReader != nil {
 		return argsevtr.ReplaceRuneReader.ReadRune()
 	}
-	if size == 0 && err == nil {
-		err = io.EOF
-	}
+	err = io.EOF
 	return
 }
 
@@ -116,8 +114,6 @@ func (argsevtr *ArgsEventReader) SetPrePostFix(a ...interface{}) {
 func validLastCdeRune(cr rune) bool {
 	return cr == '=' || cr == '(' || cr == '[' || cr == ',' || cr == '+' || cr == '/' || cr == ':'
 }
-
-type parsefunc func(r rune, preLen, postLen int, prelbl, postlbl []rune, lbli []int) (prserr error)
 
 type contentelem struct {
 	modified     time.Time
@@ -614,12 +610,6 @@ func internalProcessParsing(
 		return elempath + elemname
 	}
 
-	if addelemlevel != nil && nextfullname != nil {
-
-	}
-
-	//mainrnsslcrdr := iorw.NewRuneReaderSlice(ctntinitrplcrdr)
-	//ctntrmianrd := iorw.NewRuneReaderSlice()
 	chkrns := make([]rune, 1)
 	chkrnsl := 0
 	chkng := false
@@ -1329,36 +1319,6 @@ func internalProcessParsing(
 		}
 	}
 	return
-}
-
-func prepInvalidElemBuf(elmbuf *iorw.Buffer, cntntelm *contentelem) {
-	if !elmbuf.Empty() && cntntelm != nil && len(cntntelm.attrs) > 0 {
-		var phrsbf *iorw.Buffer = nil
-		elmrplcrdr := iorw.NewReplaceRuneReader(elmbuf.Clone(true).Reader(true), "#", func(phrase string, rplcrdr *iorw.ReplaceRuneReader) (nxtrdr interface{}) {
-			if phrase == "#" {
-				if phrsbf == nil {
-					phrsbf = iorw.NewBuffer()
-				} else {
-					phrsbf.Clear()
-				}
-				prhseofrdr := rplcrdr.ReadRunesUntil("#")
-				phrsbf.ReadRunesFrom(prhseofrdr)
-				if fnd, _ := rplcrdr.FoundEOF(); fnd {
-					for attk, attv := range func() map[string]interface{} {
-						return cntntelm.attrs
-					}() {
-						if eqls, _ := phrsbf.Equals(attk); eqls {
-							return attv
-						}
-					}
-					return ""
-				}
-				rplcrdr.PreAppend(phrsbf.Clone(true).Reader(true))
-			}
-			return
-		})
-		elmbuf.Print(elmrplcrdr)
-	}
 }
 
 type CodeError interface {
