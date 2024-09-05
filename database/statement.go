@@ -17,18 +17,18 @@ import (
 )
 
 type Statement struct {
-	ctx           context.Context
-	cn            *Connection
-	isRemote      bool
-	prepstmnt     *sql.Stmt
-	prms          *parameters.Parameters
-	rdr           *Reader
-	args          *sync.Map
-	stmntlck      *sync.RWMutex
-	stmnt         string
-	argnames      []string
-	argtypes      []int
-	parseSqlParam func(totalArgs int) (s string)
+	ctx       context.Context
+	cn        *Connection
+	isRemote  bool
+	prepstmnt *sql.Stmt
+	prms      *parameters.Parameters
+	rdr       *Reader
+	args      *sync.Map
+	stmntlck  *sync.RWMutex
+	stmnt     string
+	argnames  []string
+	argtypes  []int
+	//parseSqlParam func(totalArgs int) (s string)
 }
 
 func NewStatement(cn *Connection) (stmnt *Statement) {
@@ -77,6 +77,10 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		var cchng *concurrent.Map = nil
 		var ctx context.Context = nil
 		var stmnthndlr StatementHandler = nil
+		var parseSqlParam func(totalArgs int) (s string)
+		if stmnt.cn != nil && stmnt.cn.dbParseSqlParam != nil {
+			parseSqlParam = stmnt.cn.dbParseSqlParam
+		}
 		for ai < al {
 			if d := a[ai]; d != nil {
 				if stmnthndld, _ := d.(StatementHandler); stmnthndld != nil {
@@ -181,24 +185,31 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		*/
 
 		var possibleArgName map[string]int = map[string]int{}
+		paramkeys := prms.StandardKeys()
+		prmkschkd := map[string]bool{}
 		if len(args) > 0 {
 			for dfltk := range args {
-				possibleArgName[dfltk] = 0
+				for prmn, prmk := range paramkeys {
+					if strings.EqualFold(prmk, dfltk) {
+						if prms.StringParameter(prmk, "") == "" {
+							paramkeys = append(paramkeys[:prmn], paramkeys[prmn+1:]...)
+							prmkschkd[dfltk] = true
+							possibleArgName[dfltk] = 0
+							break
+						}
+						prmkschkd[dfltk] = true
+						possibleArgName[prmk] = 1
+						break
+					}
+				}
+				if !prmkschkd[dfltk] {
+					possibleArgName[dfltk] = 0
+				}
 			}
 		}
 
-		if prms != nil {
-			for _, dfltk := range prms.StandardKeys() {
-				if prms.StringParameter(dfltk, "") == "" {
-					for prmk := range possibleArgName {
-						if strings.EqualFold(dfltk, prmk) {
-							goto chknxt
-						}
-					}
-				}
-				possibleArgName[dfltk] = 1
-			chknxt:
-			}
+		for _, dfltk := range paramkeys {
+			possibleArgName[dfltk] = 1
 		}
 
 		if rdr != nil {
@@ -214,7 +225,6 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 
 		qrybdr := qrybuf.Clone(true).Reader(true)
 
-		//argcnt := 0
 		bsy := false
 		qrybuf.Print(iorw.ReadRunesUntil(qrybdr, iorw.RunesUntilSliceFlushFunc(func(phrase string, untilrdr io.RuneReader, orgrd *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) (fnerr error) {
 			if phrase == "@" {
@@ -234,7 +244,6 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 				argbf, argbferr := iorw.NewBufferError(untilrdr)
 				if argbferr != nil {
 					if argbferr.Error() == "@" {
-						//flushrdr.PreAppendArgs(argbferr.Error(), argbf.Reader(true), argbferr.Error())
 						if argbf.Empty() {
 							return
 						}
@@ -248,7 +257,7 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 								if validNameType == nil {
 									validNameType = []int{}
 								}
-								flushrdr.PreAppendArgs(parseParam(stmnt.cn.dbParseSqlParam, len(validNames)))
+								flushrdr.PreAppendArgs(parseParam(parseSqlParam, len(validNames)))
 								validNames = append(validNames, mpvk)
 								validNameType = append(validNameType, mpkv)
 								argbferr = nil
@@ -291,128 +300,6 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 			return
 		}), "@", "'"))
 
-		//fmt.Println(qrybuf)
-		/*var parseRune = func(r rune) {
-			if foundTxt {
-				appr(r)
-				if r == '\'' {
-					foundTxt = false
-					prvr = rune(0)
-				} else {
-					prvr = r
-				}
-			} else {
-				if prmslbli[1] == 0 && prmslbli[0] < len(prmslbl[0]) {
-					if prmslbli[0] > 0 && prmslbl[0][prmslbli[0]-1] == prvr && prmslbl[0][prmslbli[0]] != r {
-						if prmsl := prmslbli[0]; prmsl > 0 {
-							prmslbli[0] = 0
-							apprs(prmslbl[0][:prmsl])
-						}
-					}
-					if prmslbl[0][prmslbli[0]] == r {
-						prmslbli[0]++
-						if prmslbli[0] == len(prmslbl[0]) {
-							prvr = rune(0)
-						} else {
-							prvr = r
-						}
-					} else {
-						if prmsl := prmslbli[0]; prmsl > 0 {
-							prmslbli[0] = 0
-							apprs(prmslbl[0][:prmsl])
-						}
-						appr(r)
-						if r == '\'' {
-							foundTxt = true
-							prvr = rune(0)
-						} else {
-							prvr = r
-						}
-					}
-				} else if prmslbli[0] == len(prmslbl[0]) && prmslbli[1] < len(prmslbl[1]) {
-					if prmslbl[1][prmslbli[1]] == r {
-						prmslbli[1]++
-						if prmslbli[1] == len(prmslbl[1]) {
-							if psblprmnmei > 0 {
-								if psbprmnme := string(psblprmnme[:psblprmnmei]); psbprmnme != "" {
-									fndprm := true
-									for mpvk, mpkv := range possibleArgName {
-										if fndprm = strings.EqualFold(psbprmnme, mpvk); fndprm {
-											if validNames == nil {
-												validNames = []string{}
-											}
-											if validNameType == nil {
-												validNameType = []int{}
-											}
-											apprs([]rune(parseParam(stmnt.cn.dbParseSqlParam, len(validNames))))
-											validNames = append(validNames, mpvk)
-											validNameType = append(validNameType, mpkv)
-											break
-										}
-									}
-									if !fndprm {
-										apprs(prmslbl[0])
-										apprs(psblprmnme[:psblprmnmei])
-									}
-								} else {
-									apprs(prmslbl[0])
-									apprs(prmslbl[1])
-								}
-								psblprmnmei = 0
-							} else {
-								apprs(prmslbl[0])
-								apprs(prmslbl[1])
-							}
-							prmslbli[1] = 0
-							prvr = rune(0)
-							prmslbli[0] = 0
-						}
-					} else {
-						if prmsl := prmslbli[1]; prmsl > 0 {
-							prmslbli[1] = 0
-							prvr = rune(0)
-							prmslbli[0] = 0
-							apprs(prmslbl[0])
-							if psblprmnmei > 0 {
-								apprs(psblprmnme[:psblprmnmei])
-								psblprmnmei = 0
-							}
-							apprs(prmslbl[1][:prmsl])
-						} else {
-							psblprmnme[psblprmnmei] = r
-							psblprmnmei++
-							prvr = r
-							if psblprmnmei == len(psblprmnme) {
-								prmslbli[1] = 0
-								prvr = rune(0)
-								prmslbli[0] = 0
-								apprs(prmslbl[0])
-								if psblprmnmei > 0 {
-									apprs(psblprmnme[:psblprmnmei])
-									psblprmnmei = 0
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		*stmntref = ""
-		for r, rs, rerr := rnrr.ReadRune(); rs > 0 && rerr == nil; r, rs, rerr = rnrr.ReadRune() {
-			if rs > 0 {
-				parseRune(r)
-			} else {
-				if rerr != io.EOF {
-					preperr = rerr
-					return
-				}
-			}
-		}
-		if rnsbufl := len(rnsbuf); rnsbufl > 0 {
-			*stmntref += string(rnsbuf[:rnsbufl])
-			rnsbuf = nil
-			//rsnsbfi = 0
-		}*/
 		*stmntref = qrybuf.String()
 		if refrdr := stmnt.rdr; rdr != nil && refrdr != rdr {
 			stmnt.rdr = rdr
