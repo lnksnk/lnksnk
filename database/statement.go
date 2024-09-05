@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 
 	//"github.com/lnksnk/lnksnk/caching"
@@ -60,13 +61,13 @@ func (stmnthndlfnc StatementHandlerFunc) Prepair(a ...interface{}) []interface{}
 func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args map[string]interface{}, a ...interface{}) (preperr error) {
 	if stmnt != nil {
 		defer func() {
-
 			if preperr != nil && stmnt != nil {
 				stmnt.Close()
 			}
 		}()
-		var rnrr io.RuneReader = nil
+		//var rnrr io.RuneReader = nil
 		var qrybuf = iorw.NewBuffer()
+		defer qrybuf.Close()
 		var validNames []string
 		var validNameType []int
 		var fs *fsutils.FSUtils = nil
@@ -138,10 +139,6 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 			}
 		}
 
-		/*if stmnthndlr != nil {
-			qrybuf.Print(stmnthndlr.Prepair(qrybuf.Clone(true).Reader(true)))
-		}*/
-
 		if qrybuf.HasPrefix("#") && qrybuf.HasSuffix("#") {
 			if substrqry, _ := qrybuf.SubString(1, qrybuf.Size()-1); substrqry != "" {
 				subqryarr := strings.Split(substrqry, "=>")
@@ -159,13 +156,11 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 			}
 		}
 		defer qrybuf.Close()
-		//if stmnthndlr != nil {
-		//	qrybuf.Print(stmnthndlr.Prepair(qrybuf.Clone(true).Reader(true)))
-		//}
-		rnrr = qrybuf.Reader()
+
+		//rnrr = qrybuf.Reader()
 		var foundTxt = false
 
-		var prvr = rune(0)
+		/*var prvr = rune(0)
 		var prmslbl = [][]rune{[]rune("@"), []rune("@")}
 		var prmslbli = []int{0, 0}
 
@@ -183,6 +178,7 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 
 		var psblprmnme = make([]rune, 8192)
 		var psblprmnmei = 0
+		*/
 
 		var possibleArgName map[string]int = map[string]int{}
 		if len(args) > 0 {
@@ -193,17 +189,110 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 
 		if prms != nil {
 			for _, dfltk := range prms.StandardKeys() {
+				if prms.StringParameter(dfltk, "") == "" {
+					for prmk := range possibleArgName {
+						if strings.EqualFold(dfltk, prmk) {
+							goto chknxt
+						}
+					}
+				}
 				possibleArgName[dfltk] = 1
+			chknxt:
 			}
 		}
 
 		if rdr != nil {
 			for _, dfltk := range rdr.Columns() {
+				for prmk := range possibleArgName {
+					if strings.EqualFold(prmk, dfltk) && prmk != dfltk {
+						delete(possibleArgName, prmk)
+					}
+				}
 				possibleArgName[dfltk] = 2
 			}
 		}
 
-		var parseRune = func(r rune) {
+		qrybdr := qrybuf.Clone(true).Reader(true)
+
+		//argcnt := 0
+		bsy := false
+		qrybuf.Print(iorw.ReadRunesUntil(qrybdr, iorw.RunesUntilSliceFlushFunc(func(phrase string, untilrdr io.RuneReader, orgrd *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) (fnerr error) {
+			if phrase == "@" {
+				if foundTxt {
+					flushrdr.PreAppendArgs(phrase)
+					return
+				}
+				if bsy {
+					return fmt.Errorf("%s", phrase)
+				}
+				if !bsy {
+					bsy = true
+				}
+				defer func() {
+					bsy = false
+				}()
+				argbf, argbferr := iorw.NewBufferError(untilrdr)
+				if argbferr != nil {
+					if argbferr.Error() == "@" {
+						//flushrdr.PreAppendArgs(argbferr.Error(), argbf.Reader(true), argbferr.Error())
+						if argbf.Empty() {
+							return
+						}
+						fndprm := true
+						argbfl := argbf.Size()
+						for mpvk, mpkv := range possibleArgName {
+							if fndprm = int64(len(mpvk)) >= argbfl && strings.EqualFold(argbf.String(), mpvk); fndprm {
+								if validNames == nil {
+									validNames = []string{}
+								}
+								if validNameType == nil {
+									validNameType = []int{}
+								}
+								flushrdr.PreAppendArgs(parseParam(stmnt.cn.dbParseSqlParam, len(validNames)))
+								validNames = append(validNames, mpvk)
+								validNameType = append(validNameType, mpkv)
+								argbferr = nil
+								return
+							}
+						}
+						argbferr = nil
+						if !fndprm {
+							flushrdr.PreAppendArgs("''")
+						}
+						return
+					}
+					if argbferr.Error() == "'" {
+						if !argbf.Empty() {
+							flushrdr.PreAppendArgs(argbf.Reader(true), argbferr.Error())
+							argbferr = nil
+							return
+						}
+						flushrdr.PreAppendArgs(argbferr.Error())
+						argbferr = nil
+						return
+					}
+				}
+				flushrdr.PreAppendArgs(phrase)
+				return
+			}
+			if phrase == "'" {
+				if bsy {
+					return fmt.Errorf("%s", phrase)
+				}
+				if !foundTxt {
+					foundTxt = true
+					flushrdr.PreAppendArgs(phrase)
+					return
+				}
+				foundTxt = false
+				flushrdr.PreAppendArgs(phrase)
+				return
+			}
+			return
+		}), "@", "'"))
+
+		//fmt.Println(qrybuf)
+		/*var parseRune = func(r rune) {
 			if foundTxt {
 				appr(r)
 				if r == '\'' {
@@ -323,7 +412,8 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 			*stmntref += string(rnsbuf[:rnsbufl])
 			rnsbuf = nil
 			//rsnsbfi = 0
-		}
+		}*/
+		*stmntref = qrybuf.String()
 		if refrdr := stmnt.rdr; rdr != nil && refrdr != rdr {
 			stmnt.rdr = rdr
 		}
