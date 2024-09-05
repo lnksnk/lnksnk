@@ -57,9 +57,8 @@ func (dbmshndlr *DBMSHandler) Status(alias string) (status map[string]interface{
 							err = dbstatserr
 							return
 						}
-						if status == nil {
-							status = map[string]interface{}{}
-						}
+
+						status = map[string]interface{}{}
 						status["idle"] = dbstats.Idle
 						status["inuse"] = dbstats.InUse
 						status["open"] = dbstats.OpenConnections
