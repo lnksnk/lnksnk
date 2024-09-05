@@ -50,6 +50,15 @@ func Fprint(w io.Writer, a ...interface{}) (err error) {
 				continue
 			}
 			if ir, irok := a[dn].(io.RuneReader); irok {
+				if wbf, _ := w.(*Buffer); wbf != nil {
+					if _, err = wbf.ReadRunesFrom(ir); err != nil {
+						if err != io.EOF {
+							break
+						}
+						err = nil
+					}
+					continue
+				}
 				for err == nil {
 					pr, prs, prserr := ir.ReadRune()
 					if prs > 0 && (prserr == nil || prserr == io.EOF) {
