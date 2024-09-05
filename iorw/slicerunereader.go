@@ -1,6 +1,10 @@
 package iorw
 
-import "io"
+import (
+	"bufio"
+	"io"
+	"strings"
+)
 
 type RuneReaderSlice struct {
 	rnrdrs   []io.RuneReader
@@ -28,6 +32,72 @@ func (rnrdrsslce *RuneReaderSlice) Empty() bool {
 		return true
 	}
 	return false
+}
+
+func (rnrdrsslce *RuneReaderSlice) PostAppendArgs(argrdrs ...interface{}) {
+	if rnrdrsslce != nil {
+		var rdrs []io.RuneReader
+		for _, arg := range argrdrs {
+			if s, sok := arg.(string); sok {
+				if s != "" {
+					rdrs = append(rdrs, strings.NewReader(s))
+				}
+				continue
+			}
+			if int32s, int32ok := arg.([]int32); int32ok {
+				if len(int32s) > 0 {
+					rns := make([]rune, len(int32s))
+					copy(rns, int32s)
+					rdrs = append(rdrs, NewRunesReader(rns...))
+				}
+				continue
+			}
+			if rnsrdr, _ := arg.(io.RuneReader); rnsrdr != nil {
+				rdrs = append(rdrs, rnsrdr)
+				continue
+			}
+			if rdr, _ := arg.(io.Reader); rdr != nil {
+				rdrs = append(rdrs, bufio.NewReaderSize(rdr, 1))
+				continue
+			}
+		}
+		if len(rdrs) > 0 {
+			rnrdrsslce.PostAppend(rdrs...)
+		}
+	}
+}
+
+func (rnrdrsslce *RuneReaderSlice) PreAppendArgs(argrdrs ...interface{}) {
+	if rnrdrsslce != nil {
+		var rdrs []io.RuneReader
+		for _, arg := range argrdrs {
+			if s, sok := arg.(string); sok {
+				if s != "" {
+					rdrs = append(rdrs, strings.NewReader(s))
+				}
+				continue
+			}
+			if int32s, int32ok := arg.([]int32); int32ok {
+				if len(int32s) > 0 {
+					rns := make([]rune, len(int32s))
+					copy(rns, int32s)
+					rdrs = append(rdrs, NewRunesReader(rns...))
+				}
+				continue
+			}
+			if rnsrdr, _ := arg.(io.RuneReader); rnsrdr != nil {
+				rdrs = append(rdrs, rnsrdr)
+				continue
+			}
+			if rdr, _ := arg.(io.Reader); rdr != nil {
+				rdrs = append(rdrs, bufio.NewReaderSize(rdr, 1))
+				continue
+			}
+		}
+		if len(rdrs) > 0 {
+			rnrdrsslce.PreAppend(rdrs...)
+		}
+	}
 }
 
 func (rnrdrsslce *RuneReaderSlice) PreAppend(rdrs ...io.RuneReader) {
