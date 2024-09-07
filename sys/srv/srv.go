@@ -57,6 +57,12 @@ func (p *program) prepConfig(args ...string) {
 			if strings.LastIndex(p.appPath, "/") > 0 {
 				p.appPath = p.appPath[:strings.LastIndex(p.appPath, "/")]
 			}
+			tstpath := p.appPath
+			if !strings.Contains(tstpath, "/") {
+				p.appPath = ""
+			} else {
+				p.appPath = tstpath[:strings.LastIndex(tstpath, "/")]
+			}
 		}
 		if p.Config == nil {
 			p.Config = &service.Config{}
@@ -148,6 +154,8 @@ func Serve(args ...string) {
 		prg.appEnvPath = strings.Replace(args[0], "\\", "/", -1)
 		if si := strings.LastIndex(prg.appEnvPath, "/"); si > -1 {
 			prg.appEnvPath = prg.appEnvPath[:si]
+		} else {
+			prg.appEnvPath = prg.appPath
 		}
 		args = args[1:]
 		al--
