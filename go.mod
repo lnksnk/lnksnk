@@ -1,17 +1,19 @@
 module github.com/lnksnk/lnksnk
 
-go 1.22
+go 1.22.0
+
+toolchain go1.22.5
 
 require github.com/gorilla/websocket v1.5.3 // indirect
 
 require (
 	github.com/dlclark/regexp2 v1.11.4
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible
-	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8
+	github.com/google/pprof v0.0.0-20240903155634-a8630aee4ab9
 	github.com/quic-go/quic-go v0.46.0
-	golang.org/x/net v0.28.0
-	golang.org/x/oauth2 v0.22.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/net v0.29.0
+	golang.org/x/oauth2 v0.23.0
+	golang.org/x/sys v0.25.0
 )
 
 require (
@@ -37,19 +39,19 @@ require (
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
-	github.com/onsi/ginkgo/v2 v2.20.0 // indirect
+	github.com/onsi/ginkgo/v2 v2.20.2 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
-	github.com/quic-go/qpack v0.4.0 // indirect
+	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/tdewolff/parse/v2 v2.7.15 // indirect
 	go.uber.org/mock v0.4.0 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa // indirect
-	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e // indirect
+	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	modernc.org/gc/v3 v3.0.0-20240801135723-a856999a2e4a // indirect
-	modernc.org/libc v1.57.0 // indirect
+	modernc.org/libc v1.60.1 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect
 	modernc.org/strutil v1.2.0 // indirect
@@ -66,9 +68,9 @@ require (
 	github.com/polevpn/webview v1.0.8
 	github.com/sijms/go-ora/v2 v2.8.19
 	github.com/tdewolff/minify/v2 v2.20.37
-	github.com/webview/webview_go v0.0.0-20240220051247-56f456ca3a43
+	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 	github.com/zserge/lorca v0.1.10
-	golang.org/x/term v0.23.0
-	golang.org/x/text v0.17.0
+	golang.org/x/term v0.24.0
+	golang.org/x/text v0.18.0
 	modernc.org/sqlite v1.32.0
 )
