@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github/lnksnk/lnksnk/ja/parser"
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/parser"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 // JsonEncodable allows custom JSON encoding by JSON.stringify()

@@ -12,7 +12,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 const hex = "0123456789abcdef"

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 const (

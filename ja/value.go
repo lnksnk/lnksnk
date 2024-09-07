@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github/lnksnk/lnksnk/ja/ftoa"
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/ftoa"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 var (

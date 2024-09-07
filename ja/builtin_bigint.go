@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type valueBigInt big.Int

@@ -2,12 +2,13 @@ package ja
 
 import (
 	"fmt"
-	"github/lnksnk/lnksnk/ja/unistring"
 	"io"
 	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/lnksnk/lnksnk/ja/unistring"
 
 	"github.com/dlclark/regexp2"
 )

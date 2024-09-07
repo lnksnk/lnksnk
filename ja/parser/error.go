@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github/lnksnk/lnksnk/ja/file"
-	"github/lnksnk/lnksnk/ja/token"
+	"github.com/lnksnk/lnksnk/ja/file"
+	"github.com/lnksnk/lnksnk/ja/token"
 )
 
 const (

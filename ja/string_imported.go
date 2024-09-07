@@ -9,8 +9,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github/lnksnk/lnksnk/ja/parser"
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/parser"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"

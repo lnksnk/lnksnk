@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 const (

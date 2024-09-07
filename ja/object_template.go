@@ -2,10 +2,11 @@ package ja
 
 import (
 	"fmt"
-	"github/lnksnk/lnksnk/ja/unistring"
 	"math"
 	"reflect"
 	"sort"
+
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type templatePropFactory func(*Runtime) Value

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type sparseArrayItem struct {

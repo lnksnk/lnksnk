@@ -2,12 +2,13 @@ package ja
 
 import (
 	"fmt"
-	"github/lnksnk/lnksnk/ja/token"
 	"sort"
 
-	"github/lnksnk/lnksnk/ja/ast"
-	"github/lnksnk/lnksnk/ja/file"
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/token"
+
+	"github.com/lnksnk/lnksnk/ja/ast"
+	"github.com/lnksnk/lnksnk/ja/file"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type blockType int

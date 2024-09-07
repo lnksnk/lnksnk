@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"github/lnksnk/lnksnk/ja/ast"
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/ast"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type _scope struct {

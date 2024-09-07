@@ -4,7 +4,7 @@ import (
 	"math"
 	"sync"
 
-	"github/lnksnk/lnksnk/ja/ftoa"
+	"github.com/lnksnk/lnksnk/ja/ftoa"
 )
 
 func (r *Runtime) toNumber(v Value) Value {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github/lnksnk/lnksnk/ja/unistring"
+	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type byteOrder bool
