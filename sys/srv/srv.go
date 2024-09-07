@@ -57,12 +57,6 @@ func (p *program) prepConfig(args ...string) {
 			if strings.LastIndex(p.appPath, "/") > 0 {
 				p.appPath = p.appPath[:strings.LastIndex(p.appPath, "/")]
 			}
-			tstpath := p.appPath
-			if !strings.Contains(tstpath, "/") {
-				p.appPath = ""
-			} else {
-				p.appPath = tstpath[:strings.LastIndex(tstpath, "/")]
-			}
 		}
 		if p.Config == nil {
 			p.Config = &service.Config{}
