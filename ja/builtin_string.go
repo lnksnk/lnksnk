@@ -7,9 +7,10 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"github/lnksnk/lnksnk/ja/unistring"
 
-	"github.com/lnksnk/lnksnk/ja/parser"
+	"github/lnksnk/lnksnk/ja/parser"
+
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
@@ -333,7 +334,7 @@ func (r *Runtime) stringproto_indexOf(call FunctionCall) Value {
 	r.checkObjectCoercible(call.This)
 	value := call.This.toString()
 	target := call.Argument(0).toString()
-	pos := call.Argument(1).ToInteger()
+	pos := call.Argument(1).ToNumber().ToInteger()
 
 	if pos < 0 {
 		pos = 0

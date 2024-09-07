@@ -1,9 +1,8 @@
 package ja
 
 import (
+	"github/lnksnk/lnksnk/ja/unistring"
 	"reflect"
-
-	"github.com/lnksnk/lnksnk/ja/unistring"
 )
 
 type destructKeyedSource struct {

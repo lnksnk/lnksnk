@@ -3,10 +3,10 @@ package parser
 import (
 	"strings"
 
-	"github.com/lnksnk/lnksnk/ja/ast"
-	"github.com/lnksnk/lnksnk/ja/file"
-	"github.com/lnksnk/lnksnk/ja/token"
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"github/lnksnk/lnksnk/ja/ast"
+	"github/lnksnk/lnksnk/ja/file"
+	"github/lnksnk/lnksnk/ja/token"
+	"github/lnksnk/lnksnk/ja/unistring"
 )
 
 func (self *_parser) parseIdentifier() *ast.Identifier {

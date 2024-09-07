@@ -6,10 +6,11 @@ import (
 	"os"
 	"strings"
 
+	"github/lnksnk/lnksnk/ja/ast"
+	"github/lnksnk/lnksnk/ja/file"
+	"github/lnksnk/lnksnk/ja/token"
+
 	"github.com/go-sourcemap/sourcemap"
-	"github.com/lnksnk/lnksnk/ja/ast"
-	"github.com/lnksnk/lnksnk/ja/file"
-	"github.com/lnksnk/lnksnk/ja/token"
 )
 
 func (self *_parser) parseBlockStatement() *ast.BlockStatement {

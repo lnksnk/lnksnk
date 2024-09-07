@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"github/lnksnk/lnksnk/ja/unistring"
 )
 
 type objectGoSlice struct {

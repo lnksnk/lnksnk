@@ -2,12 +2,11 @@ package ja
 
 import (
 	"fmt"
+	"github/lnksnk/lnksnk/ja/parser"
 	"regexp"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
-
-	"github.com/lnksnk/lnksnk/ja/parser"
 )
 
 func (r *Runtime) newRegexpObject(proto *Object) *regexpObject {
@@ -242,7 +241,7 @@ func compileRegexp(patternStr, flags string) (p *regexpPattern, err error) {
 		patternStr = convertRegexpToUtf16(patternStr)
 	}
 
-	re2Str, err1 := parser.TransformRegExp(patternStr, dotAll)
+	re2Str, err1 := parser.TransformRegExp(patternStr, dotAll, unicode)
 	if err1 == nil {
 		re2flags := ""
 		if multiline {
@@ -269,7 +268,7 @@ func compileRegexp(patternStr, flags string) (p *regexpPattern, err error) {
 			err = err1
 			return
 		}
-		wrapper2, err = compileRegexp2(patternStr, multiline, dotAll, ignoreCase)
+		wrapper2, err = compileRegexp2(patternStr, multiline, dotAll, ignoreCase, unicode)
 		if err != nil {
 			err = fmt.Errorf("Invalid regular expression (regexp2): %s (%v)", patternStr, err)
 			return
@@ -689,8 +688,7 @@ func (r *Runtime) regExpExec(execFn func(FunctionCall) Value, rxObj *Object, arg
 	return res
 }
 
-func (r *Runtime) getGlobalRegexpMatches(rxObj *Object, s String) []Value {
-	fullUnicode := nilSafe(rxObj.self.getStr("unicode", nil)).ToBoolean()
+func (r *Runtime) getGlobalRegexpMatches(rxObj *Object, s String, fullUnicode bool) []Value {
 	rxObj.self.setOwnStr("lastIndex", intToValue(0), true)
 	execFn, ok := r.toObject(rxObj.self.getStr("exec", nil)).self.assertCallable()
 	if !ok {
@@ -715,9 +713,10 @@ func (r *Runtime) getGlobalRegexpMatches(rxObj *Object, s String) []Value {
 
 func (r *Runtime) regexpproto_stdMatcherGeneric(rxObj *Object, s String) Value {
 	rx := rxObj.self
-	global := rx.getStr("global", nil)
-	if global != nil && global.ToBoolean() {
-		a := r.getGlobalRegexpMatches(rxObj, s)
+	flags := nilSafe(rx.getStr("flags", nil)).String()
+	global := strings.ContainsRune(flags, 'g')
+	if global {
+		a := r.getGlobalRegexpMatches(rxObj, s, strings.ContainsRune(flags, 'u'))
 		if len(a) == 0 {
 			return _null
 		}
@@ -1093,8 +1092,11 @@ RETURN:
 
 func (r *Runtime) regexpproto_stdReplacerGeneric(rxObj *Object, s, replaceStr String, rcall func(FunctionCall) Value) Value {
 	var results []Value
-	if nilSafe(rxObj.self.getStr("global", nil)).ToBoolean() {
-		results = r.getGlobalRegexpMatches(rxObj, s)
+	flags := nilSafe(rxObj.self.getStr("flags", nil)).String()
+	isGlobal := strings.ContainsRune(flags, 'g')
+	isUnicode := strings.ContainsRune(flags, 'u')
+	if isGlobal {
+		results = r.getGlobalRegexpMatches(rxObj, s, isUnicode)
 	} else {
 		execFn := toMethod(rxObj.self.getStr("exec", nil)) // must be non-nil
 		result := r.regExpExec(execFn, rxObj, s)

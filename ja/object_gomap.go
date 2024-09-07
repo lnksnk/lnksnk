@@ -3,7 +3,7 @@ package ja
 import (
 	"reflect"
 
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"github/lnksnk/lnksnk/ja/unistring"
 )
 
 type objectGoMapSimple struct {

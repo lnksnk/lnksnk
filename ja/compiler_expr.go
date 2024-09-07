@@ -1,10 +1,12 @@
 package ja
 
 import (
-	"github.com/lnksnk/lnksnk/ja/ast"
-	"github.com/lnksnk/lnksnk/ja/file"
-	"github.com/lnksnk/lnksnk/ja/token"
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"math/big"
+
+	"github/lnksnk/lnksnk/ja/ast"
+	"github/lnksnk/lnksnk/ja/file"
+	"github/lnksnk/lnksnk/ja/token"
+	"github/lnksnk/lnksnk/ja/unistring"
 )
 
 type compiledExpr interface {
@@ -2446,7 +2448,7 @@ func (c *compiler) emitThrow(v Value) {
 	if o, ok := v.(*Object); ok {
 		t := nilSafe(o.self.getStr("name", nil)).toString().String()
 		switch t {
-		case "TypeError":
+		case "TypeError", "RangeError":
 			c.emit(loadDynamic(t))
 			msg := o.self.getStr("message", nil)
 			if msg != nil {
@@ -3228,6 +3230,8 @@ func (c *compiler) compileNumberLiteral(v *ast.NumberLiteral) compiledExpr {
 		val = intToValue(num)
 	case float64:
 		val = floatToValue(num)
+	case *big.Int:
+		val = (*valueBigInt)(num)
 	default:
 		c.assert(false, int(v.Idx)-1, "Unsupported number literal type: %T", v.Value)
 		panic("unreachable")

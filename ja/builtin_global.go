@@ -10,7 +10,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"github/lnksnk/lnksnk/ja/unistring"
 )
 
 const hexUpper = "0123456789ABCDEF"
@@ -340,6 +340,7 @@ func createGlobalObjectTemplate() *objectTemplate {
 	t.putStr("Array", func(r *Runtime) Value { return valueProp(r.getArray(), true, false, true) })
 	t.putStr("String", func(r *Runtime) Value { return valueProp(r.getString(), true, false, true) })
 	t.putStr("Number", func(r *Runtime) Value { return valueProp(r.getNumber(), true, false, true) })
+	t.putStr("BigInt", func(r *Runtime) Value { return valueProp(r.getBigInt(), true, false, true) })
 	t.putStr("RegExp", func(r *Runtime) Value { return valueProp(r.getRegExp(), true, false, true) })
 	t.putStr("Date", func(r *Runtime) Value { return valueProp(r.getDate(), true, false, true) })
 	t.putStr("Boolean", func(r *Runtime) Value { return valueProp(r.getBoolean(), true, false, true) })

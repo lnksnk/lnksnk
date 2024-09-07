@@ -1,7 +1,7 @@
 package ja
 
 import (
-	"github.com/lnksnk/lnksnk/ja/unistring"
+	"github/lnksnk/lnksnk/ja/unistring"
 )
 
 type nativeProxyHandler struct {
