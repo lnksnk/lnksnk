@@ -734,8 +734,9 @@ func internalProcessParsing(
 				}
 				if iorw.IsSpace(r) {
 					if elmlvl == ctntElemUnknown {
-						flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
-						return nil
+						//flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+						//return nil
+						return fmt.Errorf("failed")
 					}
 					return fmt.Errorf("prepeof")
 				}
