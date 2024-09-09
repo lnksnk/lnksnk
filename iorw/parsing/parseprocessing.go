@@ -395,12 +395,11 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			}
 			return
 		})
-
-		/*bf := iorw.NewBuffer(preprdr)
-		if ctntelm.elemname == ":heading" {
-			fmt.Println(bf)
+		bf := iorw.NewBuffer(preprdr)
+		if ctntelm.elemname == ":gui:nav:" {
+			//fmt.Println(bf)
 		}
-		preprdr = bf.Reader(true)*/
+		preprdr = bf.Reader(true)
 		//ctntelm.runerdr = agrsevtrdr
 		ctntelm.runerdr = preprdr
 	}
@@ -1078,6 +1077,11 @@ func internalProcessParsing(
 					orgrdr.PreAppend(crntnextelm)
 					return
 				}
+				if !chkbf.Empty() {
+					flushrdr.PreAppend(formatElmArgVal(chkbf.Clone(true)).Reader(true))
+				}
+				flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+				return nil
 			}
 			return
 		}
