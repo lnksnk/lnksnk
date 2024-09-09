@@ -304,6 +304,32 @@ func CopyBytes(dest []byte, desti int, src []byte, srci int) (lencopied int, des
 	return
 }
 
+func EOFReadRunes(rdr io.RuneReader, readrune func(r rune, size int) error) (err error) {
+	if rdr == nil {
+		return io.EOF
+	}
+	r, size := rune(0), 0
+	for {
+		r, size, err = rdr.ReadRune()
+		if size > 0 && (err == io.EOF || err == nil) {
+			if err = readrune(r, size); err != nil {
+				return
+			}
+			continue
+		}
+		if size == 0 && err == nil {
+			break
+		}
+		if err != nil {
+			break
+		}
+	}
+	if size == 0 && err == nil {
+		err = io.EOF
+	}
+	return
+}
+
 // FReadRunesEOL
 func FReadRunesEOL(rdr io.RuneReader, txtpar rune, eolrns ...rune) (rnsline []rune, err error) {
 	if eolrnsl := len(eolrns); rdr != nil && eolrnsl > 0 {
