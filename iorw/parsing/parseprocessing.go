@@ -860,9 +860,7 @@ func internalProcessParsing(
 								return
 							}
 							if !argbf.Empty() {
-								if !invalfnd {
-									setElmArgVal("pre", formatElmArgVal(argbf.Clone(true)))
-								}
+								setElmArgVal("pre", formatElmArgVal(argbf.Clone(true)))
 							}
 							return
 						}
