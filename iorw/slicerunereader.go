@@ -52,6 +52,12 @@ func (rnrdrsslce *RuneReaderSlice) PostAppendArgs(argrdrs ...interface{}) {
 				}
 				continue
 			}
+			if int32s, int32ok := arg.(int32); int32ok {
+				rns := make([]rune, 1)
+				copy(rns, []int32{int32s})
+				rdrs = append(rdrs, NewRunesReader(rns...))
+				continue
+			}
 			if rnsrdr, _ := arg.(io.RuneReader); rnsrdr != nil {
 				rdrs = append(rdrs, rnsrdr)
 				continue
