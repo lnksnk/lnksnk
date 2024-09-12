@@ -527,14 +527,16 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 								break
 							}
 						}
+						tstphrse = string(r)
+						lsteofphrse = ""
 						for eofk := range mtcheofs {
-							if len(eofk) == 1 {
+							if eofk[:1] != tstphrse {
 								delete(mtcheofs, eofk)
 							}
+							if len(mtcheofs) == 0 {
+								return r, size, err
+							}
 						}
-						lsteofphrse = ""
-						tstphrse = string(r)
-						//ri++
 						goto rdfndeofs
 					}
 					if err != io.EOF {
