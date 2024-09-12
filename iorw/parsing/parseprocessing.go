@@ -1256,8 +1256,6 @@ func internalProcessParsing(
 		break
 	}
 
-	//flscdrrdrns()
-
 	ctntflush()
 	var chdpgrm interface{} = nil
 	if !chdctntbuf.Empty() && cdebuf.Empty() {
