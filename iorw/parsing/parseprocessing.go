@@ -446,6 +446,13 @@ func (ctntelm *contentelem) Close() (err error) {
 
 type ctntelemlevel int
 
+const (
+	ctntElemUnknown ctntelemlevel = iota
+	ctntElemStart
+	ctntElemSingle
+	ctntElemEnd
+)
+
 func (ctntelmlvl ctntelemlevel) String() string {
 	if ctntelmlvl == ctntElemStart {
 		return "start"
