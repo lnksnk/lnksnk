@@ -12,125 +12,25 @@ import (
 	"github.com/lnksnk/lnksnk/iorw"
 )
 
-type ArgsEventReader struct {
-	*iorw.ReplaceRuneReader
-	preposts    map[string]string
-	prebufs     map[string]*iorw.Buffer
-	prepostevts map[string]func(argsevtr *ArgsEventReader, prefix, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{})
-}
-
-func NewArgsEventReader(rplcrdr *iorw.ReplaceRuneReader) (argsavtr *ArgsEventReader) {
-	if rplcrdr != nil {
-		argsavtr = &ArgsEventReader{ReplaceRuneReader: rplcrdr}
-	}
-	return
-}
-
-func (argsevtr *ArgsEventReader) ReadRune() (r rune, size int, err error) {
-	if argsevtr != nil && argsevtr.ReplaceRuneReader != nil {
-		return argsevtr.ReplaceRuneReader.ReadRune()
-	}
-	err = io.EOF
-	return
-}
-
-func (argsevtr *ArgsEventReader) ReplaceEvent(prefix string, rplcrdr *iorw.ReplaceRuneReader) (nxtrlst interface{}) {
-	if argsevtr != nil {
-		if preposts, prebufs := argsevtr.preposts, argsevtr.prebufs; len(preposts) > 0 {
-			if postfix := preposts[prefix]; postfix != "" {
-				if prebufs == nil {
-					prebufs = map[string]*iorw.Buffer{}
-					argsevtr.prebufs = prebufs
-				}
-				prebf := prebufs[prefix]
-				if prebf == nil {
-					prebf = iorw.NewBuffer()
-					prebufs[prefix] = prebf
-				}
-				prebf.Clear()
-				prebf.ReadRunesFrom(rplcrdr.ReadRunesUntil(postfix))
-				if fnd, _ := rplcrdr.FoundEOF(); fnd {
-					if PostFixFoundEvent := argsevtr.prepostevts[prefix+postfix]; PostFixFoundEvent != nil {
-						fnd, val := PostFixFoundEvent(argsevtr, prefix, postfix, prebf)
-						if fnd {
-							return val
-						}
-						return ""
-					}
-				}
-				rplcrdr.PreAppend(prebf.Clone(true).Reader(true))
-				return
-			}
-		}
-	}
-	return
-}
-
-func (argsevtr *ArgsEventReader) MatchPhrase(phrsbuf *iorw.Buffer, args map[string]interface{}) (eqls bool, result interface{}) {
-	if !phrsbuf.Empty() && len(args) > 0 {
-		for argk, arv := range args {
-			if eqls, _ = phrsbuf.Equals(argk); eqls {
-				result = arv
-				return
-			}
-		}
-	}
-	return
-}
-
-func (argsevtr *ArgsEventReader) SetPrePostFix(a ...interface{}) {
-	if al := len(a); argsevtr != nil && al > 2 {
-		preposts, prepostevts := argsevtr.preposts, argsevtr.prepostevts
-		if preposts == nil {
-			preposts = map[string]string{}
-			argsevtr.preposts = preposts
-		}
-		if prepostevts == nil {
-			prepostevts = map[string]func(argsevtr *ArgsEventReader, prefix string, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{}){}
-			argsevtr.prepostevts = prepostevts
-		}
-		for al > 2 {
-			if prepostevt, _ := a[0].(func(argsevtr *ArgsEventReader, prefix, postfix string, phrsbuf *iorw.Buffer) (fndval bool, val interface{})); prepostevt != nil {
-				a = a[1:]
-				al--
-				if prefix := a[0].(string); prefix != "" {
-					a = a[1:]
-					al--
-					if postfix := a[0].(string); postfix != "" {
-						preposts[prefix] = postfix
-						a = a[1:]
-						al--
-						argsevtr.ReplaceWith(prefix, argsevtr)
-						prepostevts[prefix+postfix] = prepostevt
-						continue
-					}
-				}
-			}
-			break
-		}
-	}
-}
-
 func validLastCdeRune(cr rune) bool {
 	return cr == '=' || cr == '(' || cr == '[' || cr == ',' || cr == '+' || cr == '/' || cr == ':'
 }
 
 type contentelem struct {
-	modified     time.Time
-	fi           fsutils.FileInfo
-	elemname     string
-	elemroot     string
-	elemext      string
-	ctntbuf      *iorw.Buffer
-	prebuf       *iorw.Buffer
-	postbuf      *iorw.Buffer
-	runerdr      io.RuneReader
-	rawBuf       *iorw.Buffer
-	eofevent     func(*contentelem, error)
-	mtchphrshndl *MatchPhraseHandler
-	attrs        map[string]interface{}
-	level        int
-	prvctntelem  *contentelem
+	modified    time.Time
+	fi          fsutils.FileInfo
+	elemname    string
+	elemroot    string
+	elemext     string
+	ctntbuf     *iorw.Buffer
+	prebuf      *iorw.Buffer
+	postbuf     *iorw.Buffer
+	runerdr     io.RuneReader
+	rawBuf      *iorw.Buffer
+	eofevent    func(*contentelem, error)
+	attrs       map[string]interface{}
+	level       int
+	prvctntelem *contentelem
 }
 
 func (ctntelm *contentelem) writeRune(r rune) {
@@ -338,6 +238,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			prpflush.PreAppend(strings.NewReader(prpphrase))
 			return
 		}, "<:_:", ":/>")
+
 		if !cntntbuf.Empty() {
 			if err = cntntbuf.Print(iorw.ReadRunesUntil(cntntbuf.Clone(true).Reader(true), "[:", func(cntphrase string, cntuntilrdr io.RuneReader, cntorgrdr *iorw.RuneReaderSlice, cntorgerr error, cntflushrdr *iorw.RuneReaderSlice) (cnterr error) {
 				if cntphrase == "[:" {
@@ -362,6 +263,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		}
 		ctntstngs["cntnt"] = cntntbuf
 		fndctnt := false
+
 		preprdr = iorw.ReadRunesUntil(preprdr, "<:", ":/>", func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr *iorw.RuneReaderSlice, prporgerr error, prpflushrdr *iorw.RuneReaderSlice) (prperr error) {
 			if prpphrase == "<:" {
 				fndctnt = true
@@ -395,12 +297,6 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			}
 			return
 		})
-		bf := iorw.NewBuffer(preprdr)
-		if ctntelm.elemname == ":gui:nav:" {
-			//fmt.Println(bf)
-		}
-		preprdr = bf.Reader(true)
-		//ctntelm.runerdr = agrsevtrdr
 		ctntelm.runerdr = preprdr
 	}
 	return
@@ -409,14 +305,13 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 // Close implements io.Closer
 func (ctntelm *contentelem) Close() (err error) {
 	if ctntelm != nil {
-		postbuf, prebuf, ctntbuf, rawBuf, mtchphrshndl, attrs := ctntelm.postbuf, ctntelm.prebuf, ctntelm.ctntbuf, ctntelm.rawBuf, ctntelm.mtchphrshndl, ctntelm.attrs
+		postbuf, prebuf, ctntbuf, rawBuf, attrs := ctntelm.postbuf, ctntelm.prebuf, ctntelm.ctntbuf, ctntelm.rawBuf, ctntelm.attrs
 		ctntelm.postbuf = nil
 		ctntelm.prebuf = nil
 		ctntelm.runerdr = nil
 		ctntelm.rawBuf = nil
 		ctntelm.fi = nil
 		ctntelm.eofevent = nil
-		ctntelm.mtchphrshndl = nil
 		ctntelm.attrs = nil
 
 		if postbuf != nil {
@@ -432,9 +327,7 @@ func (ctntelm *contentelem) Close() (err error) {
 		if rawBuf != nil {
 			rawBuf.Close()
 		}
-		if mtchphrshndl != nil {
-			mtchphrshndl.Close()
-		}
+
 		for _, atv := range attrs {
 			if atvbf, _ := atv.(*iorw.Buffer); atvbf != nil {
 				atvbf.Close()
@@ -625,8 +518,6 @@ func internalProcessParsing(
 		return elempath + elemname
 	}
 
-	//chkrns := make([]rune, 1)
-	//chkrnsl := 0
 	chkng := false
 	rdngval := false
 	var argbf *iorw.Buffer
@@ -740,8 +631,6 @@ func internalProcessParsing(
 				}
 				if iorw.IsSpace(r) {
 					if elmlvl == ctntElemUnknown {
-						//flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
-						//return nil
 						return fmt.Errorf("failed")
 					}
 					return fmt.Errorf("prepeof")
@@ -997,7 +886,7 @@ func internalProcessParsing(
 						testext = pathext
 					}
 					if fullelemname[len(fullelemname)-1] == ':' {
-						for _, nextpth := range []string{testext, ".js"} {
+						for _, nextpth := range []string{testext, ".js", ".html"} {
 							if nextpth != "" && nextpth[0:1] == "." {
 								if fios := fs.LS(testpath + "index" + nextpth); len(fios) == 1 {
 									return fios[0]
@@ -1097,17 +986,6 @@ func internalProcessParsing(
 		return nil
 	}, func() {})
 
-	var mainrdr io.RuneReader = iorw.ReadRuneFunc(func() (r rune, size int, err error) {
-	reread:
-		r, size, err = ctntprsrdr.ReadRune()
-		if size > 0 && (err == nil || err == io.EOF) {
-			if crntnextelm != nil {
-				crntnextelm.writeRune(r)
-				goto reread
-			}
-		}
-		return
-	})
 	var cdebuf *iorw.Buffer = nil
 	var codebuffer = func() *iorw.Buffer {
 		if cdebuf != nil {
@@ -1145,7 +1023,17 @@ func internalProcessParsing(
 
 	cdetxtr := rune(0)
 
-	coderunsrdr := iorw.ReadRunesUntil(mainrdr, "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) error {
+	coderunsrdr := iorw.ReadRunesUntil(iorw.ReadRuneFunc(func() (r rune, size int, err error) {
+	reread:
+		r, size, err = ctntprsrdr.ReadRune()
+		if size > 0 && (err == nil || err == io.EOF) {
+			if crntnextelm != nil {
+				crntnextelm.writeRune(r)
+				goto reread
+			}
+		}
+		return
+	}), "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) error {
 		if phrase == "<@" {
 			if cderdmode == codeReadingContent {
 				cderdmode = codeReadingCode
@@ -1245,9 +1133,8 @@ func internalProcessParsing(
 		return
 	}
 
-	for {
-		cr, csize, cerr := coderunsrdr.ReadRune()
-		if csize > 0 && (cerr == nil || cerr == io.EOF) {
+	if prsngerr = iorw.EOFReadRunes(coderunsrdr, func(cr rune, csize int) (cerr error) {
+		if csize > 0 {
 			if cderdmode == codeReadingCode {
 				ctntflush()
 				if !fncode {
@@ -1255,12 +1142,13 @@ func internalProcessParsing(
 				}
 			}
 			writecderns(cr)
-			continue
 		}
-		if cerr == io.EOF {
-
+		return
+	}); prsngerr != nil {
+		if prsngerr != io.EOF {
+			return
 		}
-		break
+		prsngerr = nil
 	}
 
 	ctntflush()
@@ -1272,6 +1160,7 @@ func internalProcessParsing(
 		}
 	}
 	if !chdctntbuf.Empty() {
+		//fmt.Println(chdctntbuf)
 		if out != nil {
 			if _, prsngerr = chdctntbuf.WriteTo(out); prsngerr != nil {
 				return
@@ -1280,6 +1169,7 @@ func internalProcessParsing(
 	}
 
 	if !cdebuf.Empty() {
+		//fmt.Println(cdebuf)
 		if DefaultMinifyCde != nil {
 			prsngerr = DefaultMinifyCde(".js", cdebuf, nil)
 		}
@@ -1304,12 +1194,16 @@ func internalProcessParsing(
 			if prsngerr == nil {
 				if pathext == ".json" {
 					if out != nil {
-						json.NewEncoder(out).Encode(&evalresult)
+						if evalresult != nil {
+							json.NewEncoder(out).Encode(&evalresult)
+						}
 					}
 					return
 				}
 				if out != nil {
-					iorw.Fbprint(out, evalresult)
+					if evalresult != nil {
+						iorw.Fbprint(out, evalresult)
+					}
 				}
 			}
 		}
