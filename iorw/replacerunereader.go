@@ -10,7 +10,7 @@ import (
 type ReplaceRuneReader struct {
 	eoffnd       bool
 	lsteofphrse  string
-	orgrdr       *RuneReaderSlice
+	orgrdr       SliceRuneReader
 	crntrdr      io.RuneReader
 	crntrns      []rune
 	crntrnsl     int
@@ -28,7 +28,7 @@ func NewReplaceRuneReader(orgrdr interface{}, rplwiths ...interface{}) (rplcerrd
 			orgrnrdr = bufio.NewReaderSize(orgr, 1)
 		}
 	}
-	rplcerrdr = &ReplaceRuneReader{orgrdr: NewRuneReaderSlice(orgrnrdr)}
+	rplcerrdr = &ReplaceRuneReader{orgrdr: NewSliceRuneReader(orgrnrdr)}
 	rplwithsl := len(rplwiths)
 	for rplwithsl > 0 && rplwithsl%2 == 0 {
 		rplcerrdr.ReplaceWith(rplwiths[0], rplwiths[1])
@@ -238,7 +238,7 @@ func replacedWithReader(rplcerrdr *ReplaceRuneReader, rplcewith map[string]inter
 	if len(rplcewith) > 0 && phrase != "" {
 		var appndrns = func(postrdr io.RuneReader) io.RuneReader {
 			if len(prerns) > 0 {
-				return NewRuneReaderSlice(NewRunesReader(prerns...), postrdr)
+				return NewSliceRuneReader(NewRunesReader(prerns...), postrdr)
 			}
 			return postrdr
 		}

@@ -19,7 +19,7 @@ const (
 )
 
 type DataReader struct {
-	rdr        *iorw.RuneReaderSlice
+	rdr        iorw.SliceRuneReader
 	rdrtpe     datareadertype
 	colsep     []rune
 	colTxtr    rune
@@ -384,7 +384,7 @@ func newDataReader(rdrtype string, sttngs map[string]interface{}, rdr *iorw.EOFC
 			return dataRdrJson
 		}
 		return dataRdrUnknown
-	}(), rdr: iorw.NewRuneReaderSlice(rdr), hasheaders: true}
+	}(), rdr: iorw.NewSliceRuneReader(rdr), hasheaders: true}
 	return
 }
 

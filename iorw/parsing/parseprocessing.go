@@ -115,7 +115,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			prpbf = iorw.NewBuffer()
 			return prpbf
 		}
-		preprdr := iorw.ReadRunesUntil(rdr, func(prasefnd string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, prpflushrdr *iorw.RuneReaderSlice) (prperr error) {
+		preprdr := iorw.ReadRunesUntil(rdr, func(prasefnd string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, prpflushrdr iorw.SliceRuneReader) (prperr error) {
 			if prasefnd == "[#" {
 				if !prpbf.Empty() {
 					prpbf.Clear()
@@ -205,7 +205,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			return
 		}()
 		corefnd := false
-		preprdr = iorw.ReadRunesUntil(preprdr, func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr *iorw.RuneReaderSlice, prporgerr error, prpflush *iorw.RuneReaderSlice) (prperr error) {
+		preprdr = iorw.ReadRunesUntil(preprdr, func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr iorw.SliceRuneReader, prporgerr error, prpflush iorw.SliceRuneReader) (prperr error) {
 			if prpphrase == "<:_:" {
 				corefnd = true
 				defer func() {
@@ -240,9 +240,9 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		}, "<:_:", ":/>")
 
 		if !cntntbuf.Empty() {
-			if err = cntntbuf.Print(iorw.ReadRunesUntil(cntntbuf.Clone(true).Reader(true), "[:", func(cntphrase string, cntuntilrdr io.RuneReader, cntorgrdr *iorw.RuneReaderSlice, cntorgerr error, cntflushrdr *iorw.RuneReaderSlice) (cnterr error) {
+			if err = cntntbuf.Print(iorw.ReadRunesUntil(cntntbuf.Clone(true).Reader(true), "[:", func(cntphrase string, cntuntilrdr io.RuneReader, cntorgrdr iorw.SliceRuneReader, cntorgerr error, cntflushrdr iorw.SliceRuneReader) (cnterr error) {
 				if cntphrase == "[:" {
-					cntbf, cntbferr := iorw.NewBufferError(iorw.ReadRunesUntil(cntuntilrdr), "::", func(tplphrase string, tpluntilrdr io.RuneReader, tplorgrdr *iorw.RuneReaderSlice, tplorgerr error, tplflushrdr *iorw.RuneReaderSlice) (tplerr error) {
+					cntbf, cntbferr := iorw.NewBufferError(iorw.ReadRunesUntil(cntuntilrdr), "::", func(tplphrase string, tpluntilrdr io.RuneReader, tplorgrdr iorw.SliceRuneReader, tplorgerr error, tplflushrdr iorw.SliceRuneReader) (tplerr error) {
 
 						return
 					})
@@ -264,7 +264,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		ctntstngs["cntnt"] = cntntbuf
 		fndctnt := false
 
-		preprdr = iorw.ReadRunesUntil(preprdr, "<:", ":/>", func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr *iorw.RuneReaderSlice, prporgerr error, prpflushrdr *iorw.RuneReaderSlice) (prperr error) {
+		preprdr = iorw.ReadRunesUntil(preprdr, "<:", ":/>", func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr iorw.SliceRuneReader, prporgerr error, prpflushrdr iorw.SliceRuneReader) (prperr error) {
 			if prpphrase == "<:" {
 				fndctnt = true
 				defer func() {
@@ -440,10 +440,10 @@ func internalProcessParsing(
 		return
 	}()
 
-	var rnsrdrslcrdr = iorw.NewRuneReaderSlice(rnrdrs...)
+	var rnsrdrslcrdr = iorw.NewSliceRuneReader(rnrdrs...)
 	var phrsbf *iorw.Buffer = nil
 	var chninit = false
-	var ctntinitrplcrdr = iorw.ReadRunesUntil(rnsrdrslcrdr, "<:_:", ":/>", iorw.RunesUntilSliceFlushFunc(func(phrasefnd string, untilrdr io.RuneReader, orgrd *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) error {
+	var ctntinitrplcrdr = iorw.ReadRunesUntil(rnsrdrslcrdr, "<:_:", ":/>", iorw.RunesUntilSliceFlushFunc(func(phrasefnd string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
 		if phrasefnd == "<:_:" {
 			if !chninit {
 				chninit = true
@@ -529,7 +529,7 @@ func internalProcessParsing(
 		return argbf
 	}
 
-	ctntprsrdr := iorw.ReadRunesUntil(iorw.NewRuneReaderSlice(ctntinitrplcrdr), "<", ">", func(phrase string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) (fnderr error) {
+	ctntprsrdr := iorw.ReadRunesUntil(iorw.NewSliceRuneReader(ctntinitrplcrdr), "<", ">", func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) (fnderr error) {
 		if rdngval {
 			orgrdr.PreAppend(strings.NewReader(phrase))
 			return
@@ -560,7 +560,7 @@ func internalProcessParsing(
 				if len(eofargs) > 0 {
 					eofargs = append(eofargs, "#")
 					srchng := false
-					eofargs = append(eofargs, func(rplcphrase string, rplcuntilrdr, rplcorgrdr io.RuneReader, rplcorgerr error, rplcflushrdr *iorw.RuneReaderSlice) (rplcfnderr error) {
+					eofargs = append(eofargs, func(rplcphrase string, rplcuntilrdr, rplcorgrdr io.RuneReader, rplcorgerr error, rplcflushrdr iorw.SliceRuneReader) (rplcfnderr error) {
 						if rplcphrase == "#" {
 							if srchng {
 								return fmt.Errorf("%s", rplcphrase)
@@ -683,7 +683,7 @@ func internalProcessParsing(
 					chkbf.WriteRune(ar)
 				}
 				return
-			}), "/", ">", "=", `='`, `="`, `=[$`, `[$`, func(argsphrase string, argsuntilrdr, argsorgrdr io.RuneReader, argsorgerr error, argsflushrdr *iorw.RuneReaderSlice) (argserr error) {
+			}), "/", ">", "=", `='`, `="`, `=[$`, `[$`, func(argsphrase string, argsuntilrdr, argsorgrdr io.RuneReader, argsorgerr error, argsflushrdr iorw.SliceRuneReader) (argserr error) {
 				if argsphrase == `='` || argsphrase == `="` {
 					rdngval = true
 					defer func() {
@@ -701,7 +701,7 @@ func internalProcessParsing(
 					if !argbf.Empty() {
 						argbf.Clear()
 					}
-					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, argtxtpar, iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd *iorw.RuneReaderSlice, txtorgerr error, txtflushrdr *iorw.RuneReaderSlice) error {
+					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, argtxtpar, iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd iorw.SliceRuneReader, txtorgerr error, txtflushrdr iorw.SliceRuneReader) error {
 						if txtphrasefnd == argtxtpar {
 							return fmt.Errorf("%s", txtphrasefnd)
 						}
@@ -744,7 +744,7 @@ func internalProcessParsing(
 					if !argbf.Empty() {
 						argbf.Clear()
 					}
-					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, "$]", iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd *iorw.RuneReaderSlice, txtorgerr error, txtflushrdr *iorw.RuneReaderSlice) error {
+					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, "$]", iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd iorw.SliceRuneReader, txtorgerr error, txtflushrdr iorw.SliceRuneReader) error {
 						if txtphrasefnd == "$]" {
 							return fmt.Errorf("%s", txtphrasefnd)
 						}
@@ -775,7 +775,7 @@ func internalProcessParsing(
 					if !argbf.Empty() {
 						argbf.Clear()
 					}
-					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, "$]", iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd *iorw.RuneReaderSlice, txtorgerr error, txtflushrdr *iorw.RuneReaderSlice) error {
+					if _, argserr = argbuffer().ReadRunesFrom(iorw.ReadRunesUntil(argsorgrdr, "$]", iorw.RunesUntilSliceFlushFunc(func(txtphrasefnd string, txtuntilrdr io.RuneReader, txtorgrd iorw.SliceRuneReader, txtorgerr error, txtflushrdr iorw.SliceRuneReader) error {
 						if txtphrasefnd == "$]" {
 							return fmt.Errorf("%s", txtphrasefnd)
 						}
@@ -1033,7 +1033,7 @@ func internalProcessParsing(
 			}
 		}
 		return
-	}), "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr *iorw.RuneReaderSlice, orgerr error, flushrdr *iorw.RuneReaderSlice) error {
+	}), "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
 		if phrase == "<@" {
 			if cderdmode == codeReadingContent {
 				cderdmode = codeReadingCode

@@ -6,25 +6,36 @@ import (
 	"strings"
 )
 
-type RuneReaderSlice struct {
+type SliceRuneReader interface {
+	Length() (ln int)
+	Empty() bool
+	ReadRune() (r rune, size int, err error)
+	PostAppendArgs(...interface{})
+	PreAppendArgs(...interface{})
+	PreAppend(...io.RuneReader)
+	PostAppend(rdrs ...io.RuneReader)
+	Close() (err error)
+}
+
+type runeReaderSlice struct {
 	rnrdrs   []io.RuneReader
 	crntrdr  io.RuneReader
 	EventEof func(io.RuneReader, error)
 }
 
-func NewRuneReaderSlice(rnrdrs ...io.RuneReader) (rnrdrsslce *RuneReaderSlice) {
-	rnrdrsslce = &RuneReaderSlice{crntrdr: nil, rnrdrs: append([]io.RuneReader{}, rnrdrs...)}
+func NewSliceRuneReader(rnrdrs ...io.RuneReader) (rnrdrsslce SliceRuneReader) {
+	rnrdrsslce = &runeReaderSlice{crntrdr: nil, rnrdrs: append([]io.RuneReader{}, rnrdrs...)}
 	return
 }
 
-func (rnrdrsslce *RuneReaderSlice) Length() (ln int) {
+func (rnrdrsslce *runeReaderSlice) Length() (ln int) {
 	if rnrdrsslce != nil {
 		ln = len(rnrdrsslce.rnrdrs)
 	}
 	return
 }
 
-func (rnrdrsslce *RuneReaderSlice) Empty() bool {
+func (rnrdrsslce *runeReaderSlice) Empty() bool {
 	if rnrdrsslce == nil {
 		return true
 	}
@@ -34,7 +45,7 @@ func (rnrdrsslce *RuneReaderSlice) Empty() bool {
 	return false
 }
 
-func (rnrdrsslce *RuneReaderSlice) PostAppendArgs(argrdrs ...interface{}) {
+func (rnrdrsslce *runeReaderSlice) PostAppendArgs(argrdrs ...interface{}) {
 	if rnrdrsslce != nil {
 		var rdrs []io.RuneReader
 		for _, arg := range argrdrs {
@@ -73,7 +84,7 @@ func (rnrdrsslce *RuneReaderSlice) PostAppendArgs(argrdrs ...interface{}) {
 	}
 }
 
-func (rnrdrsslce *RuneReaderSlice) PreAppendArgs(argrdrs ...interface{}) {
+func (rnrdrsslce *runeReaderSlice) PreAppendArgs(argrdrs ...interface{}) {
 	if rnrdrsslce != nil {
 		var rdrs []io.RuneReader
 		for _, arg := range argrdrs {
@@ -106,7 +117,7 @@ func (rnrdrsslce *RuneReaderSlice) PreAppendArgs(argrdrs ...interface{}) {
 	}
 }
 
-func (rnrdrsslce *RuneReaderSlice) PreAppend(rdrs ...io.RuneReader) {
+func (rnrdrsslce *runeReaderSlice) PreAppend(rdrs ...io.RuneReader) {
 	if rnrdrsslce != nil {
 		if len(rdrs) > 0 {
 			if rnrdrsslce.crntrdr != nil {
@@ -118,7 +129,7 @@ func (rnrdrsslce *RuneReaderSlice) PreAppend(rdrs ...io.RuneReader) {
 	}
 }
 
-func (rnrdrsslce *RuneReaderSlice) PostAppend(rdrs ...io.RuneReader) {
+func (rnrdrsslce *runeReaderSlice) PostAppend(rdrs ...io.RuneReader) {
 	if rnrdrsslce != nil {
 		if len(rdrs) > 0 {
 			rnrdrsslce.rnrdrs = append(rnrdrsslce.rnrdrs, rdrs...)
@@ -126,7 +137,7 @@ func (rnrdrsslce *RuneReaderSlice) PostAppend(rdrs ...io.RuneReader) {
 	}
 }
 
-func readSliceRune(rnrdrsslce *RuneReaderSlice, eventeof func(io.RuneReader, error), crntrdr io.RuneReader) (r rune, size int, err error) {
+func readSliceRune(rnrdrsslce *runeReaderSlice, eventeof func(io.RuneReader, error), crntrdr io.RuneReader) (r rune, size int, err error) {
 	if rnrdrsslce == nil {
 		err = io.EOF
 		return
@@ -163,17 +174,16 @@ NXTR:
 		rnrdrsslce.crntrdr = crntrdr
 		rnrdrsslce.rnrdrs = rnrdrsslce.rnrdrs[1:]
 		goto NXTR
-		//return readSliceRune(rnrdrsslce, rnrdrsslce.EventEof, rnrdrsslce.crntrdr)
 	}
 	err = io.EOF
 	return
 }
 
-func (rnrdrsslce *RuneReaderSlice) ReadRune() (r rune, size int, err error) {
+func (rnrdrsslce *runeReaderSlice) ReadRune() (r rune, size int, err error) {
 	return readSliceRune(rnrdrsslce, rnrdrsslce.EventEof, rnrdrsslce.crntrdr)
 }
 
-func (rnrdrsslce *RuneReaderSlice) Close() (err error) {
+func (rnrdrsslce *runeReaderSlice) Close() (err error) {
 	if rnrdrsslce != nil {
 		if rnrdrsl := len(rnrdrsslce.rnrdrs); rnrdrsl > 0 {
 			for rnrdrsl > 0 {
