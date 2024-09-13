@@ -113,12 +113,16 @@ func Parse(parseOnly bool, pathModified time.Time, path string, defaultext strin
 					}
 					if pathext == ".json" {
 						if out != nil {
-							json.NewEncoder(out).Encode(&evalresult)
+							if evalresult != nil {
+								json.NewEncoder(out).Encode(&evalresult)
+							}
 						}
 						return
 					}
 					if out != nil {
-						iorw.Fbprint(out, evalresult)
+						if evalresult != nil {
+							iorw.Fbprint(out, evalresult)
+						}
 					}
 					return
 				}
