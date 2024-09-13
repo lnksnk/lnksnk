@@ -161,28 +161,7 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		}
 		defer qrybuf.Close()
 
-		//rnrr = qrybuf.Reader()
 		var foundTxt = false
-
-		/*var prvr = rune(0)
-		var prmslbl = [][]rune{[]rune("@"), []rune("@")}
-		var prmslbli = []int{0, 0}
-
-		rnsbuf := []rune{}
-
-		var appr = func(r rune) {
-			rnsbuf = append(rnsbuf, r)
-		}
-
-		var apprs = func(p []rune) {
-			if pl := len(p); pl > 0 {
-				rnsbuf = append(rnsbuf, p...)
-			}
-		}
-
-		var psblprmnme = make([]rune, 8192)
-		var psblprmnmei = 0
-		*/
 
 		var possibleArgName map[string]int = map[string]int{}
 		paramkeys := prms.StandardKeys()
