@@ -1041,6 +1041,7 @@ func internalProcessParsing(
 			return nil
 		}
 		if phrase == "@>" {
+
 			if cderdmode == codeReadingCode {
 				cderdmode = codeReadingContent
 			}
@@ -1056,18 +1057,11 @@ func internalProcessParsing(
 					cdelstr = 0
 					return false
 				}
-				if !iorw.IsSpace(r) {
-					cdelstr = func() rune {
-						if validLastCdeRune(r) {
-							return r
-						}
-						return 0
-					}()
-				}
 				return true
 			}
 			if prvr != '\\' && cdetxtr == r {
 				cdetxtr = 0
+				cdelstr = 0
 				return false
 			}
 			return false
@@ -1078,6 +1072,16 @@ func internalProcessParsing(
 	writecderns := func(rns ...rune) {
 		for _, r := range rns {
 			if cderdmode == codeReadingCode {
+				if !iorw.IsSpace(r) {
+					if validLastCdeRune(r) {
+						cdelstr = r
+						codebuffer().WriteRune(r)
+						return
+					}
+					cdelstr = 0
+					codebuffer().WriteRune(r)
+					return
+				}
 				codebuffer().WriteRune(r)
 				return
 			}
@@ -1093,9 +1097,48 @@ func internalProcessParsing(
 	}
 
 	ctntflush := func() (flsherr error) {
-		if cdepsvs := ctntbuf.Size(); cdepsvs > 0 {
+		if !ctntbuf.Empty() {
 			defer ctntbuf.Clear()
-			hstmpltfx := ctntbuf.HasPrefix("`") && ctntbuf.HasSuffix("`") && cdepsvs >= 2
+			hstmpltfx := ctntbuf.HasPrefix("`") && ctntbuf.HasSuffix("`")
+			var cntntrdr io.RuneReader = nil
+			if hstmpltfx {
+				cntntrdr = ctntbuf.SubBuffer(1, ctntbuf.Size()-1).Reader(true)
+			} else {
+				cntntrdr = iorw.ReadRunesUntil(ctntbuf.Clone(true).Reader(true), "`", "${", `"\`,
+					func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) interface{} {
+						if phrase == "`" {
+							flushrdr.PreAppendArgs(`"\\`)
+							return nil
+						}
+						if phrase == "${" {
+							flushrdr.PreAppendArgs("\\${")
+							return nil
+						}
+						if phrase == `"\` {
+							flushrdr.PreAppendArgs(`"\\`)
+							return nil
+						}
+						return nil
+					})
+			}
+			if cdelstr > 0 {
+				cdelstr = 0
+				if flsherr = codebuffer().Print("`", cntntrdr, "`"); flsherr != nil {
+					if flsherr != io.EOF {
+						return
+					}
+					flsherr = nil
+				}
+				return
+			}
+			if flsherr = codebuffer().Print("print(`", cntntrdr, "`);"); flsherr != nil {
+				if flsherr != io.EOF {
+					return
+				}
+				flsherr = nil
+			}
+			return
+			/*hstmpltfx := ctntbuf.HasPrefix("`") && ctntbuf.HasSuffix("`") && cdepsvs >= 2
 			cntsinlinebraseortmpl := !hstmpltfx && ctntbuf.Contains("${") || ctntbuf.Contains("`")
 			var psvrdr io.RuneReader = func() io.RuneReader {
 				if hstmpltfx {
@@ -1128,7 +1171,7 @@ func internalProcessParsing(
 				codebuffer().Print("print(`", psvrdr, "`);")
 				return
 			}
-			codebuffer().Print("print(`", psvrdr, "`);")
+			codebuffer().Print("print(`", psvrdr, "`);")*/
 		}
 		return
 	}
