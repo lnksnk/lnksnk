@@ -306,6 +306,15 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 			}
 			continue
 		}
+		if arrs, _ := eofd.([]string); len(arrs) > 0 {
+			for _, s := range arrs {
+				if s != "" && !oefmtchd[s] {
+					eofrunes = append(eofrunes, []rune(s))
+					oefmtchd[s] = true
+				}
+			}
+			continue
+		}
 		if int32s, _ := eofd.([]int32); len(int32s) > 0 {
 			eofrns := make([]rune, len(int32s))
 			copy(eofrns, int32s)
