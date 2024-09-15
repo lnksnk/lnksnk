@@ -96,6 +96,7 @@ func (ctntelm *contentelem) ReadRune() (r rune, size int, err error) {
 
 func prepairContentElem(ctntelm *contentelem) (err error) {
 	if ctntelm != nil && ctntelm.runerdr == nil && ctntelm.fi != nil {
+
 		cntntbuf := ctntelm.ctntbuf
 		ctntelm.ctntbuf = nil
 		var rdr io.RuneReader = nil
@@ -262,41 +263,19 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			}
 		}
 		ctntstngs["cntnt"] = cntntbuf
-		fndctnt := false
+		var ctntstngskeys []string
 
-		preprdr = iorw.ReadRunesUntil(preprdr, "<:", ":/>", func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr iorw.SliceRuneReader, prporgerr error, prpflushrdr iorw.SliceRuneReader) (prperr error) {
-			if prpphrase == "<:" {
-				fndctnt = true
-				defer func() {
-					fndctnt = false
-				}()
-				tmpbf := iorw.NewBuffer()
-				if prperr = tmpbf.Print(prpuntilrdr); prperr != nil {
-					if prperr.Error() == ":/>" {
-						prperr = nil
-						for ctntk, ctntv := range ctntstngs {
-							if eql, _ := tmpbf.Equals(ctntk); eql {
-								prpflushrdr.PreAppend(valToRuneReader(ctntv, false))
-								return
-							}
-						}
-						return
-					}
-					if prperr == io.EOF {
-						prperr = nil
-						return
-					}
-				}
+		for ctntk := range ctntstngs {
+			ctntstngskeys = append(ctntstngskeys, "<:"+ctntk+":/>")
+		}
+
+		if len(ctntstngskeys) > 0 {
+			preprdr = iorw.ReadRunesUntil(preprdr, ctntstngskeys, func(prpphrase string, prpuntilrdr io.RuneReader, prporgrdr iorw.SliceRuneReader, prporgerr error, prpflushrdr iorw.SliceRuneReader) (prperr error) {
+				prpflushrdr.PreAppendArgs(valToRuneReader(ctntstngs[prpphrase[len("<:"):len(prpphrase)-len(":/>")]], false))
 				return
-			}
-			if prpphrase == ":/>" {
-				if fndctnt {
-					return fmt.Errorf("%s", prpphrase)
-				}
-				prpflushrdr.PreAppend(strings.NewReader(prpphrase))
-			}
-			return
-		})
+			})
+		}
+
 		ctntelm.runerdr = preprdr
 	}
 	return
@@ -1107,7 +1086,7 @@ func internalProcessParsing(
 				cntntrdr = iorw.ReadRunesUntil(ctntbuf.Clone(true).Reader(true), "`", "${", `"\`,
 					func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) interface{} {
 						if phrase == "`" {
-							flushrdr.PreAppendArgs(`"\\`)
+							flushrdr.PreAppendArgs("\\`")
 							return nil
 						}
 						if phrase == "${" {
@@ -1203,7 +1182,6 @@ func internalProcessParsing(
 		}
 	}
 	if !chdctntbuf.Empty() {
-		//fmt.Println(chdctntbuf)
 		if out != nil {
 			if _, prsngerr = chdctntbuf.WriteTo(out); prsngerr != nil {
 				return
@@ -1212,7 +1190,6 @@ func internalProcessParsing(
 	}
 
 	if !cdebuf.Empty() {
-		//fmt.Println(cdebuf)
 		if DefaultMinifyCde != nil {
 			prsngerr = DefaultMinifyCde(".js", cdebuf, nil)
 		}
@@ -1254,10 +1231,15 @@ func internalProcessParsing(
 			println(prsngerr.Error())
 			println()
 			if cderr, _ := prsngerr.(CodeError); cderr != nil {
-				println(cderr.Code())
-
+				for ln, cdeln := range strings.Split(cderr.Code(), "\n") {
+					println((ln + 1), strings.TrimFunc(cdeln, iorw.IsSpace))
+				}
+				println()
 			} else {
-				println(cdebuf.String())
+				for ln, cdeln := range strings.Split(cdebuf.String(), "\n") {
+					println((ln + 1), strings.TrimFunc(cdeln, iorw.IsSpace))
+				}
+				println()
 			}
 		}
 	}
