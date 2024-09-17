@@ -1001,8 +1001,9 @@ func internalProcessParsing(
 	}()
 
 	cdetxtr := rune(0)
+	cdeprvr := rune(0)
 
-	coderunsrdr := iorw.ReadRunesUntil(iorw.ReadRuneFunc(func() (r rune, size int, err error) {
+	var precodernsrdr io.RuneReader = iorw.ReadRuneFunc(func() (r rune, size int, err error) {
 	reread:
 		r, size, err = ctntprsrdr.ReadRune()
 		if size > 0 && (err == nil || err == io.EOF) {
@@ -1012,77 +1013,19 @@ func internalProcessParsing(
 			}
 		}
 		return
-	}), "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
-		if phrase == "<@" {
-			if cderdmode == codeReadingContent {
-				cderdmode = codeReadingCode
-			}
-			return nil
-		}
-		if phrase == "@>" {
-
-			if cderdmode == codeReadingCode {
-				cderdmode = codeReadingContent
-			}
-		}
-		return nil
-	}, func() {
-
-	}, func(prvr, r rune) bool {
-		if cderdmode == codeReadingCode {
-			if cdetxtr == 0 {
-				if prvr != '\\' && iorw.IsTxtPar(r) {
-					cdetxtr = r
-					cdelstr = 0
-					return false
-				}
-				return true
-			}
-			if prvr != '\\' && cdetxtr == r {
-				cdetxtr = 0
-				cdelstr = 0
-				return false
-			}
-			return false
-		}
-		return true
 	})
-
-	writecderns := func(rns ...rune) {
-		for _, r := range rns {
-			if cderdmode == codeReadingCode {
-				if !iorw.IsSpace(r) {
-					if validLastCdeRune(r) {
-						cdelstr = r
-						codebuffer().WriteRune(r)
-						return
-					}
-					cdelstr = 0
-					codebuffer().WriteRune(r)
-					return
-				}
-				codebuffer().WriteRune(r)
-				return
-			}
-			if cderdmode == codeReadingContent {
-				if fncode {
-					ctntbuffer().WriteRune(r)
-					return
-				}
-				chdctntbuffer().WriteRune(r)
-				return
-			}
-		}
-	}
 
 	ctntflush := func() (flsherr error) {
 		if !ctntbuf.Empty() {
 			defer ctntbuf.Clear()
 			hstmpltfx := ctntbuf.HasPrefix("`") && ctntbuf.HasSuffix("`")
+
 			var cntntrdr io.RuneReader = nil
 			if hstmpltfx {
-				cntntrdr = ctntbuf.SubBuffer(1, ctntbuf.Size()-1).Reader(true)
+				cntntrdr = ctntbuf.Clone(true).Reader(true)
 			} else {
+				//ts := ctntbuf.String()
+
 				cntntrdr = iorw.ReadRunesUntil(ctntbuf.Clone(true).Reader(true), "`", "${", `"\`,
 					func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) interface{} {
 						if phrase == "`" {
@@ -1090,7 +1033,19 @@ func internalProcessParsing(
 							return nil
 						}
 						if phrase == "${" {
-							flushrdr.PreAppendArgs("\\${")
+							brsbuf, brserr := iorw.NewBufferError(iorw.ReadRunesUntil(orgrdr, "}", "`", func(brphrase string, brsuntilrdr io.RuneReader, brsorgrdr iorw.SliceRuneReader, brsorgerr error, brsflushrdr iorw.SliceRuneReader) error {
+								if phrase == "`" {
+									brsflushrdr.PreAppendArgs("\\`")
+									return nil
+								}
+								return fmt.Errorf("%s", phrase)
+							}))
+							if brserr != nil {
+								if brserr.Error() == "}" {
+									brsbuf.Print("}")
+								}
+							}
+							flushrdr.PreAppendArgs("\\${", brsbuf.Reader(true))
 							return nil
 						}
 						if phrase == `"\` {
@@ -1099,9 +1054,24 @@ func internalProcessParsing(
 						}
 						return nil
 					})
+				//tbf := iorw.NewBuffer(cntntrdr)
+				//if eql, _ := tbf.Equals(ts); !eql {
+				//	fmt.Println(ts)
+				//	fmt.Println(tbf.String())
+				//}
+				//cntntrdr = tbf.Reader(true)
 			}
 			if cdelstr > 0 {
 				cdelstr = 0
+				if hstmpltfx {
+					if flsherr = codebuffer().Print(cntntrdr); flsherr != nil {
+						if flsherr != io.EOF {
+							return
+						}
+						flsherr = nil
+					}
+					return
+				}
 				if flsherr = codebuffer().Print("`", cntntrdr, "`"); flsherr != nil {
 					if flsherr != io.EOF {
 						return
@@ -1110,7 +1080,16 @@ func internalProcessParsing(
 				}
 				return
 			}
-			if flsherr = codebuffer().Print("print(`", cntntrdr, "`);"); flsherr != nil {
+			if hstmpltfx {
+				if flsherr = codebuffer().Print("print(", cntntrdr, ");"); flsherr != nil {
+					if flsherr != io.EOF {
+						return
+					}
+					flsherr = nil
+				}
+				return
+			}
+			if flsherr = codebuffer().Print("print(`", iorw.NewBuffer(cntntrdr).String(), "`);"); flsherr != nil {
 				if flsherr != io.EOF {
 					return
 				}
@@ -1155,18 +1134,92 @@ func internalProcessParsing(
 		return
 	}
 
-	if prsngerr = iorw.EOFReadRunes(coderunsrdr, func(cr rune, csize int) (cerr error) {
-		if csize > 0 {
-			if cderdmode == codeReadingCode {
+	readCode := func(untilrdr io.RuneReader) (rderr error) {
+		rderr = iorw.EOFReadRunes(untilrdr, func(r rune, size int) error {
+			if size > 0 {
 				ctntflush()
 				if !fncode {
 					fncode = true
 				}
+				codebuffer().WriteRune(r)
+				if cdetxtr == 0 {
+					if cdeprvr != '\\' && iorw.IsTxtPar(r) {
+						cdetxtr = r
+						cdelstr = 0
+						return nil
+					}
+					if !iorw.IsSpace(r) {
+						if validLastCdeRune(r) {
+							cdelstr = r
+							return nil
+						}
+						cdelstr = 0
+						return nil
+					}
+					cdeprvr = r
+					return nil
+				}
+				if cdeprvr != '\\' && cdetxtr == r {
+					cdetxtr = 0
+					cdelstr = 0
+					return nil
+				}
+				return nil
 			}
-			writecderns(cr)
-		}
+			return nil
+		})
 		return
-	}); prsngerr != nil {
+	}
+
+	tbf := iorw.NewBuffer(precodernsrdr)
+	//fmt.Println(tbf)
+	precodernsrdr = tbf.Reader(true)
+
+	coderunsrdr := iorw.ReadRunesUntil(precodernsrdr, "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
+		if phrase == "<@" {
+			if cderdmode == codeReadingContent {
+				cderdmode = codeReadingCode
+			}
+			if rderr := readCode(untilrdr); rderr != nil {
+				if rderr.Error() == "@>" {
+					cderdmode = codeReadingContent
+					return nil
+				}
+				return rderr
+			}
+			return nil
+		}
+		if phrase == "@>" {
+			if cderdmode == codeReadingCode {
+				return fmt.Errorf("%s", phrase)
+			}
+		}
+		return nil
+	}, func() {
+
+	}, func(prvr, r rune) bool {
+		if cderdmode == codeReadingCode {
+			return cdetxtr == 0
+		}
+		return true
+	})
+
+	if invertActive {
+		prsngerr = readCode(coderunsrdr)
+	} else {
+		prsngerr = iorw.EOFReadRunes(coderunsrdr, func(cr rune, csize int) (cerr error) {
+			if csize > 0 {
+				if fncode {
+					ctntbuffer().WriteRune(cr)
+					return
+				}
+				chdctntbuffer().WriteRune(cr)
+				return
+			}
+			return
+		})
+	}
+	if prsngerr != nil {
 		if prsngerr != io.EOF {
 			return
 		}

@@ -308,20 +308,20 @@ func EOFReadRunes(rdr io.RuneReader, readrune func(r rune, size int) error) (err
 	if rdr == nil {
 		return io.EOF
 	}
-	r, size := rune(0), 0
-	for {
+	r, size, rderr := rune(0), 0, error(nil)
+	for err == nil {
 		r, size, err = rdr.ReadRune()
 		if size > 0 && (err == io.EOF || err == nil) {
-			if err = readrune(r, size); err != nil {
+			if rderr = readrune(r, size); rderr != nil {
+				return rderr
+			}
+			if err == io.EOF {
 				return
 			}
 			continue
 		}
 		if size == 0 && err == nil {
-			break
-		}
-		if err != nil {
-			break
+			return io.EOF
 		}
 	}
 	if size == 0 && err == nil {
