@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"reflect"
 
 	//"github.com/lnksnk/lnksnk/caching"
 	"strings"
@@ -164,31 +165,39 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		var foundTxt = false
 
 		var possibleArgName map[string]int = map[string]int{}
+		var possibleArgSize map[string]int = map[string]int{}
 		paramkeys := prms.StandardKeys()
 		prmkschkd := map[string]bool{}
 		if len(args) > 0 {
-			for dfltk := range args {
+			for dfltk, dfltv := range args {
 				for prmn, prmk := range paramkeys {
 					if strings.EqualFold(prmk, dfltk) {
 						if prms.StringParameter(prmk, "") == "" {
 							paramkeys = append(paramkeys[:prmn], paramkeys[prmn+1:]...)
 							prmkschkd[dfltk] = true
 							possibleArgName[dfltk] = 0
+							possibleArgSize[dfltk] = 1
 							break
 						}
 						prmkschkd[dfltk] = true
-						possibleArgName[prmk] = 1
 						break
 					}
 				}
 				if !prmkschkd[dfltk] {
 					possibleArgName[dfltk] = 0
+					if reflect.TypeOf(dfltv).Kind() == reflect.Array || reflect.TypeOf(dfltv).Kind() == reflect.Slice {
+						possibleArgSize[dfltk] = reflect.ValueOf(dfltv).Len()
+					} else {
+						possibleArgSize[dfltk] = 1
+					}
 				}
 			}
 		}
 
 		for _, dfltk := range paramkeys {
+			prmv := prms.Parameter(dfltk)
 			possibleArgName[dfltk] = 1
+			possibleArgSize[dfltk] = len(prmv)
 		}
 
 		if rdr != nil {
@@ -196,9 +205,11 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 				for prmk := range possibleArgName {
 					if strings.EqualFold(prmk, dfltk) && prmk != dfltk {
 						delete(possibleArgName, prmk)
+						delete(possibleArgSize, prmk)
 					}
 				}
 				possibleArgName[dfltk] = 2
+				possibleArgSize[dfltk] = 1
 			}
 		}
 
@@ -236,9 +247,21 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 								if validNameType == nil {
 									validNameType = []int{}
 								}
-								flushrdr.PreAppendArgs(parseParam(parseSqlParam, len(validNames)))
-								validNames = append(validNames, mpvk)
-								validNameType = append(validNameType, mpkv)
+								argss := possibleArgSize[mpvk]
+								if argss > 0 {
+									tmpsql := ""
+									for argi := range argss {
+										tmpsql += parseParam(parseSqlParam, argi+len(validNames)) + func() string {
+											if argi < argss-1 {
+												return ","
+											}
+											return ""
+										}()
+									}
+									flushrdr.PreAppendArgs(tmpsql)
+									validNames = append(validNames, mpvk)
+									validNameType = append(validNameType, mpkv)
+								}
 								argbferr = nil
 								return
 							}
@@ -329,10 +352,41 @@ func (stmnt *Statement) Arguments() (args []interface{}) {
 			for argn, argnme := range argnames {
 				if argtpe := argtypes[argn]; argtpe == 0 {
 					if argv, argvok := argssnc.Load(argnme); argvok {
+						if reflect.TypeOf(argv).Kind() == reflect.Array || reflect.TypeOf(argv).Kind() == reflect.Slice {
+							if argvls, argvlsok := argv.([]interface{}); argvlsok {
+								args = append(args, argvls...)
+								continue
+							}
+							if argvls, argvlsok := argv.([]string); argvlsok {
+								for _, av := range argvls {
+									args = append(args, av)
+								}
+								continue
+							}
+							if argvls, argvlsok := argv.([]int); argvlsok {
+								for _, av := range argvls {
+									args = append(args, av)
+								}
+								continue
+							}
+							continue
+						}
 						args = append(args, argv)
 					}
 				} else if prms := stmnt.prms; prms != nil && argtpe == 1 {
-					args = append(args, strings.Join(prms.Parameter(argnme), ""))
+					prmv := prms.Parameter(argnme)
+					prmvl := len(prmv)
+					if prmvl == 0 {
+						args = append(args, "")
+						continue
+					}
+					if prmvl == 1 {
+						args = append(args, prmv[0])
+						continue
+					}
+					for _, prmrgv := range prmv {
+						args = append(args, prmrgv)
+					}
 				} else if rdr != nil && argtpe == 2 {
 					if rows := rdr.rows; rows != nil {
 						if clsi := rows.FieldIndex(argnme); clsi > -1 {
