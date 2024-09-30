@@ -197,6 +197,15 @@ type Runtime struct {
 	hash  *maphash.Hash
 	idSeq uint64
 
+	modules          map[ModuleRecord]ModuleInstance
+	moduleNamespaces map[ModuleRecord]*namespaceObject
+	importMetas      map[ModuleRecord]*Object
+
+	getImportMetaProperties func(ModuleRecord) []MetaProperty
+	finalizeImportMeta      func(*Object, ModuleRecord)
+	importModuleDynamically ImportModuleDynamicallyCallback
+	evaluationState         *evaluationState
+
 	jobQueue []func()
 
 	promiseRejectionTracker PromiseRejectionTracker
@@ -1427,6 +1436,15 @@ func asUncatchableException(v interface{}) error {
 		}
 	}
 	return nil
+}
+
+func (r *Runtime) RunAstProgram(prgm *js_ast.Program) (result Value, err error) {
+	p, perr := CompileAST(prgm, false)
+	if perr != nil {
+		err = perr
+		return
+	}
+	return r.RunProgram(p)
 }
 
 // RunProgram executes a pre-compiled (see Compile()) code in the global context.

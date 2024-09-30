@@ -9,11 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw"
 
 	"github.com/lnksnk/lnksnk/iorw/active/require"
 
 	"github.com/lnksnk/lnksnk/ja"
+	ja_ast "github.com/lnksnk/lnksnk/ja/ast"
 	"github.com/lnksnk/lnksnk/ja/parser"
 )
 
@@ -26,6 +28,8 @@ type VM struct {
 	R             io.Reader
 	buffs         map[*iorw.Buffer]*iorw.Buffer
 	ErrPrint      func(...interface{}) error
+	FS            *fsutils.FSUtils
+	ImportModule  func(referencingScriptOrModule interface{}, specifier ja.Value, promiseCapability interface{})
 }
 
 func NewVM(a ...interface{}) (vm *VM) {
@@ -67,7 +71,11 @@ func NewVM(a ...interface{}) (vm *VM) {
 	vm.vmreq = gojaregistry.Enable(vm.vm, vm.Print, vm.Println)
 	//vm.vm.RunProgram(typescript.TypeScriptProgram)
 	vm.vm.RunProgram(adhocPrgm)
-
+	vm.vm.SetImportModuleDynamically(func(referencingScriptOrModule interface{}, specifier ja.Value, promiseCapability interface{}) {
+		if importmod := vm.ImportModule; importmod != nil {
+			importmod(referencingScriptOrModule, specifier, promiseCapability)
+		}
+	})
 	var fldmppr = &fieldmapper{fldmppr: ja.UncapFieldNameMapper()}
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {
@@ -85,6 +93,11 @@ func NewVM(a ...interface{}) (vm *VM) {
 		}
 		delete(stngs, stngk)
 	}
+	vm.Set("impstmnt", func(modname string, namedimports ...[][]string) bool {
+		DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...)
+		return true
+	})
+
 	vm.Set("include", func(modname string) bool {
 		IncludeModule(vm.vm, modname)
 		return true
@@ -201,6 +214,10 @@ func uncapitalize(s string) (nme string) {
 		}
 	}
 	return nme
+}
+
+func (vm *VM) ImportModuleDynamically(referencingScriptOrModule interface{}, specifier ja.Value, promiseCapability interface{}) {
+
 }
 
 func (vm *VM) Get(objname string) (obj interface{}) {
@@ -343,6 +360,197 @@ func (vm *VM) Write(p ...byte) (n int, err error) {
 
 var DefaultTransformCode func(code string) (transformedcode string, errors []string, warnings []string)
 
+type programModElemManager struct {
+	prgmodelms *sync.Map
+}
+
+func (prgmodmngr *programModElemManager) InvokeModule(fs *fsutils.FSUtils, specifier string) (invoked bool, invkerr error) {
+	if prgmodmngr == nil {
+		return
+	}
+
+	return
+}
+func (prgmodmngr *programModElemManager) invokeJaMod(fs *fsutils.FSUtils, referencingScriptOrModule interface{}, specifier string) (m ja.ModuleRecord, merr error) {
+
+	return
+}
+func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string, namedimports ...[][]string) (err error) {
+
+	if prgmodmngr == nil {
+		return
+	}
+	if specifier == "" {
+		if vm != nil {
+			vm.Try(func() {
+				panic(fmt.Errorf("%s", "No specifier provided"))
+			})
+		}
+		return
+	}
+	if fs != nil {
+		prgmodelm := prgmodmngr.Module(specifier)
+		lastmod := time.Now()
+		if prgmodelm == nil {
+
+			if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, fs, nil); prgmodelm == nil || err != nil {
+				if vm != nil {
+					vm.Try(func() {
+						panic(fmt.Errorf("%s", "Unable to load "+specifier))
+					})
+				}
+				return
+			}
+			prgmodmngr.prgmodelms.Store(specifier, prgmodelm)
+			prgmodelm.RunMod(vm, fs, namedimports...)
+			return
+		}
+		lastmod = prgmodelm.modfied
+		if fs.EXISTS(specifier) {
+			fi := fs.LS(specifier)[0]
+			if fi.ModTime() != lastmod {
+				prgmodelms := prgmodmngr.prgmodelms
+				if prgmodelms != nil {
+					prgmodelms.Delete(specifier)
+				}
+
+				if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, nil, fi); err != nil {
+					return
+				}
+				prgmodelms.Store(specifier, prgmodelm)
+			}
+			m := prgmodelm.m
+			if vm != nil {
+				func() {
+					evalprms := m.Evaluate(vm)
+					if evalprms.State() == ja.PromiseStateFulfilled {
+						nmspce := vm.NamespaceObjectFor(m)
+						if nmspce != nil {
+							for _, nmdimprt := range namedimports {
+								for _, imprtthis := range nmdimprt {
+									if imprtthisl := len(imprtthis); imprtthisl > 0 {
+										idntys := imprtthis[0]
+										if idntys != "" {
+											if imprtthisl > 1 {
+												if aliass := imprtthis[1]; aliass != "" {
+													vm.Set(idntys, nmspce.Get(idntys))
+													continue
+												}
+											}
+											vm.Set(idntys, nmspce.Get(idntys))
+										}
+									}
+								}
+							}
+						}
+					}
+				}()
+			}
+			return
+		}
+	}
+	return
+}
+
+func newProgramModElement(prgmodmngr *programModElemManager, specifier string, fs *fsutils.FSUtils, fi fsutils.FileInfo) (prgmodelm *programModElement, err error) {
+	if specifier != "" {
+		if fi == nil {
+			if fs != nil {
+				fis := fs.LS(specifier)
+				if len(fis) > 1 || fis[0].IsDir() {
+					return nil, fmt.Errorf("specifier %s is a director", specifier)
+				}
+				fi = fis[0]
+			}
+		}
+		if fi != nil {
+			if fi.IsDir() {
+				return nil, fmt.Errorf("specifier %s is a director", specifier)
+			}
+			if fr, _ := fi.Open(); fr != nil {
+				defer fr.Close()
+				if src, _ := iorw.ReaderToString(fr); src != "" {
+					p, perr := ja.ParseModule(specifier, src, func(referencingScriptOrModule interface{}, modspecifier string) (ja.ModuleRecord, error) {
+						if prgmodelm = prgmodmngr.Module(modspecifier); prgmodelm != nil {
+							return prgmodelm.m, nil
+						}
+						return nil, fmt.Errorf("Unable to load specifier %s", modspecifier)
+					})
+					if perr != nil {
+						err = perr
+						return
+					}
+					if err = p.Link(); err != nil {
+						p = nil
+						return
+					}
+					prgmodelm = &programModElement{modfied: fi.ModTime(), m: p, prgmodmngr: prgmodmngr}
+				}
+			}
+		}
+	}
+
+	return
+}
+
+func (prgmodmngr *programModElemManager) Module(specifier string) *programModElement {
+	if prgmodmngr == nil || specifier == "" {
+		return nil
+	}
+	if prgmodelms := prgmodmngr.prgmodelms; prgmodelms != nil {
+		if modv, modok := prgmodelms.Load(specifier); modok {
+			return modv.(*programModElement)
+		}
+	}
+	return nil
+}
+
+var DefaultModuleManager = &programModElemManager{prgmodelms: &sync.Map{}}
+
+type programModElement struct {
+	prgmodmngr *programModElemManager
+	modfied    time.Time
+	m          ja.ModuleRecord
+	prgm       *ja.Program
+}
+
+func (prgmodElm *programModElement) Invoke(fs *fsutils.FSUtils, specifier string) {
+
+}
+
+func (prgmodElm *programModElement) RunMod(vm *ja.Runtime, fs *fsutils.FSUtils, namedimports ...[][]string) {
+	if prgmodElm == nil {
+		return
+	}
+
+	m := prgmodElm.m
+
+	if vm != nil {
+		evalprms := m.Evaluate(vm)
+		if evalprms.State() == ja.PromiseStateFulfilled {
+			nmspce := vm.NamespaceObjectFor(m)
+			if nmspce != nil {
+				for _, nmdimprt := range namedimports {
+					for _, imprtthis := range nmdimprt {
+						if imprtthisl := len(imprtthis); imprtthisl > 0 {
+							idntys := imprtthis[0]
+							if idntys != "" {
+								if imprtthisl > 1 {
+									if aliass := imprtthis[1]; aliass != "" {
+										vm.Set(idntys, nmspce.Get(idntys))
+										continue
+									}
+								}
+								vm.Set(idntys, nmspce.Get(idntys))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 	if vm != nil && vm.vm != nil {
 		var cdes = ""
@@ -384,15 +592,49 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 					var cde = iorw.NewMultiArgsReader(a...)
 					defer cde.Close()
 					cdes, _ = cde.ReadAll()
-					if prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps); prsderr == nil {
-						if p, perr = ja.CompileAST(prsd, false); perr == nil && p != nil {
-							if setchdprgm != nil {
-								setchdprgm(p, nil, nil)
+
+					if prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps, parser.IsModule); prsderr == nil {
+						if len(prsd.ImportEntries) > 0 {
+							for stmnti, stmnt := range prsd.Body {
+								if imprtast, _ := stmnt.(*ja_ast.ImportDeclaration); imprtast != nil {
+									for _, imprt := range prsd.ImportEntries {
+										if imprt == imprtast {
+											nmdimprt := ""
+											for nmpi, nmmp := range imprt.ImportClause.NamedImports.ImportsList {
+
+												if nmdimprt != "" {
+													nmdimprt += ","
+												}
+												if nmpi == 0 {
+													nmdimprt += "["
+												}
+												nmdimprt += fmt.Sprintf("['%s','%s']", nmmp.IdentifierName.String(), nmmp.Alias.String())
+											}
+											if nmdimprt != "" {
+												nmdimprt = "," + nmdimprt + "]"
+											}
+											if prppedast, preppedatserr := ja.Parse("", fmt.Sprintf("impstmnt('%s'%s)", imprt.FromClause.ModuleSpecifier.String(), nmdimprt), parser.WithDisableSourceMaps); preppedatserr == nil {
+												if len(prppedast.Body) == 1 {
+													orgstmmnt := prppedast.Body[0]
+													prsd.Body[stmnti] = orgstmmnt
+												}
+											}
+										}
+									}
+								}
 							}
 						}
-						if p == nil && perr != nil && setchdprgm == nil {
-							setchdprgm(nil, nil, perr)
+						prgm, prgmerr := ja.CompileAST(prsd, false)
+						if prgmerr != nil {
+							if setchdprgm != nil {
+								setchdprgm(nil, nil, prgmerr)
+							}
+							return nil, prgmerr
 						}
+						if setchdprgm != nil {
+							setchdprgm(prgm, nil, nil)
+						}
+						p = prgm
 					} else {
 						if setchdprgm != nil {
 							setchdprgm(nil, prsderr, nil)

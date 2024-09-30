@@ -272,6 +272,7 @@ func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
 		return
 	}
 	nvm.Set("fs", fs)
+	nvm.FS = fs
 	nvm.Set("listen", LISTEN)
 	nvm.Set("lstn", LISTEN)
 	nvm.Set("terminal", terminal)
