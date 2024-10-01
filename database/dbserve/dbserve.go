@@ -93,7 +93,7 @@ func ServeRequest(prefix string, w serveio.Writer, r serveio.Reader, a ...interf
 				parameters.LoadParametersFromHTTPRequest(params, r.HttpR())
 				parameters.LoadParametersFromRawURL(params, path)
 			}
-			dbhndl = database.GLOBALDBMS().DBMSHandler(ctx, runtime, params, nil, fs, callPrepStatement)
+			dbhndl = database.GLOBALDBMS().DBMSHandler(ctx, runtime, params, fs, callPrepStatement)
 		}
 		if dbhndl != nil {
 			if path = path[strings.Index(path, prefix)+len(prefix):]; path != "" && validdbrequestexts[pathext] {

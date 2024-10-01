@@ -360,8 +360,8 @@ func (dbmshndlr *DBMSHandler) Register(alias string, driver string, datasource s
 	return
 }
 
-func (dbms *DBMS) DBMSHandler(ctx context.Context, runtime active.Runtime, prms parameters.ParametersAPI, cchng *concurrent.Map, fs *fsutils.FSUtils, callprepstmnt StatementHandlerFunc) (dbmshndlr *DBMSHandler) {
-	dbmshndlr = &DBMSHandler{ctx: ctx, dbms: dbms, runtime: runtime, prms: prms, cchng: cchng, fs: fs, CallPrepStatement: callprepstmnt}
+func (dbms *DBMS) DBMSHandler(ctx context.Context, runtime active.Runtime, prms parameters.ParametersAPI, fs *fsutils.FSUtils, callprepstmnt StatementHandlerFunc) (dbmshndlr *DBMSHandler) {
+	dbmshndlr = &DBMSHandler{ctx: ctx, dbms: dbms, runtime: runtime, prms: prms, fs: fs, CallPrepStatement: callprepstmnt}
 	return
 }
 
