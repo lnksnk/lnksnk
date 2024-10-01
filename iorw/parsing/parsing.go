@@ -97,15 +97,18 @@ func Parse(parseOnly bool, pathModified time.Time, path string, defaultext strin
 			if chdscrpt.IsValidSince(pathModified, fs) {
 				if out != nil {
 					if _, prserr = chdscrpt.WritePsvTo(out); prserr != nil {
-						chdscrpt.Dispose()
-						chdscrpt = nil
+						//chdscrpt.Dispose()
+						//chdscrpt = nil
+						//prserr = nil
 						return
 					}
 				}
 				if evalcode != nil {
 					var evalresult interface{} = nil
 					if evalresult, prserr = chdscrpt.EvalAtv(evalcode); prserr != nil {
-						chdscrpt.Dispose()
+						//prserr = nil
+						//chdscrpt.Dispose()
+						return
 					}
 					pathext := filepath.Ext(fullpath)
 					if pathext == "" && defaultext != "" {
