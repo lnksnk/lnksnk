@@ -137,7 +137,7 @@ func (imapsvc *ImapService) NewSession(alias string) (ssn imapserver.Session, gr
 				if impsrvrv, _ := imapsrvrs.Load(alias); impsrvrv != nil {
 					if svr, _ := impsrvrv.(*imapserver.Server); svr != nil {
 						imapssn := &imapsession{alias: alias, imapsvc: imapsvc, svr: svr, dbalias: alias + "imap"}
-						imapssn.dbhndl = dbms.DBMSHandler(nil, imapssn, nil, nil, imapsvc.fs, nil)
+						imapssn.dbhndl = dbms.DBMSHandler(nil, imapssn, nil, imapsvc.fs, nil)
 						ssn = imapssn
 					}
 				}
