@@ -98,9 +98,12 @@ func (chdscrpt *CachedScript) WritePsvTo(w io.Writer, path ...string) (n int64, 
 		if psvbuf.Empty() {
 			return
 		}
-		chdscrpt.psvlck.RLock()
-		defer chdscrpt.psvlck.RUnlock()
-		n, err = psvbuf.WriteTo(w)
+		//chdscrpt.psvlck.RLock()
+		//defer chdscrpt.psvlck.RUnlock()
+		//n, err = psvbuf.WriteTo(w)
+		if n, err = psvbuf.WriteTo(w); err != nil {
+			err = nil
+		}
 	}
 	return
 }
