@@ -1171,10 +1171,6 @@ func internalProcessParsing(
 		return
 	}
 
-	tbf := iorw.NewBuffer(precodernsrdr)
-	//fmt.Println(tbf)
-	precodernsrdr = tbf.Reader(true)
-
 	coderunsrdr := iorw.ReadRunesUntil(precodernsrdr, "<@", "@>", func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
 		if phrase == "<@" {
 			if cderdmode == codeReadingContent {
@@ -1281,7 +1277,7 @@ func internalProcessParsing(
 			}
 		}
 		if prsngerr != nil {
-			println(prsngerr.Error())
+			println(fullpath, ":=> ", prsngerr.Error())
 			println()
 			if cderr, _ := prsngerr.(CodeError); cderr != nil {
 				for ln, cdeln := range strings.Split(cderr.Code(), "\n") {
