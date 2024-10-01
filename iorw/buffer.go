@@ -1060,102 +1060,102 @@ func (buff *Buffer) WriteRunes(p ...rune) (n int, err error) {
 
 func internalBufferWriteToOffSet(buff *Buffer, w io.Writer, stroffset, endoffset, maxoffset int64, wrtbtsfunc func([]byte) (int, error)) (n int64, err error) {
 	if buff != nil && stroffset >= 0 && stroffset < endoffset && maxoffset > 0 && maxoffset <= buff.Size() {
-		if wbuf, _ := w.(*Buffer); wbuf != nil {
-			var wrtbst = func(b []byte) {
-				wn, _ := wbuf.Write(b)
-				n += int64(wn)
-			}
+		var wrtbst func(b []byte) (wterr error) = nil
 
-			for btsn, bts := range buff.buffer {
-				btnbufoffset, btnbuffoffsetlen := int64(len(buff.buffer[0])*btsn), int64(len(buff.buffer[0]))*int64(btsn+1)
-				if btnbufoffset < endoffset {
-					if stroffset >= btnbufoffset {
-						if stroffset < btnbufoffset+btnbuffoffsetlen {
-							btsn = int(stroffset - btnbufoffset)
-							if endoffset <= btnbuffoffsetlen {
-								btsne := int(endoffset - btnbufoffset)
-								wrtbst(bts[btsn:btsne])
-								return
-							} else {
-								wrtbst(bts[btsn:])
-							}
-						} else {
-							return
-						}
-					} else if btnbufoffset > stroffset {
-						if endoffset <= btnbuffoffsetlen {
-							btsne := int(endoffset - btnbufoffset)
-							wrtbst(bts[:btsne])
-							return
-						} else if endoffset > btnbuffoffsetlen {
-							wrtbst(bts)
-						} else {
-							return
-						}
-					}
-				} else {
-					return
-				}
+		if w != nil {
+			wrtbst = func(b []byte) (wterr error) {
+				wn, wterr := w.Write(b)
+				n += int64(wn)
+				return
 			}
-			if buff.bytesi > 0 {
-				bts := buff.bytes[:buff.bytesi]
-				btnbufoffset := int64(0)
-				if len(buff.buffer) > 0 {
-					btnbufoffset = int64(len(buff.buffer) * len(buff.buffer[0]))
-				}
-				btnbuffoffsetlen := btnbufoffset + int64(buff.bytesi)
-				if btnbufoffset < endoffset {
-					if stroffset >= btnbufoffset {
-						if stroffset < btnbufoffset+btnbuffoffsetlen {
-							btsn := int(stroffset - btnbufoffset)
-							if endoffset <= btnbuffoffsetlen {
-								btsne := int(endoffset - btnbufoffset)
-								wrtbst(bts[btsn:btsne])
-								return
-							} else {
-								wrtbst(bts[btsn:])
-							}
-						} else {
-							return
-						}
-					} else if btnbufoffset > stroffset {
-						if endoffset <= btnbuffoffsetlen {
-							btsne := int(endoffset - btnbufoffset)
-							wrtbst(bts[:btsne])
-							return
-						} else if endoffset > btnbuffoffsetlen {
-							wrtbst(bts)
-						} else {
-							return
-						}
-					}
-				} else {
-					return
-				}
+		}
+		if wrtbtsfunc != nil && w == nil {
+			wrtbst = func(b []byte) (wterr error) {
+				wn, wterr := wrtbtsfunc(b)
+				n += int64(wn)
+				return
 			}
+		}
+		if wrtbst == nil {
 			return
-		} else {
-			var bufcur = newBufferCursor(buff, true, stroffset, endoffset)
-			defer bufcur.close()
-			if wrtbtsfunc != nil {
-				for {
-					bts, lstbytes := bufcur.nextBytes()
-					if wn, werr := wrtbtsfunc(bts); werr != nil {
-						err = werr
+		}
+
+		buffer := buff.buffer
+		bytes := buff.bytes
+		bytesi := buff.bytesi
+
+		for btsn, bts := range buffer {
+			btnbufoffset, btnbuffoffsetlen := int64(len(buffer[0])*btsn), int64(len(buffer[0]))*int64(btsn+1)
+			if btnbufoffset < endoffset {
+				if stroffset >= btnbufoffset {
+					if stroffset < btnbufoffset+btnbuffoffsetlen {
+						btsn = int(stroffset - btnbufoffset)
+						if endoffset <= btnbuffoffsetlen {
+							btsne := int(endoffset - btnbufoffset)
+							err = wrtbst(bts[btsn:btsne])
+							return
+						} else {
+							if err = wrtbst(bts[btsn:]); err != nil {
+								return
+							}
+						}
+					} else {
 						return
-					} else if wn > 0 {
-						n += int64(wn)
 					}
-					if lstbytes {
-						break
+				} else if btnbufoffset > stroffset {
+					if endoffset <= btnbuffoffsetlen {
+						btsne := int(endoffset - btnbufoffset)
+						err = wrtbst(bts[:btsne])
+						return
+					} else if endoffset > btnbuffoffsetlen {
+						if err = wrtbst(bts); err != nil {
+							return
+						}
+					} else {
+						return
 					}
 				}
 			} else {
-				if err = Fprint(w, bufcur); err == nil {
-					n = buff.Size()
-				}
+				return
 			}
 		}
+		if bytesi > 0 && err == nil {
+			bts := bytes[:buff.bytesi]
+			btnbufoffset := int64(0)
+			if len(buffer) > 0 {
+				btnbufoffset = int64(len(buffer) * len(buffer[0]))
+			}
+			btnbuffoffsetlen := btnbufoffset + int64(bytesi)
+			if btnbufoffset < endoffset {
+				if stroffset >= btnbufoffset {
+					if stroffset < btnbufoffset+btnbuffoffsetlen {
+						btsn := int(stroffset - btnbufoffset)
+						if endoffset <= btnbuffoffsetlen {
+							btsne := int(endoffset - btnbufoffset)
+							err = wrtbst(bts[btsn:btsne])
+							return
+						} else {
+							err = wrtbst(bts[btsn:])
+						}
+					} else {
+						return
+					}
+				} else if btnbufoffset > stroffset {
+					if endoffset <= btnbuffoffsetlen {
+						btsne := int(endoffset - btnbufoffset)
+						err = wrtbst(bts[:btsne])
+						return
+					} else if endoffset > btnbuffoffsetlen {
+						err = wrtbst(bts)
+					} else {
+						return
+					}
+				}
+			} else {
+				return
+			}
+		}
+		return
 	}
 	return
 }
