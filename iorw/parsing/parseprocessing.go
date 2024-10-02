@@ -992,7 +992,7 @@ func internalProcessParsing(
 		return chdctntbuf
 	}
 	cdelstr := rune(0)
-	fncode := false
+	fndcode := false
 	cderdmode := func() codeReadMode {
 		if invertActive {
 			return codeReadingCode
@@ -1015,7 +1015,30 @@ func internalProcessParsing(
 		return
 	})
 
+	var cderns []rune = make([]rune, 8192)
+	defer func() {
+		cderns = nil
+	}()
+	var cdernsi = 0
+
+	var chdrns []rune = make([]rune, 8192)
+	defer func() {
+		chdrns = nil
+	}()
+	var chdrnsi = 0
 	ctntflush := func() (flsherr error) {
+		if fndcode && cdernsi > 0 {
+			codebuffer().WriteRunes(cderns[:cdernsi]...)
+			cdernsi = 0
+		}
+		if chdrnsi > 0 && !fndcode {
+			chdctntbuffer().WriteRunes(chdrns[:chdrnsi]...)
+			chdrnsi = 0
+		}
+		if chdrnsi > 0 && fndcode {
+			ctntbuffer().WriteRunes(chdrns[:chdrnsi]...)
+			chdrnsi = 0
+		}
 		if !ctntbuf.Empty() {
 			defer ctntbuf.Clear()
 			hstmpltfx := ctntbuf.HasPrefix("`") && ctntbuf.HasSuffix("`")
@@ -1138,10 +1161,15 @@ func internalProcessParsing(
 		rderr = iorw.EOFReadRunes(untilrdr, func(r rune, size int) error {
 			if size > 0 {
 				ctntflush()
-				if !fncode {
-					fncode = true
+				if !fndcode {
+					fndcode = true
 				}
-				codebuffer().WriteRune(r)
+				cderns[cdernsi] = r
+				cdernsi++
+				if cdernsi == 8192 {
+					codebuffer().WriteRunes(cderns[:cdernsi]...)
+					cdernsi = 0
+				}
 				if cdetxtr == 0 {
 					if cdeprvr != '\\' && iorw.IsTxtPar(r) {
 						cdetxtr = r
@@ -1205,11 +1233,17 @@ func internalProcessParsing(
 	} else {
 		prsngerr = iorw.EOFReadRunes(coderunsrdr, func(cr rune, csize int) (cerr error) {
 			if csize > 0 {
-				if fncode {
-					ctntbuffer().WriteRune(cr)
-					return
+				chdrns[chdrnsi] = cr
+				chdrnsi++
+				if chdrnsi == 8192 {
+					chdrnsi = 0
+					if fndcode {
+						ctntbuffer().WriteRunes(chdrns[:8192]...)
+						return
+					}
+					chdctntbuffer().WriteRunes(chdrns[:8192]...)
 				}
-				chdctntbuffer().WriteRune(cr)
+				//chdctntbuffer().WriteRune(cr)
 				return
 			}
 			return
@@ -1256,7 +1290,10 @@ func internalProcessParsing(
 				}
 				if prsngerr == nil {
 					if capturecache != nil {
-						prsngerr = capturecache(fullpath, pathModified, validelempaths, chdctntbuf, cdebuf, chdpgrm)
+						go func() {
+							//prsngerr = capturecache(fullpath, pathModified, validelempaths, chdctntbuf, cdebuf, chdpgrm)
+							prsngerr = capturecache(fullpath, pathModified, validelempaths, chdctntbuf, cdebuf, chdpgrm)
+						}()
 					}
 				}
 			})
