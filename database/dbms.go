@@ -374,6 +374,7 @@ func (dbms *DBMS) DriverCnInvoker(driver string) (dbinvoker func(string, ...inte
 }
 
 func NewDBMS() (dbms *DBMS) {
+	dbms = &DBMS{cnctns: &sync.Map{}, drivers: &sync.Map{}}
 	return
 }
 
