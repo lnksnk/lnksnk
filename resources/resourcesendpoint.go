@@ -817,19 +817,29 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 										if cachableExtsBuffs != nil && cachableExts[path] {
 											if bufr, bofmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufr != nil && modified != bofmod) {
 												if rc, rcerr := f.Open(); rcerr == nil {
-													cachableExtsBuffs.Set(path, modified, rc)
-													rs, _ = cachableExtsBuffs.Reader(path)
-												} else if rcerr != nil {
-													err = rcerr
+													func() {
+														defer rc.Close()
+														if prebf, prebferr := iorw.NewBufferError(rc); prebferr == nil {
+															rs = prebf.Reader()
+															cachableExtsBuffs.Set(path, modified, prebf.Reader())
+														}
+													}()
+													//rs, _ = cachableExtsBuffs.Reader(path)
+
+												} else {
+													if rcerr != nil {
+														err = rcerr
+													}
 												}
 											} else if bufr != nil {
 												rs = bufr
 											}
 										} else if rc, rcerr := f.Open(); rcerr == nil {
 											rs = rc
-
-										} else if rcerr != nil {
-											err = rcerr
+										} else {
+											if rcerr != nil {
+												err = rcerr
+											}
 										}
 										return
 									}
@@ -851,8 +861,14 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 			if cachableExtsBuffs != nil && cachableExts[filepath.Ext(path)] {
 				if bufr, bufmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufr != nil && bufmod != fi.ModTime()) {
 					if f, ferr := os.Open(lklpath + path); ferr == nil && f != nil {
-						cachableExtsBuffs.Set(path, fi.ModTime(), f)
-						rs, _ = cachableExtsBuffs.Reader(path)
+						func() {
+							defer f.Close()
+							if prebf, prebferr := iorw.NewBufferError(f); prebferr == nil {
+								rs = prebf.Reader()
+								cachableExtsBuffs.Set(path, fi.ModTime(), prebf.Reader())
+							}
+						}()
+						//rs, _ = cachableExtsBuffs.Reader(path)
 					}
 				} else {
 					rs = bufr

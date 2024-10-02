@@ -5,11 +5,11 @@ import (
 
 	"github.com/lnksnk/lnksnk/iorw"
 	"github.com/lnksnk/lnksnk/iorw/parsing"
-	"github.com/tdewolff/minify/v2"
-	"github.com/tdewolff/minify/v2/css"
-	"github.com/tdewolff/minify/v2/html"
-	"github.com/tdewolff/minify/v2/js"
-	"github.com/tdewolff/minify/v2/svg"
+	"github.com/lnksnk/lnksnk/minify"
+	"github.com/lnksnk/lnksnk/minify/css"
+	"github.com/lnksnk/lnksnk/minify/html"
+	"github.com/lnksnk/lnksnk/minify/js"
+	"github.com/lnksnk/lnksnk/minify/svg"
 )
 
 func MinifyHTML(out io.Writer, rdr io.Reader) (err error) {

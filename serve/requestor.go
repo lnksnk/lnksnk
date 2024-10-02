@@ -15,16 +15,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lnksnk/lnksnk/concurrent"
 	"github.com/lnksnk/lnksnk/database"
 	"github.com/lnksnk/lnksnk/database/dbserve"
-	"github.com/lnksnk/lnksnk/email/emailing"
-	"github.com/lnksnk/lnksnk/emailservice"
-	"github.com/lnksnk/lnksnk/emailservice/emailserve"
+	"github.com/lnksnk/lnksnk/ws"
+
+	//"github.com/lnksnk/lnksnk/email/emailing"
+	//"github.com/lnksnk/lnksnk/emailservice"
+	//"github.com/lnksnk/lnksnk/emailservice/emailserve"
 	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw"
 	"github.com/lnksnk/lnksnk/iorw/active"
-	"github.com/lnksnk/lnksnk/iorw/active/require"
 	"github.com/lnksnk/lnksnk/iorw/parsing"
 	_ "github.com/lnksnk/lnksnk/iorw/parsing/minify"
 	"github.com/lnksnk/lnksnk/mimes"
@@ -33,7 +33,6 @@ import (
 	"github.com/lnksnk/lnksnk/scheduling"
 	"github.com/lnksnk/lnksnk/serve/serveio"
 	"github.com/lnksnk/lnksnk/stdio/command"
-	"github.com/lnksnk/lnksnk/ws"
 )
 
 var lastserial int64 = time.Now().UnixNano()
@@ -124,7 +123,10 @@ func ProcessRequest(path string, httprqst *http.Request, httprspns http.Response
 
 			return
 		}
-		err = internalServeRequest(path, serveio.NewReader(httprqst), serveio.NewWriter(httprspns), fs, activemap, a...)
+		prcsrdr := serveio.NewReader(httprqst)
+		prcswtr := serveio.NewWriter(httprspns)
+
+		err = internalServeRequest(path, prcsrdr, prcswtr, fs, activemap, a...)
 	}
 	return
 }
@@ -145,15 +147,9 @@ func ParseEval(evalcode func(a ...interface{}) (val interface{}, err error), pat
 	return
 }
 
-func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
-	if vm != nil {
-		return vm
-	}
+func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	select {
-	case nvm = <-chnvms:
-		if nvm == nil {
-			nvm = active.NewVM()
-		}
+	case nvm = <-chngvm:
 	default:
 		nvm = active.NewVM()
 	}
@@ -163,7 +159,7 @@ func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
 	var params *parameters.Parameters = nil
 	var activemap map[string]interface{} = nil
 	var dbhnlr *database.DBMSHandler = nil
-	var emailsvchndl *emailservice.EMAILSvcHandler = nil
+	//var emailsvchndl *emailservice.EMAILSvcHandler = nil
 	var fi fsutils.FileInfo
 	var fs *fsutils.FSUtils = nil
 	ai, al := 0, len(a)
@@ -224,14 +220,14 @@ func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
 			al--
 			continue
 		}
-		if emailsvchnld, _ := a[ai].(*emailservice.EMAILSvcHandler); emailsvchnld != nil {
+		/*if emailsvchnld, _ := a[ai].(*emailservice.EMAILSvcHandler); emailsvchnld != nil {
 			if emailsvchndl == nil {
 				emailsvchndl = emailsvchnld
 			}
 			a = append(a[:ai], a[ai+1:]...)
 			al--
 			continue
-		}
+		}*/
 		if fsd, _ := a[ai].(*fsutils.FSUtils); fsd != nil {
 			if fs == nil {
 				fs = fsd
@@ -264,23 +260,24 @@ func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
 		ai++
 	}
 	nvm.ErrPrint = func(a ...interface{}) (vmerr error) {
-		if Out != nil {
+		/*if Out != nil {
 			Out.Print("<pre>ERR:\r\n")
 			Out.Print(a...)
 			Out.Print("\r\n</pre>")
-		}
+		}*/
 		return
 	}
-	nvm.Set("fs", fs)
+
 	nvm.FS = fs
+	nvm.Set("fs", nvm.FS)
 	nvm.Set("listen", LISTEN)
 	nvm.Set("lstn", LISTEN)
 	nvm.Set("terminal", terminal)
 	nvm.Set("trm", terminal)
 	nvm.Set("command", terminal)
 	nvm.Set("cmd", terminal)
-	nvm.Set("faf", func(rqstpath string) {
-		go ProcessRequestPath(rqstpath, nil)
+	nvm.Set("faf", func(rqstpath string, a ...interface{}) {
+		go ProcessRequestPath(rqstpath, nil, a...)
 	})
 	var fparseEval = func(prsout io.Writer, evalrt interface{}, a ...interface{}) (prsevalerr error) {
 		var invert bool = false
@@ -337,18 +334,8 @@ func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
 				if evalroot != "" && prin == nil {
 					if fios := fs.LS(evalroot); len(fios) == 1 {
 						fitouse = fios[0]
-						evalroot = fitouse.PathRoot()
-						if !fitouse.IsDir() {
-							prsevalerr = ParseEval(nvm.Eval, fitouse.Path(), fitouse.PathExt(), fitouse.ModTime(), prsout, nil, fstouse, invert, fitouse, nil, nil)
-							return
-						}
-						for _, evlpth := range []string{"index.html", "index.js"} {
-							if fis := fstouse.LS(evalroot + evlpth); len(fis) == 1 {
-								fitouse = fis[0]
-								prsevalerr = ParseEval(nvm.Eval, fitouse.Path(), fitouse.PathExt(), fitouse.ModTime(), prsout, nil, fstouse, invert, fitouse, nil, nil)
-								return
-							}
-						}
+						prsevalerr = ParseEval(nvm.Eval, fitouse.Path(), fitouse.PathExt(), fitouse.ModTime(), prsout, nil, fstouse, invert, fitouse, nil, nil)
+						return
 					}
 				}
 				fitouse = fi
@@ -382,13 +369,13 @@ func InvokeVM(vm *active.VM, a ...interface{}) (nvm *active.VM) {
 
 	nvm.Set("scheduling", SCHEDULING)
 	nvm.Set("schdlng", SCHEDULING)
-	nvm.Set("caching", CHACHING)
-	nvm.Set("cchng", CHACHING)
+	//nvm.Set("caching", CHACHING)
+	//nvm.Set("cchng", CHACHING)
 	nvm.Set("db", dbhnlr)
-	nvm.Set("emailsvc", emailsvchndl)
-	nvm.Set("email", EMAILING.ActiveEmailManager(nvm, func() parameters.ParametersAPI {
+	//nvm.Set("emailsvc", emailsvchndl)
+	/*nvm.Set("email", EMAILING.ActiveEmailManager(nvm, func() parameters.ParametersAPI {
 		return params
-	}, fs))
+	}, fs))*/
 	for actvkey, actvval := range activemap {
 		nvm.Set(actvkey, actvval)
 	}
@@ -429,12 +416,10 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 		if path != "" {
 			path = strings.Replace(path, "\\", "/", -1)
 		}
-
 	}
 	if strings.Contains(path, "?") {
 		parameters.LoadParametersFromRawURL(params, path)
 	}
-
 	if In != nil {
 		defer In.Close()
 	}
@@ -448,17 +433,12 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 	}
 	var fi fsutils.FileInfo = nil
 
-	var dbclsrs = newdbclosers()
-	defer dbclsrs.Close()
 	var vm *active.VM = nil
 	var invokevm func() *active.VM
-	var emailsvchndl *emailservice.EMAILSvcHandler = emailservice.GLOABLEMAILSVC().EMAILSvcHandler(ctx, active.RuntimeFunc(func(functocall interface{}, args ...interface{}) interface{} {
-		return invokevm().InvokeFunction(functocall, args...)
-	}), params)
-	defer emailsvchndl.Dispose()
+
 	var dbhnlr *database.DBMSHandler = DBMS.DBMSHandler(ctx, active.RuntimeFunc(func(functocall interface{}, args ...interface{}) interface{} {
 		return invokevm().InvokeFunction(functocall, args...)
-	}), params, CHACHING, fs, func(ina ...interface{}) (a []interface{}) {
+	}), params /* CHACHING,*/, fs, func(ina ...interface{}) (a []interface{}) {
 		if len(ina) == 1 {
 			if fia, _ := ina[0].(fsutils.FileInfo); fia != nil {
 				dbvm := invokevm()
@@ -477,13 +457,17 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 		return
 	})
 	defer dbhnlr.Dispose()
+
 	invokevm = func() *active.VM {
+		if vm != nil {
+			return vm
+		}
 		vm = InvokeVM(vm, func() *terminals {
 			if terminal == nil {
 				terminal = newTerminal()
 			}
 			return terminal
-		}, dbhnlr, emailsvchndl, params, Out, In, activemap, func() fsutils.FileInfo {
+		}, dbhnlr /* emailsvchndl,*/, params, Out, In, activemap, func() fsutils.FileInfo {
 			return fi
 		}, fs)
 		return vm
@@ -502,7 +486,7 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 	}()
 	if vm != nil {
 		defer func() {
-			chnvms <- vm
+			chngvm <- vm
 		}()
 	}
 
@@ -547,9 +531,6 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 		}
 	}
 	if fndapi, dbapierr := dbserve.ServeRequest("/db:", Out, In, path, dbhnlr, params, fs); fndapi || dbapierr != nil {
-		return
-	}
-	if fndapi, emailapierr := emailserve.ServeRequest("/email:", Out, In, path, emailsvchndl, params, fs); fndapi || emailapierr != nil {
 		return
 	}
 	if fi == nil && pathext == "" && strings.HasSuffix(path, "/") {
@@ -680,34 +661,6 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 	return
 }
 
-type dbclosers struct {
-	clsrs *sync.Map
-}
-
-func newdbclosers() *dbclosers {
-	return &dbclosers{clsrs: &sync.Map{}}
-}
-
-func (dbcls *dbclosers) Close() {
-	if dbcls != nil {
-		if clsrs := dbcls.clsrs; clsrs != nil {
-			clsrs.Range(func(key, value any) bool {
-				if exctr, _ := value.(*database.Executor); exctr != nil {
-					exctr.EventClose = nil
-					clsrs.Delete(key)
-					exctr.Close()
-				} else if dbrdr, _ := value.(*database.Reader); dbrdr != nil {
-					dbrdr.EventClose = nil
-					clsrs.Delete(key)
-					dbrdr.Close()
-				}
-				return true
-			})
-			dbcls.clsrs = nil
-		}
-	}
-}
-
 type terminals struct {
 	cmdprscs    *sync.Map
 	cmdprscrefs *sync.Map
@@ -788,14 +741,9 @@ func (terms *terminals) Close() {
 	}
 }
 
-var chnvms = make(chan *active.VM)
-var chndbmshnds = make(chan *database.DBMSHandler)
-var chnemailing = make(chan *emailing.ActiveEmailManager)
-var chnterms = make(chan *terminals)
-
+var chngvm = make(chan *active.VM)
 var DBMS = database.GLOBALDBMS()
 var SCHEDULING = scheduling.GLOBALSCHEDULING()
-var EMAILING = emailing.GLOBALEMAILMNGR()
 
 type ListenApi interface {
 	Serve(network string, addr string, tlsconf ...*tls.Config)
@@ -805,28 +753,10 @@ type ListenApi interface {
 
 var LISTEN ListenApi = nil
 
-var CHACHING = concurrent.NewMap()
-
 func init() {
-	require.DefaultSourceFS = gblfs
 	go func() {
-		for vmref := range chnvms {
-			go func(vm *active.VM) { vm.Close() }(vmref)
-		}
-	}()
-	go func() {
-		for dbmsref := range chndbmshnds {
-			go func(dbms *database.DBMSHandler) { dbms.Dispose() }(dbmsref)
-		}
-	}()
-	go func() {
-		for emailref := range chnemailing {
-			go func(email *emailing.ActiveEmailManager) { email.Close() }(emailref)
-		}
-	}()
-	go func() {
-		for termref := range chnterms {
-			go func(term *terminals) { term.Close() }(termref)
+		for vm := range chngvm {
+			go vm.Close()
 		}
 	}()
 }

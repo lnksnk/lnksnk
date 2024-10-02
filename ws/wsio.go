@@ -44,7 +44,7 @@ var upgrader = &websocket.Upgrader{
 // NewServerReaderWriter - instance
 func NewServerReaderWriter(w http.ResponseWriter, r *http.Request) (wsrw *ReaderWriter, err error) {
 	if w != nil && r != nil {
-		if websocket.IsWebSocketUpgrade(r) && r.Method == "GET" {
+		if r.Method == "GET" && websocket.IsWebSocketUpgrade(r) {
 			wsu := upgrader
 			if ws, wserr := wsu.Upgrade(w, r, nil); wserr == nil {
 				wsrw = &ReaderWriter{ws: ws, lcladdr: ws.LocalAddr().String(), rmtaddr: ws.RemoteAddr().String(), isText: false, isBinary: false, rerr: nil, werr: nil, MaxRead: -1}
