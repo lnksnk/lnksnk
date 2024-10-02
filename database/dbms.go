@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"io"
 
-	"github.com/lnksnk/lnksnk/concurrent"
 	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw/active"
 
@@ -24,7 +23,6 @@ type DBMSHandler struct {
 	prms              parameters.ParametersAPI
 	readers           *sync.Map
 	exctrs            *sync.Map
-	cchng             *concurrent.Map
 	CallPrepStatement StatementHandlerFunc
 }
 
@@ -155,16 +153,13 @@ func (dbmshndlr *DBMSHandler) Drivers() (drvrs []string) {
 
 func (dbmshndlr *DBMSHandler) Dispose() {
 	if dbmshndlr != nil {
-		if dbmshndlr.runtime != nil {
-			dbmshndlr.runtime = nil
-		}
-		if dbmshndlr.dbms != nil {
-			dbmshndlr.dbms = nil
-		}
-		if dbmshndlr.prms != nil {
-			dbmshndlr.prms = nil
-		}
-		if readers := dbmshndlr.readers; readers != nil {
+		dbmshndlr.runtime = nil
+		dbmshndlr.dbms = nil
+		dbmshndlr.prms = nil
+		readers := dbmshndlr.readers
+		exctrs := dbmshndlr.exctrs
+
+		if readers != nil {
 			dbmshndlr.readers = nil
 			readers.Range(func(key, value any) bool {
 				if rdr, _ := key.(*Reader); rdr != nil && rdr == value {
@@ -173,7 +168,8 @@ func (dbmshndlr *DBMSHandler) Dispose() {
 				return true
 			})
 		}
-		if exctrs := dbmshndlr.exctrs; exctrs != nil {
+
+		if exctrs != nil {
 			dbmshndlr.exctrs = nil
 			exctrs.Range(func(key, value any) bool {
 				if exctr := key.(*Executor); exctr != nil && exctr == value {
@@ -182,7 +178,6 @@ func (dbmshndlr *DBMSHandler) Dispose() {
 				return true
 			})
 		}
-		dbmshndlr = nil
 	}
 }
 
@@ -267,9 +262,6 @@ func (dbmshndlr *DBMSHandler) Execute(alias string, a ...interface{}) (exctr *Ex
 			if dbmshndlr.fs != nil {
 				a = append(a, dbmshndlr.fs)
 			}
-			if dbmshndlr.cchng != nil {
-				a = append(a, dbmshndlr.cchng)
-			}
 			if dbmshndlr.CallPrepStatement != nil {
 				a = append(a, dbmshndlr.CallPrepStatement)
 			}
@@ -309,9 +301,6 @@ func (dbmshndlr *DBMSHandler) Prepair(alias string, a ...interface{}) (exctr *Ex
 			}
 			if dbmshndlr.fs != nil {
 				a = append(a, dbmshndlr.fs)
-			}
-			if dbmshndlr.cchng != nil {
-				a = append(a, dbmshndlr.cchng)
 			}
 			if dbmshndlr.CallPrepStatement != nil {
 				a = append(a, dbmshndlr.CallPrepStatement)
@@ -385,7 +374,6 @@ func (dbms *DBMS) DriverCnInvoker(driver string) (dbinvoker func(string, ...inte
 }
 
 func NewDBMS() (dbms *DBMS) {
-	dbms = &DBMS{cnctns: &sync.Map{}, drivers: &sync.Map{}}
 	return
 }
 
