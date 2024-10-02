@@ -343,6 +343,8 @@ func (buff *Buffer) HasPrefix(teststring string) (isprefixed bool) {
 
 type bufferCursor struct {
 	buff        *Buffer
+	buffer      [][]byte
+	bytes       []byte
 	lastBytes   []byte
 	noMoreBytes bool
 	fromOffset  int64
@@ -350,14 +352,25 @@ type bufferCursor struct {
 	buffs       int64
 	curOffset   int64
 	lastOffset  int64
-	//bufi       int
-	//bufl       int
-	asc bool
+	asc         bool
 }
 
 func (bufcur *bufferCursor) reset(asc bool, offsets ...int64) {
 	if bufcur != nil {
-		bufcur.buffs = bufcur.buff.Size()
+		buff, buffs := bufcur.buff, bufcur.buff.Size()
+		if bufcur.buffs != buffs {
+			bufcur.buffs = buffs
+			bufcur.buffer = nil
+			bufcur.bytes = nil
+			if buffs > 0 {
+				if buffer := buff.buffer; len(buffer) > 0 {
+					bufcur.buffer = buffer[:]
+				}
+				if buff.bytesi > 0 {
+					bufcur.bytes = buff.bytes[:buff.bytesi][:]
+				}
+			}
+		}
 		bufcur.asc = asc
 		bufcur.curOffset = -1
 		bufcur.lastOffset = -1
@@ -376,6 +389,12 @@ func (bufcur *bufferCursor) close() {
 	if bufcur != nil {
 		if bufcur.buff != nil {
 			bufcur.buff = nil
+		}
+		if bufcur.buffer != nil {
+			bufcur.buffer = nil
+		}
+		if bufcur.bytes != nil {
+			bufcur.bytes = nil
 		}
 		bufcur = nil
 	}
@@ -413,25 +432,24 @@ func (bufcur *bufferCursor) Read(p []byte) (n int, err error) {
 
 func (bufcur *bufferCursor) nextBytes() (bts []byte, lastBytes bool) {
 	if bufcur != nil {
-		if buff := bufcur.buff; buff != nil && bufcur.fromOffset >= 0 && (bufcur.asc || !bufcur.asc) {
-			buff.lck.RLock()
-			defer buff.lck.RUnlock()
+		if buffer, bytes := bufcur.buffer, bufcur.bytes; (len(buffer) > 0 || len(bytes) > 0) && bufcur.fromOffset >= 0 && (bufcur.asc || !bufcur.asc) {
+
 			bufs := int64(0)
-			if bfl := len(buff.buffer); bfl > 0 {
-				bufs = int64(bfl) * int64(len(buff.buffer[0]))
+			if bfl := len(buffer); bfl > 0 {
+				bufs = int64(bfl) * int64(len(buffer[0]))
 			}
 			if bufcur.asc {
 				if bufcur.fromOffset < bufcur.toOffset {
 					if bufcur.fromOffset < bufs {
-						bl := len(buff.buffer[0])
+						bl := len(buffer[0])
 						bfi := int((bufcur.fromOffset + 1) / int64(bl))
 						bi := int(bufcur.fromOffset % int64(bl))
 
 						if bufcur.toOffset <= int64(bl) || (bufcur.toOffset <= bufs && bufcur.toOffset > (bufs-int64(bl))) {
 							bmi := bl - int(bufcur.toOffset%int64(bl))
-							bts = buff.buffer[bfi][bi:bmi]
+							bts = buffer[bfi][bi:bmi]
 						} else {
-							bts = buff.buffer[bfi][bi:bl]
+							bts = buffer[bfi][bi:bl]
 						}
 
 						bufcur.curOffset = bufcur.fromOffset
@@ -440,7 +458,7 @@ func (bufcur *bufferCursor) nextBytes() (bts []byte, lastBytes bool) {
 						return
 					}
 					if bufcur.fromOffset < bufcur.buffs {
-						bts = buff.bytes[int(bufcur.fromOffset-bufs):int(bufcur.toOffset-bufs)]
+						bts = bytes[int(bufcur.fromOffset-bufs):int(bufcur.toOffset-bufs)]
 						bufcur.curOffset = bufcur.fromOffset
 						bufcur.fromOffset += int64(len(bts))
 						lastBytes = bufcur.fromOffset >= bufcur.toOffset
@@ -452,16 +470,16 @@ func (bufcur *bufferCursor) nextBytes() (bts []byte, lastBytes bool) {
 			}
 			if bufcur.toOffset > bufcur.fromOffset {
 				if bufcur.toOffset <= bufs {
-					if bl := len(buff.buffer[0]); bufcur.toOffset < int64(bl) {
-						bts = buff.buffer[0][int(bufcur.fromOffset):int(bufcur.toOffset)]
+					if bl := len(buffer[0]); bufcur.toOffset < int64(bl) {
+						bts = buffer[0][int(bufcur.fromOffset):int(bufcur.toOffset)]
 					} else {
 						bfi := int((bufcur.toOffset) / int64(bl))
 						bmi := int(bufcur.toOffset - (int64(bl) * int64(bfi-1)))
 						if bufcur.fromOffset >= (int64(bfi-1) * int64(bl)) {
 							bi := int(bufcur.fromOffset % int64(bl))
-							bts = buff.buffer[bfi-1][bi:bmi]
+							bts = buffer[bfi-1][bi:bmi]
 						} else {
-							bts = buff.buffer[bfi-1][:bmi]
+							bts = buffer[bfi-1][:bmi]
 						}
 					}
 					bufcur.curOffset = bufcur.toOffset - int64(len(bts))
@@ -471,9 +489,9 @@ func (bufcur *bufferCursor) nextBytes() (bts []byte, lastBytes bool) {
 				}
 				if bufcur.toOffset > bufs {
 					if bufcur.fromOffset > bufs {
-						bts = buff.bytes[int(bufcur.fromOffset-bufs):int(bufcur.toOffset-bufs)]
+						bts = bytes[int(bufcur.fromOffset-bufs):int(bufcur.toOffset-bufs)]
 					} else {
-						bts = buff.bytes[:int(bufcur.toOffset-bufs)]
+						bts = bytes[:int(bufcur.toOffset-bufs)]
 					}
 					bufcur.curOffset = bufcur.toOffset - int64(len(bts))
 					bufcur.toOffset -= int64(len(bts))
@@ -488,13 +506,14 @@ func (bufcur *bufferCursor) nextBytes() (bts []byte, lastBytes bool) {
 }
 
 func newBufferCursor(buff *Buffer, asc bool, offsets ...int64) (bufcur *bufferCursor) {
-	bufcur = &bufferCursor{buff: buff, asc: asc, curOffset: -1, buffs: buff.Size(), fromOffset: -1, toOffset: -1}
-	if len(offsets) > 0 && len(offsets)%2 == 0 {
+	bufcur = &bufferCursor{buff: buff, asc: asc, curOffset: -1, fromOffset: -1, toOffset: -1}
+	bufcur.reset(asc, offsets...)
+	/*if len(offsets) > 0 && len(offsets)%2 == 0 {
 		if offsets[0] >= 0 && offsets[1] > 0 && offsets[0] < offsets[1] && offsets[1] <= bufcur.buffs {
 			bufcur.fromOffset = offsets[0]
 			bufcur.toOffset = offsets[1]
 		}
-	}
+	}*/
 	return
 }
 
@@ -1951,8 +1970,8 @@ func (bufr *BuffReader) Seek(offset int64, whence int) (n int64, err error) {
 		var adjusted = false
 		if bufs := bufr.buffer.Size(); bufs > 0 {
 			func() {
-				bufr.buffer.lck.RLock()
-				defer bufr.buffer.lck.RUnlock()
+				//bufr.buffer.lck.RLock()
+				//defer bufr.buffer.lck.RUnlock()
 				var adjustOffsetRead = func() {
 					bufr.bufcur.reset(true, n, bufs)
 					adjusted = true
