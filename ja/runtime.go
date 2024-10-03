@@ -178,6 +178,7 @@ type RandSource func() float64
 type Now func() time.Time
 
 type Runtime struct {
+	importModule    func(modname string, namedimports ...[][]string) bool
 	global          global
 	globalObject    *Object
 	stringSingleton *stringObject
@@ -210,6 +211,20 @@ type Runtime struct {
 
 	promiseRejectionTracker PromiseRejectionTracker
 	asyncContextTracker     AsyncContextTracker
+}
+
+func (r *Runtime) ImportModule(modname string, namedimports ...[][]string) bool {
+	if r.importModule != nil {
+		return r.importModule(modname, namedimports...)
+	}
+	return false
+}
+
+func (r *Runtime) SetImportModule(importModule func(modname string, namedimports ...[][]string) bool) {
+	if r != nil && importModule != nil {
+		r.importModule = importModule
+		r.Set("impstmnt", importModule)
+	}
 }
 
 type StackFrame struct {
