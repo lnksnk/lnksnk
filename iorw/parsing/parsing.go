@@ -94,41 +94,41 @@ func Parse(parseOnly bool, pathModified time.Time, path string, defaultext strin
 			}
 			return fullpath
 		}()); chdscrpt != nil {
-			if chdscrpt.IsValidSince(pathModified, fs) {
-				if out != nil {
-					if _, prserr = chdscrpt.WritePsvTo(out); prserr != nil {
-						return
-					}
+			scrptp, invld := chdscrpt.scrptprgm, chdscrpt.IsValidSince(pathModified, fs)
+			defer func() {
+				if !invld {
+					go chdscrpt.Dispose()
 				}
-				if evalcode != nil {
-					var evalresult interface{} = nil
-					if evalresult, prserr = chdscrpt.EvalAtv(evalcode); prserr != nil {
-						chdscrpt.Dispose()
-						return
-					}
-					pathext := filepath.Ext(fullpath)
-					if pathext == "" && defaultext != "" {
-						pathext = defaultext
-					}
-					if pathext == ".json" {
-						if out != nil {
-							if evalresult != nil {
-								json.NewEncoder(out).Encode(&evalresult)
-							}
-						}
-						return
-					}
+			}()
+			if out != nil {
+				if _, prserr = chdscrpt.WritePsvTo(out); prserr != nil {
+					return
+				}
+			}
+			if evalcode != nil && scrptp != nil {
+				var evalresult interface{} = nil
+				if evalresult, prserr = evalcode(scrptp); prserr != nil {
+					return
+				}
+				pathext := filepath.Ext(fullpath)
+				if pathext == "" && defaultext != "" {
+					pathext = defaultext
+				}
+				if pathext == ".json" {
 					if out != nil {
 						if evalresult != nil {
-							iorw.Fbprint(out, evalresult)
+							json.NewEncoder(out).Encode(&evalresult)
 						}
 					}
 					return
 				}
-			} else {
-				chdscrpt.Dispose()
-				chdscrpt = nil
+				if out != nil {
+					if evalresult != nil {
+						iorw.Fbprint(out, evalresult)
+					}
+				}
 			}
+			return
 		}
 		cachecdefunc = func(fullpath string, pathModified time.Time, cachedpaths map[string]time.Time, prsdpsv, prsdatv *iorw.Buffer, preppedatv interface{}) (cshderr error) {
 			if fullpath != "" {
