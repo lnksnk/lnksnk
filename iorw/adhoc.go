@@ -324,8 +324,8 @@ func EOFReadRunes(rdr io.RuneReader, readrune func(r rune, size int) error) (err
 			return io.EOF
 		}
 	}
-	if size == 0 {
-		return io.EOF
+	if size == 0 && err == nil {
+		err = io.EOF
 	}
 	return
 }
