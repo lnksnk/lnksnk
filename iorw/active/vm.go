@@ -583,81 +583,73 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 			}
 		}
 		if func() {
-			var psrdprgm = func() (p *ja.Program, perr error) {
-				if chdprgm != nil {
-					p = chdprgm
+			p := chdprgm
+			perr := error(nil)
+			if p == nil {
+				var cde = iorw.NewMultiArgsReader(a...)
+				defer cde.Close()
+				cdes, _ = cde.ReadAll()
+
+				prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps, parser.IsModule)
+				if prsderr != nil {
+					if setchdprgm != nil {
+						setchdprgm(nil, prsderr, nil)
+					}
+					err = prsderr
 					return
 				}
-				if p == nil {
-					var cde = iorw.NewMultiArgsReader(a...)
-					defer cde.Close()
-					cdes, _ = cde.ReadAll()
+				if len(prsd.ImportEntries) > 0 {
+					for stmnti, stmnt := range prsd.Body {
+						if imprtast, _ := stmnt.(*ja_ast.ImportDeclaration); imprtast != nil {
+							for _, imprt := range prsd.ImportEntries {
+								if imprt == imprtast {
+									nmdimprt := ""
+									for nmpi, nmmp := range imprt.ImportClause.NamedImports.ImportsList {
 
-					if prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps, parser.IsModule); prsderr == nil {
-						if len(prsd.ImportEntries) > 0 {
-							for stmnti, stmnt := range prsd.Body {
-								if imprtast, _ := stmnt.(*ja_ast.ImportDeclaration); imprtast != nil {
-									for _, imprt := range prsd.ImportEntries {
-										if imprt == imprtast {
-											nmdimprt := ""
-											for nmpi, nmmp := range imprt.ImportClause.NamedImports.ImportsList {
-
-												if nmdimprt != "" {
-													nmdimprt += ","
-												}
-												if nmpi == 0 {
-													nmdimprt += "["
-												}
-												nmdimprt += fmt.Sprintf("['%s','%s']", nmmp.IdentifierName.String(), nmmp.Alias.String())
-											}
-											if nmdimprt != "" {
-												nmdimprt = "," + nmdimprt + "]"
-											}
-											if prppedast, preppedatserr := ja.Parse("", fmt.Sprintf("impstmnt('%s'%s)", imprt.FromClause.ModuleSpecifier.String(), nmdimprt), parser.WithDisableSourceMaps); preppedatserr == nil {
-												if len(prppedast.Body) == 1 {
-													orgstmmnt := prppedast.Body[0]
-													prsd.Body[stmnti] = orgstmmnt
-												}
-											}
+										if nmdimprt != "" {
+											nmdimprt += ","
+										}
+										if nmpi == 0 {
+											nmdimprt += "["
+										}
+										nmdimprt += fmt.Sprintf("['%s','%s']", nmmp.IdentifierName.String(), nmmp.Alias.String())
+									}
+									if nmdimprt != "" {
+										nmdimprt = "," + nmdimprt + "]"
+									}
+									if prppedast, preppedatserr := ja.Parse("", fmt.Sprintf("impstmnt('%s'%s)", imprt.FromClause.ModuleSpecifier.String(), nmdimprt), parser.WithDisableSourceMaps); preppedatserr == nil {
+										if len(prppedast.Body) == 1 {
+											orgstmmnt := prppedast.Body[0]
+											prsd.Body[stmnti] = orgstmmnt
 										}
 									}
 								}
 							}
 						}
-						prgm, prgmerr := ja.CompileAST(prsd, false)
-						if prgmerr != nil {
-							if setchdprgm != nil {
-								setchdprgm(nil, nil, prgmerr)
-							}
-							return nil, prgmerr
-						}
-						if setchdprgm != nil {
-							setchdprgm(prgm, nil, nil)
-						}
-						p = prgm
-					} else {
-						if setchdprgm != nil {
-							setchdprgm(nil, prsderr, nil)
-						}
-						p, perr = nil, prsderr
 					}
 				}
-				return
-			}
-			p, perr := psrdprgm()
-			if perr == nil && p != nil {
-				gojaval, gojaerr := vm.vm.RunProgram(p)
-				if gojaerr == nil {
-					if gojaval != nil {
-						val = gojaval.Export()
-						return
+				p, perr = ja.CompileAST(prsd, false)
+				if perr != nil {
+					err = perr
+					if setchdprgm != nil {
+						setchdprgm(nil, nil, perr)
 					}
 					return
 				}
-				err = gojaerr
+				if setchdprgm != nil {
+					setchdprgm(p, nil, nil)
+				}
+			}
+
+			gojaval, gojaerr := vm.vm.RunProgram(p)
+			if gojaerr == nil {
+				if gojaval != nil {
+					val = gojaval.Export()
+					return
+				}
 				return
 			}
-			err = perr
+			err = gojaerr
 		}(); err != nil {
 			errfns := []func(...interface{}) error{}
 			if vm.ErrPrint != nil {
