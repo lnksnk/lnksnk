@@ -74,7 +74,9 @@ func (chdscrpt *CachedScript) ScriptProgram() (scrptpgrm interface{}) {
 func (chdscrpt *CachedScript) Dispose() {
 	if chdscrpt != nil {
 		if chdscrpt.chdscrptng != nil {
-			chdscrpt.chdscrptng.chdscrpts.Del(chdscrpt.path)
+			if val, valok := chdscrpt.chdscrptng.chdscrpts.LoadAndDelete(chdscrpt.path); valok {
+				val.(*CachedScript).Dispose()
+			}
 			chdscrpt.chdscrptng = nil
 		}
 		if chdscrpt.psvbuf != nil {
@@ -148,7 +150,7 @@ func newCachedScript(chdscrptng *CachedScripting, path string, modified time.Tim
 }
 
 type CachedScripting struct {
-	chdscrpts *concurrent.Map
+	chdscrpts *sync.Map
 }
 
 func (chdscrptng *CachedScripting) Load(modified time.Time, psvbuf *iorw.Buffer, atvbuf *iorw.Buffer, validElems map[string]time.Time, path string) (chdscrpt *CachedScript) {
@@ -156,9 +158,9 @@ func (chdscrptng *CachedScripting) Load(modified time.Time, psvbuf *iorw.Buffer,
 		if path != "" {
 			chdscrptok := false
 			chdscrptany := interface{}(nil)
-			if chdscrptany, chdscrptok = chdscrptng.chdscrpts.Get(path); !chdscrptok {
+			if chdscrptany, chdscrptok = chdscrptng.chdscrpts.Load(path); !chdscrptok {
 				chdscrpt = newCachedScript(chdscrptng /*nil,*/, path, modified, psvbuf, atvbuf, validElems)
-				chdscrptng.chdscrpts.Set(path, chdscrpt)
+				chdscrptng.chdscrpts.Store(path, chdscrpt)
 			} else if chdscrptok {
 				if chdscrpt, _ = chdscrptany.(*CachedScript); chdscrpt != nil {
 					chdscrpt.modified = modified
@@ -216,7 +218,7 @@ func (chdscrptng *CachedScripting) Script(path string) (chdscrpt *CachedScript) 
 		if path != "" {
 			chdscrptok := false
 			chdscrptany := interface{}(nil)
-			if chdscrptany, chdscrptok = chdscrptng.chdscrpts.Get(path); chdscrptok {
+			if chdscrptany, chdscrptok = chdscrptng.chdscrpts.Load(path); chdscrptok {
 				chdscrpt, _ = chdscrptany.(*CachedScript)
 			}
 		}
@@ -231,5 +233,5 @@ func GLOBALCACHEDSCRIPTING() *CachedScripting {
 }
 
 func init() {
-	gblchdscrptng = &CachedScripting{chdscrpts: concurrent.NewMap()}
+	gblchdscrptng = &CachedScripting{chdscrpts: &sync.Map{}}
 }
