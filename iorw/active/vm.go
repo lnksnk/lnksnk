@@ -15,7 +15,6 @@ import (
 	"github.com/lnksnk/lnksnk/iorw/active/require"
 
 	"github.com/lnksnk/lnksnk/ja"
-	ja_ast "github.com/lnksnk/lnksnk/ja/ast"
 	"github.com/lnksnk/lnksnk/ja/parser"
 )
 
@@ -68,14 +67,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 			iorw.Fprintln(os.Stdout, a...)
 		},
 	})
-	vm.vmreq = gojaregistry.Enable(vm.vm, vm.Print, vm.Println)
-	//vm.vm.RunProgram(typescript.TypeScriptProgram)
 	vm.vm.RunProgram(adhocPrgm)
-	vm.vm.SetImportModuleDynamically(func(referencingScriptOrModule interface{}, specifier ja.Value, promiseCapability interface{}) {
-		if importmod := vm.ImportModule; importmod != nil {
-			importmod(referencingScriptOrModule, specifier, promiseCapability)
-		}
-	})
 	var fldmppr = &fieldmapper{fldmppr: ja.UncapFieldNameMapper()}
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {
@@ -93,10 +85,14 @@ func NewVM(a ...interface{}) (vm *VM) {
 		}
 		delete(stngs, stngk)
 	}
-	vm.Set("impstmnt", func(modname string, namedimports ...[][]string) bool {
+	vm.vm.SetImportModule(func(modname string, namedimports ...[][]string) bool {
 		DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...)
 		return true
 	})
+	/*vm.Set("impstmnt", func(modname string, namedimports ...[][]string) bool {
+		DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...)
+		return true
+	})*/
 
 	vm.Set("include", func(modname string) bool {
 		IncludeModule(vm.vm, modname)
@@ -371,10 +367,7 @@ func (prgmodmngr *programModElemManager) InvokeModule(fs *fsutils.FSUtils, speci
 
 	return
 }
-func (prgmodmngr *programModElemManager) invokeJaMod(fs *fsutils.FSUtils, referencingScriptOrModule interface{}, specifier string) (m ja.ModuleRecord, merr error) {
 
-	return
-}
 func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string, namedimports ...[][]string) (err error) {
 
 	if prgmodmngr == nil {
@@ -390,9 +383,7 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 	}
 	if fs != nil {
 		prgmodelm := prgmodmngr.Module(specifier)
-		lastmod := time.Now()
 		if prgmodelm == nil {
-
 			if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, fs, nil); prgmodelm == nil || err != nil {
 				if vm != nil {
 					vm.Try(func() {
@@ -405,15 +396,13 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 			prgmodelm.RunMod(vm, fs, namedimports...)
 			return
 		}
-		lastmod = prgmodelm.modfied
 		if fs.EXISTS(specifier) {
 			fi := fs.LS(specifier)[0]
-			if fi.ModTime() != lastmod {
+			if fi.ModTime() != prgmodelm.modfied {
 				prgmodelms := prgmodmngr.prgmodelms
 				if prgmodelms != nil {
 					prgmodelms.Delete(specifier)
 				}
-
 				if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, nil, fi); err != nil {
 					return
 				}
@@ -598,7 +587,7 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 					err = prsderr
 					return
 				}
-				if len(prsd.ImportEntries) > 0 {
+				/*if len(prsd.ImportEntries) > 0 {
 					for stmnti, stmnt := range prsd.Body {
 						if imprtast, _ := stmnt.(*ja_ast.ImportDeclaration); imprtast != nil {
 							for _, imprt := range prsd.ImportEntries {
@@ -627,7 +616,7 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 							}
 						}
 					}
-				}
+				}*/
 				p, perr = ja.CompileAST(prsd, false)
 				if perr != nil {
 					err = perr
