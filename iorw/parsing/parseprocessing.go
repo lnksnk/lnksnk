@@ -1026,10 +1026,12 @@ func internalProcessParsing(
 		chdrns = nil
 	}()
 	var chdrnsi = 0
-	ctntflush := func() (flsherr error) {
-		if fndcode && cdernsi > 0 {
-			codebuffer().WriteRunes(cderns[:cdernsi]...)
-			cdernsi = 0
+	ctntflush := func(flscde ...bool) (flsherr error) {
+		if len(flscde) == 1 && flscde[0] {
+			if fndcode && cdernsi > 0 {
+				codebuffer().WriteRunes(cderns[:cdernsi]...)
+				cdernsi = 0
+			}
 		}
 		if chdrnsi > 0 && !fndcode {
 			chdctntbuffer().WriteRunes(chdrns[:chdrnsi]...)
@@ -1040,6 +1042,10 @@ func internalProcessParsing(
 			chdrnsi = 0
 		}
 		if !ctntbuf.Empty() {
+			if fndcode && cdernsi > 0 {
+				codebuffer().WriteRunes(cderns[:cdernsi]...)
+				cdernsi = 0
+			}
 			defer ctntbuf.Clear()
 			hstmpltfx := ctntbuf.HasPrefix("`") && ctntbuf.HasSuffix("`")
 
@@ -1256,7 +1262,7 @@ func internalProcessParsing(
 		prsngerr = nil
 	}
 
-	ctntflush()
+	ctntflush(true)
 	var chdpgrm interface{} = nil
 	if !chdctntbuf.Empty() && cdebuf.Empty() {
 		DefaultMinifyPsv(pathext, chdctntbuf, nil)
