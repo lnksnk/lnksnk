@@ -1026,11 +1026,18 @@ func internalProcessParsing(
 		chdrns = nil
 	}()
 	var chdrnsi = 0
-	ctntflush := func(flscde ...bool) (flsherr error) {
+	var ctntflush func(flscde ...bool) (flsherr error)
+	ctntflush = func(flscde ...bool) (flsherr error) {
 		if len(flscde) == 1 && flscde[0] {
 			if fndcode && cdernsi > 0 {
-				codebuffer().WriteRunes(cderns[:cdernsi]...)
+				cderi := cdernsi
 				cdernsi = 0
+				if !chdctntbuf.Empty() {
+					chdctntbuf.WriteTo(ctntbuffer())
+					chdctntbuf.Clear()
+					ctntflush()
+				}
+				codebuffer().WriteRunes(cderns[:cderi]...)
 			}
 		}
 		if chdrnsi > 0 && !fndcode {
@@ -1118,7 +1125,10 @@ func internalProcessParsing(
 				}
 				return
 			}
-			if flsherr = codebuffer().Print("print(`", iorw.NewBuffer(cntntrdr).String(), "`);"); flsherr != nil {
+			if flsherr = codebuffer().Print("print(`", func() (s string) {
+				s, _ = iorw.ReaderToString(iorw.NewBuffer(cntntrdr).Reader(true))
+				return
+			}(), "`);"); flsherr != nil {
 				if flsherr != io.EOF {
 					return
 				}
@@ -1168,6 +1178,11 @@ func internalProcessParsing(
 			if size > 0 {
 				ctntflush()
 				if !fndcode {
+					if !chdctntbuf.Empty() {
+						chdctntbuf.WriteTo(ctntbuffer())
+						chdctntbuf.Clear()
+						ctntflush()
+					}
 					fndcode = true
 				}
 				cderns[cdernsi] = r
