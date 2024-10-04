@@ -150,19 +150,18 @@ func (enmmp *Map) Range(ietrfunc func(key, value any) bool) {
 
 func (enmmp *Map) ForEach(eachitem func(interface{}, interface{}, bool, bool) bool) {
 	if enmmp != nil && eachitem != nil {
-		if mp := enmmp; mp != nil {
-			first := true
-			cnt := mp.Count()
-			kn := 0
-			mp.Range(func(k interface{}, v interface{}) (stop bool) {
-				stop = !eachitem(v, k, first, cnt-1 == kn)
-				if first {
-					first = false
-				}
-				kn++
-				return stop || cnt-1 == kn
-			})
-		}
+		mp := enmmp
+		first := true
+		cnt := mp.Count()
+		kn := 0
+		mp.Range(func(k interface{}, v interface{}) (stop bool) {
+			stop = !eachitem(v, k, first, cnt-1 == kn)
+			if first {
+				first = false
+			}
+			kn++
+			return stop || cnt-1 == kn
+		})
 	}
 }
 
