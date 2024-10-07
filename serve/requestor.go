@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lnksnk/lnksnk/concurrent"
 	"github.com/lnksnk/lnksnk/database"
 	"github.com/lnksnk/lnksnk/database/dbserve"
 	"github.com/lnksnk/lnksnk/ws"
@@ -137,7 +138,7 @@ func ParseEval(evalcode func(a ...interface{}) (val interface{}, err error), pat
 	if fi != nil && path != "" && path[0:1] != "/" {
 		path += fi.Path()
 	}
-	err = parsing.Parse(false, pathmodified, path, pathext, Out, func() (f io.Reader, ferr error) {
+	err = parsing.Parse(pathmodified, path, pathext, Out, func() (f io.Reader, ferr error) {
 		if fi != nil {
 			f, ferr = fi.Open(fnactiveraw, fnmodified)
 			return
@@ -157,8 +158,11 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	var Out serveio.Writer = nil
 	var In serveio.Reader = nil
 	var params *parameters.Parameters = nil
+	var caching *concurrent.Map
+	var invkcachng func() *concurrent.Map
 	var activemap map[string]interface{} = nil
 	var dbhnlr *database.DBMSHandler = nil
+
 	//var emailsvchndl *emailservice.EMAILSvcHandler = nil
 	var fi fsutils.FileInfo
 	var fs *fsutils.FSUtils = nil
@@ -199,6 +203,14 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 		if paramsd, _ := a[ai].(*parameters.Parameters); paramsd != nil {
 			if params == nil {
 				params = paramsd
+			}
+			a = append(a[:ai], a[ai+1:]...)
+			al--
+			continue
+		}
+		if invkcachingd, _ := a[ai].(func() *concurrent.Map); invkcachingd != nil {
+			if invkcachng == nil {
+				invkcachng = invkcachingd
 			}
 			a = append(a[:ai], a[ai+1:]...)
 			al--
@@ -380,7 +392,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 		nvm.Set(actvkey, actvval)
 	}
 
-	var vmparam = map[string]interface{}{
+	nvm.Set("_params", map[string]interface{}{
 		"set":       params.SetParameter,
 		"get":       params.Parameter,
 		"type":      params.Type,
@@ -391,9 +403,62 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 		"keys":      params.StandardKeys,
 		"fileKeys":  params.FileKeys,
 		"fileName":  params.FileName,
-	}
-
-	nvm.Set("_params", vmparam)
+	})
+	nvm.Set("_cache", map[string]interface{}{
+		"count": func() (cnt int) {
+			if caching != nil {
+				return caching.Count()
+			}
+			return
+		},
+		"del": func(keys ...interface{}) {
+			if caching != nil {
+				caching.Del(keys...)
+			}
+		},
+		"find": func(k ...interface{}) (value interface{}, found bool) {
+			if caching != nil {
+				value, found = caching.Find(k...)
+			}
+			return
+		},
+		"exist": func(key interface{}) (exist bool) {
+			if caching != nil {
+				exist = caching.Exist(key)
+			}
+			return
+		},
+		"get": func(key interface{}) (value interface{}, loaded bool) {
+			if caching != nil {
+				value, loaded = caching.Get(key)
+			}
+			return
+		},
+		"set": func(key, value interface{}) {
+			if caching == nil && invkcachng != nil {
+				caching = invkcachng()
+				caching.Set(key, value)
+			}
+			if caching != nil {
+				caching.Set(key, value)
+			}
+		},
+		"forEach": func(ietrfunc func(key any, value any) bool) {
+			if ietrfunc != nil {
+				if caching != nil && ietrfunc != nil {
+					caching.ForEach(func(key, value any, first, last bool) bool {
+						return !ietrfunc(key, value)
+					})
+				}
+			}
+		},
+		"keys": func() (keys []interface{}) {
+			if caching != nil {
+				return caching.Keys()
+			}
+			return
+		},
+	})
 	nvm.Set("_in", In)
 	nvm.Set("_out", Out)
 	nvm.R = In
@@ -403,6 +468,16 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 }
 
 func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (err error) {
+	var caching *concurrent.Map
+	var invokecaching = func() *concurrent.Map {
+		if caching == nil {
+			caching = concurrent.NewMap()
+		}
+		return caching
+	}
+	defer func() {
+		go caching.Dispose()
+	}()
 	params := parameters.NewParameters()
 	defer params.CleanupParameters()
 	var ctx context.Context = nil
@@ -469,7 +544,7 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 			return terminal
 		}, dbhnlr /* emailsvchndl,*/, params, Out, In, activemap, func() fsutils.FileInfo {
 			return fi
-		}, fs)
+		}, fs, invokecaching)
 		return vm
 	}
 	var rangeOffset = func() int64 {
@@ -754,6 +829,7 @@ type ListenApi interface {
 var LISTEN ListenApi = nil
 
 func init() {
+	active.DefaultParseFileInfo = parsing.ParseFileInfo
 	go func() {
 		for vm := range chngvm {
 			go vm.Close()
