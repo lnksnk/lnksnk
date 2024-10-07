@@ -25,6 +25,27 @@ func (enmmp *Map) Count() (cnt int) {
 	return
 }
 
+func (enmmp *Map) Exist(key interface{}) (exist bool) {
+	if enmmp != nil {
+		if elmmp := enmmp.elmmp; elmmp != nil {
+			_, exist = elmmp.Load(key)
+		}
+	}
+	return
+}
+
+func (enmmp *Map) Keys() (keys []interface{}) {
+	if enmmp != nil {
+		if elmmp := enmmp.elmmp; elmmp != nil {
+			elmmp.Range(func(key, value any) bool {
+				keys = append(keys, key)
+				return true
+			})
+		}
+	}
+	return
+}
+
 func (enmmp *Map) Del(key ...interface{}) {
 	if keysl := len(key); enmmp != nil && keysl > 0 {
 		if elmmp := enmmp.elmmp; elmmp != nil {
@@ -33,17 +54,30 @@ func (enmmp *Map) Del(key ...interface{}) {
 				keysl--
 				key = key[:keysl]
 			}
-			delkeys := make([]interface{}, keysl)
-			delvalues := make([]interface{}, keysl)
+			var delkeys []interface{} = nil
+			var delvalues []interface{} = nil
 			delkeysi := 0
 			elmmp.Range(func(ke, value any) bool {
 				for kn, k := range key {
 					if k == ke {
 						if delval, keyexisted := elmmp.LoadAndDelete(k); keyexisted {
 							enmmp.cnt.Add(-1)
-							delkeys[delkeysi] = k
-							delvalues[delkeysi] = delval
-							delkeysi++
+							func() {
+								if donedel == nil {
+									if vm, _ := delval.(*Map); vm != nil {
+										vm.Dispose()
+										return
+									}
+									if vsl, _ := delval.(*Slice); vsl != nil {
+										vsl.Dispose()
+									}
+									return
+								}
+								delkeys = append(delkeys, k)
+								delvalues = append(delvalues, delval)
+								delvalues[delkeysi] = delval
+								delkeysi++
+							}()
 						}
 						key = append(key[:kn], key[kn+1:]...)
 						keysl--
@@ -54,6 +88,10 @@ func (enmmp *Map) Del(key ...interface{}) {
 			})
 
 			if delkeysi > 0 && donedel != nil {
+				defer func() {
+					delvalues = nil
+					delkeys = nil
+				}()
 				donedel(delkeys[:delkeysi], delvalues[:delkeysi])
 			}
 		}
@@ -173,7 +211,7 @@ func (enmmp *Map) Set(key interface{}, value interface{}) {
 				enmmp.cnt.Add(1)
 			}
 			if oldval != value {
-				elmmp.Store(key, value)
+				elmmp.Store(key, constructValue(value))
 			} else {
 				loaded = false
 			}
@@ -191,20 +229,17 @@ func (enmmp *Map) Dispose() {
 		if elmp := enmmp.elmmp; elmp != nil {
 			enmmp.elmmp = nil
 
-			delkvs := map[interface{}]interface{}{}
 			elmp.Range(func(ke, value any) bool {
-				delkvs[ke] = value
+				//delkvs[ke] = value
 				elmp.Delete(ke)
+				if vm, _ := value.(*Map); vm != nil {
+					vm.Dispose()
+				}
+				if vsl, _ := value.(*Slice); vsl != nil {
+					vsl.Dispose()
+				}
 				return false
 			})
-			if len(delkvs) > 0 {
-				for k, v := range delkvs {
-					delete(delkvs, k)
-					if v != nil {
-						v = nil
-					}
-				}
-			}
 			elmp = nil
 		}
 	}
