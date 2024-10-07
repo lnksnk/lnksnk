@@ -479,6 +479,15 @@ func (p *Program) _dumpCode(indent string, logger func(format string, args ...in
 	}
 }
 
+func (p *Program) Src() (src string) {
+	if p != nil {
+		if p.src != nil {
+			src = p.src.Source()
+		}
+	}
+	return
+}
+
 func (p *Program) sourceOffset(pc int) int {
 	i := sort.Search(len(p.srcMap), func(idx int) bool {
 		return p.srcMap[idx].pc > pc
