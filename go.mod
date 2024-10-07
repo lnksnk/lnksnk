@@ -1,8 +1,6 @@
 module github.com/lnksnk/lnksnk
 
-go 1.22.0
-
-toolchain go1.23.1
+go 1.23.0
 
 require github.com/gorilla/websocket v1.5.3 // indirect
 
@@ -11,9 +9,9 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible
 	github.com/google/pprof v0.0.0-20241001023024-f4c0cfd0cf1d
 	github.com/quic-go/quic-go v0.47.0
-	golang.org/x/net v0.29.0
+	golang.org/x/net v0.30.0
 	golang.org/x/oauth2 v0.23.0
-	golang.org/x/sys v0.25.0
+	golang.org/x/sys v0.26.0
 )
 
 require (
@@ -41,11 +39,11 @@ require (
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	go.uber.org/mock v0.4.0 // indirect
-	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
+	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6 // indirect
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/tools v0.25.0 // indirect
-	modernc.org/gc/v3 v3.0.0-20240801135723-a856999a2e4a // indirect
+	golang.org/x/tools v0.26.0 // indirect
+	modernc.org/gc/v3 v3.0.0-20241004144649-1aea3fae8852 // indirect
 	modernc.org/libc v1.61.0 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect
@@ -62,7 +60,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sijms/go-ora/v2 v2.8.21
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
-	golang.org/x/crypto v0.27.0
-	golang.org/x/text v0.18.0
+	golang.org/x/crypto v0.28.0
+	golang.org/x/text v0.19.0
 	modernc.org/sqlite v1.33.1
 )
