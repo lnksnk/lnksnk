@@ -369,7 +369,6 @@ func (prgmodmngr *programModElemManager) InvokeModule(fs *fsutils.FSUtils, speci
 }
 
 func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string, namedimports ...[][]string) (err error) {
-
 	if prgmodmngr == nil {
 		return
 	}
@@ -407,8 +406,10 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 					return
 				}
 				prgmodelms.Store(specifier, prgmodelm)
+				prgmodelm.RunMod(vm, fs, namedimports...)
 			}
-			m := prgmodelm.m
+			prgmodelm.RunMod(vm, fs, namedimports...)
+			/*m := prgmodelm.m
 			if vm != nil {
 				func() {
 					evalprms := m.Evaluate(vm)
@@ -434,12 +435,30 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 						}
 					}
 				}()
-			}
+			}*/
 			return
 		}
 	}
 	return
 }
+
+var DefaultParseModeCode = func(prgmodmngr *programModElemManager, fi fsutils.FileInfo, fs *fsutils.FSUtils) (cde string, prserr error) {
+	if DefaultParseFileInfo != nil {
+		bfout := iorw.NewBuffer()
+		prserr = DefaultParseFileInfo(fi, fs, ".js", bfout, true, func(a ...interface{}) (result interface{}, err error) {
+			p, perr := Compile(a...)
+			if perr != nil {
+				prserr = perr
+			}
+			cde = p.Src()
+
+			return
+		})
+	}
+	return
+}
+
+var DefaultParseFileInfo func(fi fsutils.FileInfo, fs *fsutils.FSUtils, defaultext string, out io.Writer, invertActive bool, evalcode func(...interface{}) (interface{}, error), a ...interface{}) (prserr error)
 
 func newProgramModElement(prgmodmngr *programModElemManager, specifier string, fs *fsutils.FSUtils, fi fsutils.FileInfo) (prgmodelm *programModElement, err error) {
 	if specifier != "" {
@@ -456,26 +475,36 @@ func newProgramModElement(prgmodmngr *programModElemManager, specifier string, f
 			if fi.IsDir() {
 				return nil, fmt.Errorf("specifier %s is a director", specifier)
 			}
-			if fr, _ := fi.Open(); fr != nil {
-				defer fr.Close()
-				if src, _ := iorw.ReaderToString(fr); src != "" {
-					p, perr := ja.ParseModule(specifier, src, func(referencingScriptOrModule interface{}, modspecifier string) (ja.ModuleRecord, error) {
-						if prgmodelm = prgmodmngr.Module(modspecifier); prgmodelm != nil {
-							return prgmodelm.m, nil
-						}
-						return nil, fmt.Errorf("Unable to load specifier %s", modspecifier)
-					})
-					if perr != nil {
-						err = perr
-						return
-					}
-					if err = p.Link(); err != nil {
-						p = nil
-						return
-					}
-					prgmodelm = &programModElement{modfied: fi.ModTime(), m: p, prgmodmngr: prgmodmngr}
+			src := ""
+			if DefaultParseModeCode != nil {
+				if src, err = DefaultParseModeCode(prgmodmngr, fi, fs); err != nil {
+					return nil, err
 				}
 			}
+			if src == "" {
+				if fr, _ := fi.Open(); fr != nil {
+					defer fr.Close()
+
+					if src, _ = iorw.ReaderToString(fr); src == "" {
+						return nil, fmt.Errorf("empty source for specifier %s", specifier)
+					}
+				}
+			}
+			p, perr := ja.ParseModule(specifier, src, func(referencingScriptOrModule interface{}, modspecifier string) (ja.ModuleRecord, error) {
+				if prgmodelm = prgmodmngr.Module(modspecifier); prgmodelm != nil {
+					return prgmodelm.m, nil
+				}
+				return nil, fmt.Errorf("unable to load specifier %s", modspecifier)
+			})
+			if perr != nil {
+				err = perr
+				return
+			}
+			if err = p.Link(); err != nil {
+				p = nil
+				return
+			}
+			prgmodelm = &programModElement{modfied: fi.ModTime(), m: p, prgmodmngr: prgmodmngr}
 		}
 	}
 
@@ -540,28 +569,84 @@ func (prgmodElm *programModElement) RunMod(vm *ja.Runtime, fs *fsutils.FSUtils, 
 	}
 }
 
+type parseerr struct {
+	cde string
+	err error
+}
+
+func (prserr *parseerr) Error() string {
+	return prserr.err.Error()
+}
+
+func (prserr *parseerr) Code() string {
+	return prserr.cde
+}
+
+func Compile(a ...interface{}) (p *ja.Program, perr error) {
+	var ai, ail = 0, len(a)
+	var cdes = ""
+	var chdprgm *ja.Program = nil
+	var setchdprgm func(interface{}, error, error)
+	for ai < ail {
+		if chdpgrmd, chdpgrmdok := a[ai].(*ja.Program); chdpgrmdok {
+			if chdprgm == nil && chdpgrmd != nil {
+				chdprgm = chdpgrmd
+			}
+			ail--
+			a = append(a[:ai], a[ai+1:]...)
+			continue
+		}
+		if setchdpgrmd, setchdpgrmdok := a[ai].(func(interface{}, error, error)); setchdpgrmdok {
+			if setchdprgm == nil && setchdpgrmd != nil {
+				setchdprgm = setchdpgrmd
+			}
+			ail--
+			a = append(a[:ai], a[ai+1:]...)
+			continue
+		}
+		ai++
+	}
+	if p = chdprgm; p == nil {
+		if p == nil {
+			var cde = iorw.NewMultiArgsReader(a...)
+			defer cde.Close()
+			cdes, _ = cde.ReadAll()
+
+			prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps, parser.IsModule)
+			if prsderr != nil {
+				if setchdprgm != nil {
+					setchdprgm(nil, prsderr, nil)
+				}
+				perr = &parseerr{cde: cdes, err: prsderr}
+				return
+			}
+			p, perr = ja.CompileAST(prsd, false)
+			if perr != nil {
+				if setchdprgm != nil {
+					setchdprgm(nil, nil, perr)
+				}
+				perr = &parseerr{cde: cdes, err: prsderr}
+				return
+			}
+			if setchdprgm != nil {
+				setchdprgm(p, nil, nil)
+			}
+		}
+	}
+
+	return
+}
+
 func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 	if vm != nil && vm.vm != nil {
-		var cdes = ""
-		var chdprgm *ja.Program = nil
-		var setchdprgm func(interface{}, error, error)
+		//var cdes = ""
+		//var chdprgm *ja.Program = nil
+		//var setchdprgm func(interface{}, error, error)
 		var ai, ail = 0, len(a)
 
 		var errfound func(...interface{}) error = nil
 		for ai < ail {
-			if chdpgrmd, chdpgrmdok := a[ai].(*ja.Program); chdpgrmdok {
-				if chdprgm == nil && chdpgrmd != nil {
-					chdprgm = chdpgrmd
-				}
-				ail--
-				a = append(a[:ai], a[ai+1:]...)
-			} else if setchdpgrmd, setchdpgrmdok := a[ai].(func(interface{}, error, error)); setchdpgrmdok {
-				if setchdprgm == nil && setchdpgrmd != nil {
-					setchdprgm = setchdpgrmd
-				}
-				ail--
-				a = append(a[:ai], a[ai+1:]...)
-			} else if errfoundd, errfounddok := a[ai].(func(...interface{}) error); errfounddok {
+			if errfoundd, errfounddok := a[ai].(func(...interface{}) error); errfounddok {
 				if errfound == nil && errfoundd != nil {
 					errfound = errfoundd
 				}
@@ -571,65 +656,12 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 				ai++
 			}
 		}
+
 		if func() {
-			p := chdprgm
-			perr := error(nil)
-			if p == nil {
-				var cde = iorw.NewMultiArgsReader(a...)
-				defer cde.Close()
-				cdes, _ = cde.ReadAll()
-
-				prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps, parser.IsModule)
-				if prsderr != nil {
-					if setchdprgm != nil {
-						setchdprgm(nil, prsderr, nil)
-					}
-					err = prsderr
-					return
-				}
-				/*if len(prsd.ImportEntries) > 0 {
-					for stmnti, stmnt := range prsd.Body {
-						if imprtast, _ := stmnt.(*ja_ast.ImportDeclaration); imprtast != nil {
-							for _, imprt := range prsd.ImportEntries {
-								if imprt == imprtast {
-									nmdimprt := ""
-									for nmpi, nmmp := range imprt.ImportClause.NamedImports.ImportsList {
-
-										if nmdimprt != "" {
-											nmdimprt += ","
-										}
-										if nmpi == 0 {
-											nmdimprt += "["
-										}
-										nmdimprt += fmt.Sprintf("['%s','%s']", nmmp.IdentifierName.String(), nmmp.Alias.String())
-									}
-									if nmdimprt != "" {
-										nmdimprt = "," + nmdimprt + "]"
-									}
-									if prppedast, preppedatserr := ja.Parse("", fmt.Sprintf("impstmnt('%s'%s)", imprt.FromClause.ModuleSpecifier.String(), nmdimprt), parser.WithDisableSourceMaps); preppedatserr == nil {
-										if len(prppedast.Body) == 1 {
-											orgstmmnt := prppedast.Body[0]
-											prsd.Body[stmnti] = orgstmmnt
-										}
-									}
-								}
-							}
-						}
-					}
-				}*/
-				p, perr = ja.CompileAST(prsd, false)
-				if perr != nil {
-					err = perr
-					if setchdprgm != nil {
-						setchdprgm(nil, nil, perr)
-					}
-					return
-				}
-				if setchdprgm != nil {
-					setchdprgm(p, nil, nil)
-				}
+			p, perr := Compile(a...)
+			if perr != nil {
+				err = perr
 			}
-
 			gojaval, gojaerr := vm.vm.RunProgram(p)
 			if gojaerr == nil {
 				if gojaval != nil {
@@ -638,6 +670,7 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 				}
 				return
 			}
+
 			err = gojaerr
 		}(); err != nil {
 			errfns := []func(...interface{}) error{}
@@ -646,6 +679,10 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 			}
 			if errfound != nil {
 				errfns = append(errfns, errfound)
+			}
+			cdes := ""
+			if prserr, _ := err.(*parseerr); prserr != nil {
+				cdes = prserr.Code()
 			}
 			for _, ErrPrint := range errfns {
 				func() {
@@ -720,10 +757,6 @@ var gobalMods *sync.Map
 
 var adhocPrgm *ja.Program = nil
 
-var gojaregistry *require.Registry
-
-var VMSourceLoader require.SourceLoader
-
 func LoadGlobalModule(modname string, a ...interface{}) {
 	if _, ok := gobalMods.Load(modname); ok {
 
@@ -751,12 +784,6 @@ func IncludeModule(vm *ja.Runtime, modname string) {
 func init() {
 
 	gobalMods = &sync.Map{}
-	gojaregistry = require.NewRegistryWithLoader(func(path string) (src []byte, err error) {
-		if VMSourceLoader != nil {
-			src, err = VMSourceLoader(path)
-		}
-		return
-	})
 
 	if adhocast, _ := ja.Parse(``, `_methods = (obj) => {
 		let properties = new Set()
