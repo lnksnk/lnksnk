@@ -476,13 +476,16 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 		return caching
 	}
 	defer func() {
-		go caching.Dispose()
+		if caching != nil {
+			go caching.Dispose()
+		}
 	}()
 	params := parameters.NewParameters()
 	defer params.CleanupParameters()
 	var ctx context.Context = nil
 	if In != nil {
 		ctx = In.Context()
+		defer In.Close()
 		parameters.LoadParametersFromHTTPRequest(params, In.HttpR())
 		if path == "" {
 			path = In.Path()
@@ -495,9 +498,7 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 	if strings.Contains(path, "?") {
 		parameters.LoadParametersFromRawURL(params, path)
 	}
-	if In != nil {
-		defer In.Close()
-	}
+
 	if Out != nil {
 		defer Out.Close()
 	}
