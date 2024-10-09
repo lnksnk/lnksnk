@@ -1237,7 +1237,7 @@ func (rdr *Reader) Next() (next bool, err error) {
 		}
 		if rows != nil {
 			if stmnt := rdr.stmnt; stmnt != nil {
-				if ctx := stmnt.ctx; rdr.rows != nil {
+				if ctx := stmnt.ctx; ctx != nil && rdr.rows != nil {
 					select {
 					case <-ctx.Done():
 						if err = ctx.Err(); err != nil {
