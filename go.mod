@@ -7,7 +7,7 @@ require github.com/gorilla/websocket v1.5.3 // indirect
 require (
 	github.com/dlclark/regexp2 v1.11.4
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible
-	github.com/google/pprof v0.0.0-20241001023024-f4c0cfd0cf1d
+	github.com/google/pprof v0.0.0-20241008032058-148460133af7
 	github.com/quic-go/quic-go v0.47.0
 	golang.org/x/net v0.30.0
 	golang.org/x/oauth2 v0.23.0
