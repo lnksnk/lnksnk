@@ -15,12 +15,14 @@ type Reader interface {
 	io.ReadCloser
 	io.RuneReader
 	Context() context.Context
+	Cancel()
 	HttpR() *http.Request
 	Path() string
 }
 
 type reader struct {
 	ctx         context.Context
+	ctxcnl      func()
 	httpr       *http.Request
 	path        string
 	bufr        *bufio.Reader
@@ -97,6 +99,15 @@ func (rqr *reader) Context() (ctx context.Context) {
 	return
 }
 
+func (rqr *reader) Cancel() {
+	if rqr != nil {
+		if cncl := rqr.ctxcnl; cncl != nil {
+			cncl()
+		}
+	}
+	return
+}
+
 func (rqr *reader) Close() (err error) {
 	if rqr != nil {
 		if rqr.httpr != nil {
@@ -111,6 +122,9 @@ func (rqr *reader) Close() (err error) {
 
 func NewReader(httpr *http.Request) (rdr *reader) {
 	rdr = &reader{httpr: httpr, rangeoffset: -1, ctx: httpr.Context()}
+	if rdr.ctx != nil {
+		rdr.ctx, rdr.ctxcnl = context.WithCancel(rdr.ctx)
+	}
 	if httpr != nil {
 		prtclrangetype := ""
 		prtclrangeoffset := int64(-1)
