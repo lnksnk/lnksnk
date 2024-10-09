@@ -395,8 +395,14 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 			prgmodelm.RunMod(vm, fs, namedimports...)
 			return
 		}
+	retry:
 		if fs.EXISTS(specifier) {
 			fi := fs.LS(specifier)[0]
+			if fi.IsDir() {
+				specifier = fi.Path() + "index.js"
+				fi = nil
+				goto retry
+			}
 			if fi.ModTime() != prgmodelm.modfied {
 				prgmodelms := prgmodmngr.prgmodelms
 				if prgmodelms != nil {
@@ -465,16 +471,25 @@ func newProgramModElement(prgmodmngr *programModElemManager, specifier string, f
 		if fi == nil {
 			if fs != nil {
 				fis := fs.LS(specifier)
-				if len(fis) > 1 || fis[0].IsDir() {
-					return nil, fmt.Errorf("specifier %s is a director", specifier)
+				if fisl := len(fis); fisl > 0 {
+					if !fis[0].IsDir() {
+						fi = fis[0]
+						goto doit
+					}
+					if fis[0].IsDir() {
+						retryspecifier := fis[0].Path() + "index.js"
+						if fis = fs.LS(specifier); len(fis) == 1 {
+							specifier = retryspecifier
+							fi = fis[0]
+							goto doit
+						}
+					}
 				}
-				fi = fis[0]
-			}
-		}
-		if fi != nil {
-			if fi.IsDir() {
 				return nil, fmt.Errorf("specifier %s is a director", specifier)
 			}
+		}
+	doit:
+		if fi != nil {
 			src := ""
 			if DefaultParseModeCode != nil {
 				if src, err = DefaultParseModeCode(prgmodmngr, fi, fs); err != nil {
@@ -555,7 +570,7 @@ func (prgmodElm *programModElement) RunMod(vm *ja.Runtime, fs *fsutils.FSUtils, 
 							if idntys != "" {
 								if imprtthisl > 1 {
 									if aliass := imprtthis[1]; aliass != "" {
-										vm.Set(idntys, nmspce.Get(idntys))
+										vm.Set(aliass, nmspce.Get(idntys))
 										continue
 									}
 								}
