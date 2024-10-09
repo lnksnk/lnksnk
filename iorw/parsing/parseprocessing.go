@@ -372,6 +372,10 @@ func internalProcessParsing(
 	validelempaths := map[string]time.Time{}
 	invalidelempaths := map[string]bool{}
 
+	if len(rnrdrs) == 0 {
+		return
+	}
+
 	root := pathroot
 	if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
@@ -418,6 +422,10 @@ func internalProcessParsing(
 		}
 		return
 	}()
+
+	if invertActive {
+		rnrdrs = append([]io.RuneReader{strings.NewReader("<@")}, append(rnrdrs, strings.NewReader("@>"))...)
+	}
 
 	var rnsrdrslcrdr = iorw.NewSliceRuneReader(rnrdrs...)
 	var phrsbf *iorw.Buffer = nil
@@ -1249,27 +1257,23 @@ func internalProcessParsing(
 		return true
 	})
 
-	if invertActive {
-		prsngerr = readCode(coderunsrdr)
-	} else {
-		prsngerr = iorw.EOFReadRunes(coderunsrdr, func(cr rune, csize int) (cerr error) {
-			if csize > 0 {
-				chdrns[chdrnsi] = cr
-				chdrnsi++
-				if chdrnsi == 8192 {
-					chdrnsi = 0
-					if fndcode {
-						ctntbuffer().WriteRunes(chdrns[:8192]...)
-						return
-					}
-					chdctntbuffer().WriteRunes(chdrns[:8192]...)
+	prsngerr = iorw.EOFReadRunes(coderunsrdr, func(cr rune, csize int) (cerr error) {
+		if csize > 0 {
+			chdrns[chdrnsi] = cr
+			chdrnsi++
+			if chdrnsi == 8192 {
+				chdrnsi = 0
+				if fndcode {
+					ctntbuffer().WriteRunes(chdrns[:8192]...)
+					return
 				}
-				//chdctntbuffer().WriteRune(cr)
-				return
+				chdctntbuffer().WriteRunes(chdrns[:8192]...)
 			}
 			return
-		})
-	}
+		}
+		return
+	})
+	//}
 	if prsngerr != nil {
 		if prsngerr != io.EOF {
 			return
