@@ -13,9 +13,19 @@ import (
 
 // ResourcingManager - struct
 type ResourcingManager struct {
-	fsutils      *fsutils.FSUtils
-	rsngpaths    map[string]*ResourcingEndpoint
-	rsngendpaths map[*ResourcingEndpoint]string
+	fsutils       *fsutils.FSUtils
+	rsngpaths     map[string]*ResourcingEndpoint
+	rsngendpaths  map[*ResourcingEndpoint]string
+	FSNotifyEvent func(fs *fsutils.FSUtils, path string, modified time.Time)
+}
+
+func (rscngmngr *ResourcingManager) fsNotifyEvent(path string, modified time.Time) {
+	if rscngmngr == nil {
+		return
+	}
+	if fsntfyevt := rscngmngr.FSNotifyEvent; fsntfyevt != nil {
+		go fsntfyevt(rscngmngr.FS(), path, modified)
+	}
 }
 
 // FS return fsutils.FSUtils implementation for *ResourcingManager

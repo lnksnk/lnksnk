@@ -721,7 +721,7 @@ func OpenReader(name string) (*iorw.EOFCloseSeekReader, error) {
 	return nil, nil
 }
 
-func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.BufferCache) (rs io.ReadCloser, modified time.Time, err error) {
+func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.BufferCache, fsNotifyEvent func(path string, modified time.Time)) (rs io.ReadCloser, modified time.Time, err error) {
 	lkpzpi, lkpzpext := lkpzpextindex(lklpath)
 	pthzpi, pthzpext := lkpzpextindex(path)
 
@@ -791,10 +791,13 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 												if !finfo.IsDir() && fpath == testpath {
 													modified = trhead.ModTime
 													if cachableExtsBuffs != nil && cachableExts[path] {
-														if bufr, bofmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufr != nil && modified != bofmod) {
+														if bufr, bofmod := cachableExtsBuffs.Reader(path); bufr == nil || (modified != bofmod) {
 															cachableExtsBuffs.Set(path, modified, trerr)
 															rs, _ = cachableExtsBuffs.Reader(path)
-														} else if bufr != nil {
+															if fsNotifyEvent != nil {
+																go fsNotifyEvent(path, modified)
+															}
+														} else {
 															rs = bufr
 														}
 													} else {
@@ -815,21 +818,21 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 									if f.Name == testpath {
 										modified = f.Modified
 										if cachableExtsBuffs != nil && cachableExts[path] {
-											if bufr, bofmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufr != nil && modified != bofmod) {
+											if bufr, bofmod := cachableExtsBuffs.Reader(path); bufr == nil || (modified != bofmod) {
 												if rc, rcerr := f.Open(); rcerr == nil {
 													func() {
 														defer rc.Close()
 														if prebf, prebferr := iorw.NewBufferError(rc); prebferr == nil {
-															rs = prebf.Reader()
 															cachableExtsBuffs.Set(path, modified, prebf.Reader())
+															if fsNotifyEvent != nil {
+																go fsNotifyEvent(path, modified)
+															}
 														}
 													}()
-													//rs, _ = cachableExtsBuffs.Reader(path)
+													rs, _ = cachableExtsBuffs.Reader(path)
 
 												} else {
-													if rcerr != nil {
-														err = rcerr
-													}
+													err = rcerr
 												}
 											} else if bufr != nil {
 												rs = bufr
@@ -837,9 +840,7 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 										} else if rc, rcerr := f.Open(); rcerr == nil {
 											rs = rc
 										} else {
-											if rcerr != nil {
-												err = rcerr
-											}
+											err = rcerr
 										}
 										return
 									}
@@ -859,16 +860,18 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 		if fi, fierr := os.Stat(lklpath + path); fierr == nil && !fi.IsDir() {
 			modified = fi.ModTime()
 			if cachableExtsBuffs != nil && cachableExts[filepath.Ext(path)] {
-				if bufr, bufmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufr != nil && bufmod != fi.ModTime()) {
+				if bufr, bufmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufmod != fi.ModTime()) {
 					if f, ferr := os.Open(lklpath + path); ferr == nil && f != nil {
 						func() {
 							defer f.Close()
 							if prebf, prebferr := iorw.NewBufferError(f); prebferr == nil {
-								rs = prebf.Reader()
 								cachableExtsBuffs.Set(path, fi.ModTime(), prebf.Reader())
+								if fsNotifyEvent != nil {
+									go fsNotifyEvent(path, modified)
+								}
 							}
 						}()
-						//rs, _ = cachableExtsBuffs.Reader(path)
+						rs, _ = cachableExtsBuffs.Reader(path)
 					}
 				} else {
 					rs = bufr
@@ -934,7 +937,7 @@ func (rscngepnt *ResourcingEndpoint) findRS(path string) (rs io.ReadCloser, modi
 					if apppath := rscngepnt.rsngmngr.rsngendpaths[rscngepnt]; apppath != "" && strings.HasPrefix(path, apppath) {
 						path = path[len(apppath):]
 					}
-					rs, modified, err = getLocalResource(rscngepnt.path, path, rscngepnt.cachableExtsBuffs)
+					rs, modified, err = getLocalResource(rscngepnt.path, path, rscngepnt.cachableExtsBuffs, rscngepnt.rsngmngr.fsNotifyEvent)
 				} else if rscngepnt.isRemote {
 					prms := map[string]interface{}{}
 					if rscngepnt.querystring != "" {
