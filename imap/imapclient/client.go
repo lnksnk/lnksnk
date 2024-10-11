@@ -10,7 +10,7 @@
 //	import (
 //		"mime"
 //
-//		"github.com/lnksnk/lnksnk/message/charset"
+//		"github.com/emersion/go-message/charset"
 //	)
 //
 //	options := &imapclient.Options{
@@ -404,7 +404,7 @@ func (c *Client) beginCommand(name string, cmd command) *commandEncoder {
 	tag := fmt.Sprintf("T%v", c.cmdTag)
 
 	baseCmd := cmd.base()
-	*baseCmd = Command{
+	*baseCmd = commandBase{
 		tag:  tag,
 		done: make(chan error, 1),
 	}
@@ -723,7 +723,14 @@ func (c *Client) readResponseTagged(tag, typ string) (startTLS *startTLSCommand,
 			if err != nil {
 				return nil, fmt.Errorf("in resp-code-copy: %v", err)
 			}
-			if cmd, ok := cmd.(*CopyCommand); ok {
+			switch cmd := cmd.(type) {
+			case *CopyCommand:
+				cmd.data.UIDValidity = uidValidity
+				cmd.data.SourceUIDs = srcUIDs
+				cmd.data.DestUIDs = dstUIDs
+			case *MoveCommand:
+				// This can happen when Client.Move falls back to COPY +
+				// STORE + EXPUNGE
 				cmd.data.UIDValidity = uidValidity
 				cmd.data.SourceUIDs = srcUIDs
 				cmd.data.DestUIDs = dstUIDs
@@ -907,6 +914,8 @@ func (c *Client) readResponseData(typ string) error {
 			}
 			close(c.greetingCh)
 		}
+	case "ID":
+		return c.handleID()
 	case "CAPABILITY":
 		return c.handleCapability()
 	case "ENABLED":
@@ -1008,7 +1017,7 @@ func (c *Client) Noop() *Command {
 func (c *Client) Logout() *Command {
 	cmd := &logoutCommand{}
 	c.beginCommand("LOGOUT", cmd).end()
-	return &cmd.cmd
+	return &cmd.Command
 }
 
 // Login sends a LOGIN command.
@@ -1017,7 +1026,7 @@ func (c *Client) Login(username, password string) *Command {
 	enc := c.beginCommand("LOGIN", cmd)
 	enc.SP().String(username).SP().String(password)
 	enc.end()
-	return &cmd.cmd
+	return &cmd.Command
 }
 
 // Delete sends a DELETE command.
@@ -1070,7 +1079,7 @@ func uidCmdName(name string, kind imapwire.NumKind) string {
 type commandEncoder struct {
 	*imapwire.Encoder
 	client *Client
-	cmd    *Command
+	cmd    *commandBase
 }
 
 // end ends an outgoing command.
@@ -1126,7 +1135,7 @@ func (lw literalWriter) Close() error {
 // continuationRequest is a pending continuation request.
 type continuationRequest struct {
 	*imapwire.ContinuationRequest
-	cmd *Command
+	cmd *commandBase
 }
 
 // UnilateralDataMailbox describes a mailbox status update.
@@ -1161,35 +1170,41 @@ type UnilateralDataHandler struct {
 // Commands are represented by the Command type, but can be extended by other
 // types (e.g. CapabilityCommand).
 type command interface {
-	base() *Command
+	base() *commandBase
 }
 
-// Command is a basic IMAP command.
-type Command struct {
+type commandBase struct {
 	tag  string
 	done chan error
 	err  error
 }
 
-func (cmd *Command) base() *Command {
+func (cmd *commandBase) base() *commandBase {
 	return cmd
 }
 
-// Wait blocks until the command has completed.
-func (cmd *Command) Wait() error {
+func (cmd *commandBase) wait() error {
 	if cmd.err == nil {
 		cmd.err = <-cmd.done
 	}
 	return cmd.err
 }
 
-type cmd = Command // type alias to avoid exporting anonymous struct fields
+// Command is a basic IMAP command.
+type Command struct {
+	commandBase
+}
+
+// Wait blocks until the command has completed.
+func (cmd *Command) Wait() error {
+	return cmd.wait()
+}
 
 type loginCommand struct {
-	cmd
+	Command
 }
 
 // logoutCommand is a LOGOUT command.
 type logoutCommand struct {
-	cmd
+	Command
 }
