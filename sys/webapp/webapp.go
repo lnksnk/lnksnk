@@ -62,7 +62,7 @@ func App(args ...string) {
 		appEnvPath = "./"
 	}
 	appName := appName()
-	if fs.EXISTS(appEnvPath) {
+	if fs.EXIST(appEnvPath) {
 		resources.GLOBALRSNG().FS().MKDIR("/"+appName+"/env", appEnvPath)
 		appEnvPath = "/" + appName + "/env/"
 	}

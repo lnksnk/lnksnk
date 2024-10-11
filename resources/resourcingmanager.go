@@ -32,7 +32,7 @@ func (rscngmngr *ResourcingManager) fsNotifyEvent(path string, modified time.Tim
 func (rscngmngr *ResourcingManager) FS() *fsutils.FSUtils {
 	if rscngmngr.fsutils == nil {
 		rscngmngr.fsutils = &fsutils.FSUtils{
-			EXISTS: func(path string) bool {
+			EXIST: func(path string) bool {
 				return rscngmngr.fsexists(path)
 			},
 			ABS: func(path string) (abspath string) {

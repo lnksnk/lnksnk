@@ -838,7 +838,7 @@ func FINFOPATHSJSON(a ...FileInfo) (s string) {
 
 // FSUtils struct
 type FSUtils struct {
-	EXISTS         func(path string) bool                                                                                                                                               `json:"exists"`
+	EXIST          func(path string) bool                                                                                                                                               `json:"exists"`
 	ABS            func(path string) string                                                                                                                                             `json:"abs"`
 	LS             func(path ...interface{}) (finfos []FileInfo)                                                                                                                        `json:"ls"`
 	FIND           func(path ...interface{}) (finfos []FileInfo)                                                                                                                        `json:"find"`
@@ -864,7 +864,7 @@ type FSUtils struct {
 // NewFSUtils return instance of FSUtils
 func NewFSUtils() (fsutlsstrct FSUtils) {
 	fsutlsstrct = FSUtils{
-		EXISTS: func(path string) (exist bool) {
+		EXIST: func(path string) (exist bool) {
 			exist, _ = EXISTS(path)
 			return
 		},

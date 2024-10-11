@@ -111,7 +111,7 @@ func (rscngepnt *ResourcingEndpoint) FS() *fsutils.FSUtils {
 				abspath, _ = rscngepnt.fsabs(path)
 				return
 			},
-			EXISTS: func(path string) (exists bool) {
+			EXIST: func(path string) (exists bool) {
 				exists, _ = rscngepnt.fsexists(path)
 				return
 			},

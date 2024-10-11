@@ -396,7 +396,7 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 			return
 		}
 	retry:
-		if fs.EXISTS(specifier) {
+		if fs.EXIST(specifier) {
 			fi := fs.LS(specifier)[0]
 			if fi.IsDir() {
 				specifier = fi.Path() + "index.js"
