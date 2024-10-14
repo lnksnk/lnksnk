@@ -98,41 +98,42 @@ func ParseFileInfo(fi fsutils.FileInfo, fs *fsutils.FSUtils, defaultext string, 
 			}
 			return fullpath
 		}()); chdscrpt != nil {
-			scrptp, invld := chdscrpt.scrptprgm, chdscrpt.IsValidSince(pathModified, fs)
-			defer func() {
-				if !invld {
-					go chdscrpt.Dispose()
-				}
-			}()
-			if out != nil {
-				if _, prserr = chdscrpt.WritePsvTo(out); prserr != nil {
-					return
-				}
-			}
-			if evalcode != nil && scrptp != nil {
-				var evalresult interface{} = nil
-				if evalresult, prserr = evalcode(scrptp); prserr != nil {
-					return
-				}
-				pathext := filepath.Ext(fullpath)
-				if pathext == "" && defaultext != "" {
-					pathext = defaultext
-				}
-				if pathext == ".json" {
-					if out != nil {
-						if evalresult != nil {
-							json.NewEncoder(out).Encode(&evalresult)
+			scrptp, isvld := chdscrpt.scrptprgm, chdscrpt.IsValidSince(pathModified, fs)
+			if isvld {
+				if out != nil {
+					if psvbuf := chdscrpt.psvbuf; !psvbuf.Empty() {
+						if _, prserr = psvbuf.WriteTo(out); prserr != nil {
+							return
 						}
 					}
-					return
 				}
-				if out != nil {
-					if evalresult != nil {
-						iorw.Fbprint(out, evalresult)
+				if evalcode != nil && scrptp != nil {
+					var evalresult interface{} = nil
+					if evalresult, prserr = evalcode(scrptp); prserr != nil {
+						return
+					}
+					pathext := filepath.Ext(fullpath)
+					if pathext == "" && defaultext != "" {
+						pathext = defaultext
+					}
+					if pathext == ".json" {
+						if out != nil {
+							if evalresult != nil {
+								json.NewEncoder(out).Encode(&evalresult)
+							}
+						}
+						return
+					}
+					if out != nil {
+						if evalresult != nil {
+							iorw.Fbprint(out, evalresult)
+						}
 					}
 				}
+				return
 			}
-			return
+			chdscrpt.Dispose()
+			chdscrpt = nil
 		}
 		cachecdefunc = func(fullpath string, pathModified time.Time, cachedpaths map[string]time.Time, prsdpsv, prsdatv *iorw.Buffer, preppedatv interface{}) (cshderr error) {
 			if fullpath != "" {
@@ -240,41 +241,42 @@ func Parse(pathModified time.Time, path string, defaultext string, out io.Writer
 			}
 			return fullpath
 		}()); chdscrpt != nil {
-			scrptp, invld := chdscrpt.scrptprgm, chdscrpt.IsValidSince(pathModified, fs)
-			defer func() {
-				if !invld {
-					go chdscrpt.Dispose()
-				}
-			}()
-			if out != nil {
-				if _, prserr = chdscrpt.WritePsvTo(out); prserr != nil {
-					return
-				}
-			}
-			if evalcode != nil && scrptp != nil {
-				var evalresult interface{} = nil
-				if evalresult, prserr = evalcode(scrptp); prserr != nil {
-					return
-				}
-				pathext := filepath.Ext(fullpath)
-				if pathext == "" && defaultext != "" {
-					pathext = defaultext
-				}
-				if pathext == ".json" {
-					if out != nil {
-						if evalresult != nil {
-							json.NewEncoder(out).Encode(&evalresult)
+			scrptp, isvld := chdscrpt.scrptprgm, chdscrpt.IsValidSince(pathModified, fs)
+			if isvld {
+				if out != nil {
+					if psvbuf := chdscrpt.psvbuf; !psvbuf.Empty() {
+						if _, prserr = psvbuf.WriteTo(out); prserr != nil {
+							return
 						}
 					}
-					return
 				}
-				if out != nil {
-					if evalresult != nil {
-						iorw.Fbprint(out, evalresult)
+				if evalcode != nil && scrptp != nil {
+					var evalresult interface{} = nil
+					if evalresult, prserr = evalcode(scrptp); prserr != nil {
+						return
+					}
+					pathext := filepath.Ext(fullpath)
+					if pathext == "" && defaultext != "" {
+						pathext = defaultext
+					}
+					if pathext == ".json" {
+						if out != nil {
+							if evalresult != nil {
+								json.NewEncoder(out).Encode(&evalresult)
+							}
+						}
+						return
+					}
+					if out != nil {
+						if evalresult != nil {
+							iorw.Fbprint(out, evalresult)
+						}
 					}
 				}
+				return
 			}
-			return
+			chdscrpt.Dispose()
+			chdscrpt = nil
 		}
 		cachecdefunc = func(fullpath string, pathModified time.Time, cachedpaths map[string]time.Time, prsdpsv, prsdatv *iorw.Buffer, preppedatv interface{}) (cshderr error) {
 			if fullpath != "" {
