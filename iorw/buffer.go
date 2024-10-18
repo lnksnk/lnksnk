@@ -1258,6 +1258,15 @@ func (buff *Buffer) Write(p []byte) (n int, err error) {
 	return
 }
 
+func (buff *Buffer) Marshal(args ...interface{}) (result interface{}, err error) {
+	if buff == nil {
+		return
+	}
+	bufr := buff.Reader(args...)
+	defer bufr.Close()
+	return Marshal(bufr)
+}
+
 // Reader -
 func (buff *Buffer) Reader(args ...interface{}) (bufr *BuffReader) {
 	var offset []int64 = nil
@@ -2016,6 +2025,296 @@ func (bufr *BuffReader) Seek(offset int64, whence int) (n int64, err error) {
 	} else {
 		n = -1
 	}
+	return
+}
+
+func (bufr *BuffReader) Marshal() (result interface{}, err error) {
+	if bufr == nil {
+		return
+	}
+	result, err = Marshal(bufr)
+	return
+}
+
+func Marshal(rdr interface{}, a ...interface{}) (result interface{}, err error) {
+	var r io.Reader = nil
+	al := len(a)
+	if r, _ = rdr.(io.Reader); r == nil {
+		if rs, _ := rdr.(string); rs != "" {
+			r = strings.NewReader(rs)
+			goto decde
+		}
+		if int32a, _ := rdr.([]int32); len(int32a) > 0 {
+			rns := make([]rune, len(int32a))
+			copy(rns, int32a)
+			r = strings.NewReader(string(rns))
+			rns = nil
+			goto decde
+		}
+		if al == 0 {
+			return
+		}
+	}
+	if al > 0 {
+		rdrs := []io.Reader{r}
+		for _, d := range a {
+			if rd, _ := d.(io.Reader); rd != nil {
+				rdrs = append(rdrs, rd)
+				continue
+			}
+			if rs, _ := d.(string); rs != "" {
+				rdrs = append(rdrs, strings.NewReader(rs))
+				continue
+			}
+			if int32a, _ := d.([]int32); len(int32a) > 0 {
+				rns := make([]rune, len(int32a))
+				copy(rns, int32a)
+				rdrs = append(rdrs, strings.NewReader(string(rns)))
+				continue
+			}
+			return
+		}
+		if len(rdrs) > 1 {
+			r = io.MultiReader(rdrs...)
+		}
+	}
+decde:
+	dec := json.NewDecoder(r)
+	tkn, tknerr := dec.Token()
+	if tknerr != nil {
+		err = tknerr
+		return
+	}
+	if tkn == json.Delim('[') {
+		arrv := []interface{}{}
+		nxtv := interface{}(nil)
+		for dec.More() {
+			nxtv = nil
+			if tknerr = dec.Decode(&nxtv); tknerr != nil {
+				err = tknerr
+				result = nil
+				return
+			}
+			arrv = append(arrv, nxtv)
+		}
+		result = arrv
+		return
+	}
+	if tkn == json.Delim('{') {
+		var mp = map[string]interface{}{}
+		key := ""
+		var nxtv interface{} = nil
+		for dec.More() {
+			if key == "" {
+				if tkn, tknerr = dec.Token(); tknerr != nil {
+					err = tknerr
+					return
+				}
+				key = tkn.(string)
+				continue
+			}
+			nxtv = nil
+			if tknerr = dec.Decode(&nxtv); tknerr != nil {
+				mp = nil
+				err = tknerr
+				return
+			}
+			mp[key] = nxtv
+			key = ""
+		}
+		result = mp
+		return
+	}
+	if sv, svok := tkn.(string); svok {
+		result = sv
+		return
+	}
+	if fltv, fltvok := tkn.(float64); fltvok {
+		if intv := int64(fltv); fltv == float64(intv) {
+			result = intv
+			return
+		}
+		result = fltv
+		return
+	}
+	if blv, blvok := tkn.(bool); blvok {
+		result = blv
+		return
+	}
+	if nr, nrok := tkn.(json.Number); nrok {
+		fltv, fltverr := nr.Float64()
+		if fltverr == nil {
+			if intv := int64(fltv); fltv == float64(intv) {
+				result = intv
+				return
+			}
+			result = fltv
+			return
+		}
+		err = fltverr
+		return
+	}
+	/*
+		n := 0
+		dec := json.NewDecoder(bufr)
+		var lvltps = []string{}
+		var lvlkeys = map[int]string{}
+		var lvlvals = []interface{}{}
+		for err == nil {
+			tkn, tknerr := dec.Token()
+			if tknerr == nil {
+				if tkn == json.Delim('[') {
+					lvltps = append(lvltps, "arr")
+					lvlvals = append(lvlvals, []interface{}{})
+					n++
+					continue
+				}
+				if tkn == json.Delim('{') {
+					lvltps = append(lvltps, "obj")
+					lvlvals = append(lvlvals, map[string]interface{}{})
+					n++
+					continue
+				}
+				if tkn == json.Delim(']') {
+					n--
+					tmpv := lvlvals[n]
+					lvlvals = lvlvals[:n]
+					lvltps = lvltps[:n]
+					if n > 0 {
+						if lvltps[n-1] == "arr" {
+							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), tmpv)
+							continue
+						}
+						if lvltps[n-1] == "obj" {
+							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = tmpv
+							delete(lvlkeys, n-1)
+							continue
+						}
+					}
+					result = tmpv
+					continue
+				}
+				if tkn == json.Delim('}') {
+					n--
+					tmpv := lvlvals[n]
+					lvlvals = lvlvals[:n]
+					lvltps = lvltps[:n]
+					if n > 0 {
+						if lvltps[n-1] == "arr" {
+							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), tmpv)
+							continue
+						}
+						if lvltps[n-1] == "obj" {
+							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = tmpv
+							delete(lvlkeys, n-1)
+							continue
+						}
+					}
+					result = tmpv
+					continue
+				}
+				if sv, svok := tkn.(string); svok {
+					if n > 0 {
+						if lvltps[n-1] == "obj" {
+							if lvlkeys[n-1] == "" {
+								lvlkeys[n-1] = sv
+								continue
+							}
+							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = sv
+							delete(lvlkeys, n-1)
+							continue
+						}
+						if lvltps[n-1] == "arr" {
+							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), sv)
+							continue
+						}
+					}
+					result = sv
+					continue
+				}
+				if nr, nrok := tkn.(json.Number); nrok {
+					if n > 0 {
+						if lvltps[n-1] == "obj" {
+							if intv, intverr := nr.Int64(); intverr == nil {
+								lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = intv
+								delete(lvlkeys, n-1)
+								continue
+							}
+							if ftlv, ftlverr := nr.Float64(); ftlverr == nil {
+								lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = ftlv
+								delete(lvlkeys, n-1)
+								continue
+							}
+						}
+						if lvltps[n-1] == "arr" {
+							if intv, intverr := nr.Int64(); intverr == nil {
+								lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), intv)
+								continue
+							}
+							if ftlv, ftlverr := nr.Float64(); ftlverr == nil {
+								lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), ftlv)
+								continue
+							}
+							continue
+						}
+					}
+					if intv, intverr := nr.Int64(); intverr == nil {
+						result = intv
+						continue
+					}
+					if ftlv, ftlverr := nr.Float64(); ftlverr == nil {
+						result = ftlv
+						continue
+					}
+					continue
+				}
+				if fltv, fltok := tkn.(float64); fltok {
+					var nrv interface{} = nil
+					if fltv == float64(int64(fltv)) {
+						nrv = int64(fltv)
+					} else {
+						nrv = fltv
+					}
+					if n > 0 {
+						if lvltps[n-1] == "obj" {
+							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = nrv
+							delete(lvlkeys, n-1)
+							continue
+						}
+						if lvltps[n-1] == "arr" {
+							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), nrv)
+							continue
+						}
+					}
+					result = nrv
+					continue
+				}
+				if blnv, blnok := tkn.(bool); blnok {
+					if n > 0 {
+						if lvltps[n-1] == "obj" {
+							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = blnv
+							delete(lvlkeys, n-1)
+							continue
+						}
+						if lvltps[n-1] == "arr" {
+							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), blnv)
+							continue
+						}
+					}
+					result = blnv
+					continue
+				}
+				continue
+			}
+			if n > 0 {
+				err = tknerr
+				break
+			}
+			if tknerr != io.EOF {
+				err = tknerr
+			}
+			break
+		}*/
 	return
 }
 
