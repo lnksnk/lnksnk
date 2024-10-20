@@ -1,8 +1,6 @@
 package css
 
-import (
-	parse "github.com/lnksnk/lnksnk/lexparse"
-)
+import parse "github.com/lnksnk/lnksnk/lexparse"
 
 // IsIdent returns true if the bytes are a valid identifier.
 func IsIdent(b []byte) bool {
