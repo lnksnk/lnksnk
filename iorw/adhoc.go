@@ -2,7 +2,6 @@ package iorw
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -272,19 +271,22 @@ func Fbprint(w io.Writer, a ...interface{}) (err error) {
 	return
 }
 
+// IsSpace reports if the rune is a space
+// douse an ascci test first then an unicode code if not
 func IsSpace(r rune) bool {
 	return (asciiSpace[r] == 1) || (r > 128 && unicode.IsSpace(r))
 }
 
 var asciiSpace = map[rune]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}
 
+// IsTxtPar reports is either a ' or " or `
 func IsTxtPar(r rune) bool {
 	return (txtpars[r] == 1)
 }
 
 var txtpars = map[rune]uint8{'\'': 1, '"': 1, '`': 1}
 
-func CopyBytes(dest []byte, desti int, src []byte, srci int) (lencopied int, destn int, srcn int) {
+func copyBytes(dest []byte, desti int, src []byte, srci int) (lencopied int, destn int, srcn int) {
 	destl, srcl := len(dest), len(src)
 	if (destl > 0 && desti < destl) && (srcl > 0 && srci < srcl) {
 		if (srcl - srci) <= (destl - desti) {
@@ -304,6 +306,8 @@ func CopyBytes(dest []byte, desti int, src []byte, srci int) (lencopied int, des
 	return
 }
 
+// EOFReadRunes helper function takes a io.RuneReader and read each rune until io.EOF or an error occure
+// readrune func(r rune, size int) error) gets called every time a rune is read
 func EOFReadRunes(rdr io.RuneReader, readrune func(r rune, size int) error) (err error) {
 	if rdr == nil {
 		return io.EOF
@@ -326,152 +330,6 @@ func EOFReadRunes(rdr io.RuneReader, readrune func(r rune, size int) error) (err
 	}
 	if size == 0 && err == nil {
 		err = io.EOF
-	}
-	return
-}
-
-// FReadRunesEOL
-func FReadRunesEOL(rdr io.RuneReader, txtpar rune, eolrns ...rune) (rnsline []rune, err error) {
-	if eolrnsl := len(eolrns); rdr != nil && eolrnsl > 0 {
-		func() {
-			eofri := 0
-			prvr := rune(0)
-			txtr := rune(0)
-			for {
-				if r, s, rerr := rdr.ReadRune(); rerr == nil || rerr == io.EOF {
-					if s > 0 {
-						if txtr == 0 {
-							if txtpar > 0 && r > 0 && r == txtpar {
-								txtr = r
-								prvr = r
-							} else {
-								if eofri > 0 && eolrns[eofri-1] == prvr && eolrns[eofri] != r {
-									rnsline = append(rnsline, eolrns[:eofri]...)
-									eofri = 0
-								}
-								if eolrns[eofri] == r {
-									eofri++
-									if eofri == eolrnsl {
-										break
-									} else {
-										prvr = r
-									}
-								} else {
-									if eofri > 0 {
-										rnsline = append(rnsline, eolrns[:eofri]...)
-										eofri = 0
-									}
-									prvr = r
-									rnsline = append(rnsline, r)
-								}
-							}
-						} else if txtr > 0 && txtpar > 0 && r > 0 {
-							if txtr == r {
-								if prvr == r {
-									rnsline = append(rnsline, r)
-								} else {
-									txtr = 0
-								}
-							} else {
-								rnsline = append(rnsline, r)
-								prvr = r
-							}
-						}
-					} else {
-						if rerr != nil {
-							if rerr != io.EOF {
-								err = rerr
-							}
-						}
-						break
-					}
-				} else {
-					if rerr != io.EOF {
-						err = rerr
-					}
-					break
-				}
-			}
-		}()
-	}
-	return
-}
-
-func ReadRunesEOL(rdr func() (r rune, size int, err error), txtpar rune, foundRunes func(bool, bool, ...rune), eolrns ...rune) (err error) {
-	if eolrnsl := len(eolrns); rdr != nil && eolrnsl > 0 && foundRunes != nil {
-		func() {
-			eofri := 0
-			prvr := rune(0)
-			txtr := rune(0)
-			var rnsline []rune
-			for {
-				if r, s, rerr := rdr(); rerr == nil || rerr == io.EOF {
-					if s > 0 {
-						if txtr == 0 {
-							if txtpar > 0 && r > 0 && r == txtpar {
-								txtr = r
-								prvr = r
-							} else {
-								if eofri > 0 && eolrns[eofri-1] == prvr && eolrns[eofri] != r {
-									rnsline = append(rnsline, eolrns[:eofri]...)
-									eofri = 0
-								}
-								if eolrns[eofri] == r {
-									eofri++
-									if eofri == eolrnsl {
-										if len(rnsline) > 0 {
-											foundRunes(true, false, rnsline...)
-											rnsline = nil
-										}
-										return
-									} else {
-										prvr = r
-									}
-								} else {
-									if eofri > 0 {
-										rnsline = append(rnsline, eolrns[:eofri]...)
-										eofri = 0
-									}
-									prvr = r
-									rnsline = append(rnsline, r)
-								}
-							}
-						} else if txtr > 0 && txtpar > 0 && r > 0 {
-							if txtr == r {
-								if prvr == r {
-									rnsline = append(rnsline, r)
-								} else {
-									txtr = 0
-								}
-							} else {
-								rnsline = append(rnsline, r)
-								prvr = r
-							}
-						}
-					} else {
-						if rerr != nil {
-							err = rerr
-							if rerr == io.EOF {
-								foundRunes(true, true, rnsline...)
-								if len(rnsline) > 0 {
-									rnsline = nil
-								}
-							}
-						}
-						return
-					}
-				} else {
-					err = rerr
-					if rerr == io.EOF {
-						foundRunes(true, true, rnsline...)
-						if len(rnsline) > 0 {
-							rnsline = nil
-						}
-					}
-					return
-				}
-			}
-		}()
 	}
 	return
 }
@@ -553,6 +411,7 @@ func ReadLines(r interface{}) (lines []string, err error) {
 	return
 }
 
+// ReadWriteEof takes readfunc and writefunc and keaps on reading and then writing until io.EOF or error occurs
 func ReadWriteEof(readfunc func([]byte) (int, error), writefunc func([]byte) (int, error), nexteof func() []byte, foundeeof func() error) (n int64, err error) {
 	for err == nil {
 		oefbytes := nexteof()
@@ -698,18 +557,19 @@ func ReaderToString(r interface{}) (s string, err error) {
 	return
 }
 
-// ReadRunesEOFFunc read runes from r io.Reader and call fncrne func(rune) error
+// ReadRunesEOFFunc read runes from r io.Reader, r io.RuneReader or r func() (rune,int,error) and call fncrne func(rune) error
 func ReadRunesEOFFunc(r interface{}, fncrne func(rune) error) (err error) {
 	if r != nil && fncrne != nil {
-		var rnrd io.RuneReader = nil
+		var rdrne func() (rune, int, error)
 		if rnr, rnrok := r.(io.RuneReader); rnrok {
-			rnrd = rnr
+			//rnrd = rnr
+			rdrne = rnr.ReadRune
 		} else if rdr, rdrok := r.(io.Reader); rdrok {
-			rnrd = bufio.NewReader(rdr)
+			rdrne = bufio.NewReader(rdr).ReadRune
 		}
-		if rnrd != nil {
+		if rdrne != nil {
 			for {
-				rn, size, rnerr := rnrd.ReadRune()
+				rn, size, rnerr := rdrne()
 				if size > 0 {
 					if err = fncrne(rn); err != nil {
 						break
@@ -727,6 +587,7 @@ func ReadRunesEOFFunc(r interface{}, fncrne func(rune) error) (err error) {
 	return
 }
 
+// RunesToUTF8 convert rs []rune to []byte of raw utf8
 func RunesToUTF8(rs ...rune) []byte {
 	size := 0
 	for rn := range rs {
@@ -773,6 +634,7 @@ func (fncrw *funcrdrwtr) Read(p []byte) (n int, err error) {
 	return
 }
 
+// WriteToFunc takes a io.Reader and func(p[]byte) (n int,err error) arguments write p []byte to func argument until an error or io.EOF
 func WriteToFunc(r io.Reader, funcw func([]byte) (int, error), bufsize ...int) (n int64, err error) {
 	if r != nil && funcw != nil {
 		func() {
@@ -784,6 +646,7 @@ func WriteToFunc(r io.Reader, funcw func([]byte) (int, error), bufsize ...int) (
 	return
 }
 
+// ReadToFunc takes a io.Writer and func(p[]byte) (n int,err error) as arguments and keep on reading p[]byte from func argument and write it to io.Write argument until error or io.EOF
 func ReadToFunc(w io.Writer, funcr func([]byte) (int, error)) (n int64, err error) {
 	if w != nil && funcr != nil {
 		func() {
@@ -795,40 +658,8 @@ func ReadToFunc(w io.Writer, funcr func([]byte) (int, error)) (n int64, err erro
 	return
 }
 
-func ReadHandle(r io.Reader, handle func([]byte), maxrlen int) (n int, err error) {
-	if maxrlen < 4096 {
-		maxrlen = 4096
-	}
-	s := make([]byte, maxrlen)
-	sn := 0
-	si := 0
-	sl := len(s)
-	serr := error(nil)
-	for n < maxrlen && err == nil {
-		switch sn, serr = r.Read(s[si : si+(sl-si)]); true {
-		case sn < 0:
-			err = serr
-		case sn == 0: // EOF
-			if si > 0 {
-				handle(s[:si])
-				si = 0
-			}
-			err = serr
-		case sn > 0:
-			si += sn
-			n += sn
-			err = serr
-		}
-	}
-	if si > 0 {
-		handle(s[:si])
-	}
-	if n == 0 && err == nil {
-		err = io.EOF
-	}
-	return
-}
-
+// ReadWriteToFunc has funcw func([]byte) (int, error), funcr func([]byte) (int, error) arguments
+// continuesly read p[]byte from funcr and write it to funcw untile io.EOF or an error
 func ReadWriteToFunc(funcw func([]byte) (int, error), funcr func([]byte) (int, error), bufsize ...int) (n int64, err error) {
 	if funcw != nil && funcr != nil {
 		fncrw := &funcrdrwtr{funcr: funcr, funcw: funcw}
@@ -860,6 +691,7 @@ func ReadWriteToFunc(funcw func([]byte) (int, error), funcr func([]byte) (int, e
 	return
 }
 
+// RunesToBytes takes rns[]rune argument and return []byte and bytes length
 func RunesToBytes(r ...rune) (bts []byte, rl int) {
 	return RunesToUTF8(r...), len(r)
 }
@@ -868,211 +700,41 @@ func ToData(format string, a ...interface{}) (data interface{}, err error) {
 	mltiargrdr := NewMultiArgsReader(a...)
 	defer mltiargrdr.Close()
 	if format = strings.TrimFunc(format, IsSpace); format == "" || strings.EqualFold(format, "json") {
-		dec := json.NewDecoder(mltiargrdr)
-		tknlvl := -1
-		mps := map[int]map[string]interface{}{}
-		mpdkeys := map[int]string{}
-		lsts := map[int][]interface{}{}
-		tknlvltpes := map[int]rune{}
-		lsttkntpe := rune(0)
-
-		lstkey := ""
-		for {
-			if tkn, tknerr := dec.Token(); tknerr == nil {
-				if tok, ok := tkn.(json.Delim); ok {
-					if tok == '{' {
-						lstmap := map[string]interface{}{}
-						tknlvl++
-						lsttkntpe = 'O'
-						tknlvltpes[tknlvl] = lsttkntpe
-						mps[tknlvl] = lstmap
-					} else if tok == '}' {
-						lstmap := mps[tknlvl]
-						delete(tknlvltpes, tknlvl)
-						delete(mps, tknlvl)
-						delete(mpdkeys, tknlvl)
-						tknlvl--
-						if tknlvl <= -1 {
-							data = lstmap
-							lsttkntpe = rune(0)
-						} else {
-							if lsttkntpe, lstkey = tknlvltpes[tknlvl], mpdkeys[tknlvl]; lsttkntpe == 'O' {
-								if lstkey != "" {
-									mps[tknlvl][lstkey] = lstmap
-									mpdkeys[tknlvl] = ""
-								}
-							} else if lsttkntpe == 'A' {
-								lsts[tknlvl] = append(lsts[tknlvl], lstmap)
-							}
-						}
-					} else if tok == '[' {
-						lstlst := []interface{}{}
-						tknlvl++
-						lsts[tknlvl] = lstlst
-						lsttkntpe = 'A'
-						tknlvltpes[tknlvl] = lsttkntpe
-					} else if tok == ']' {
-						lstlst := lsts[tknlvl]
-						delete(tknlvltpes, tknlvl)
-						delete(lsts, tknlvl)
-						tknlvl--
-						if tknlvl <= -1 {
-							data = lstlst
-							lsttkntpe = rune(0)
-						} else {
-							if lsttkntpe, lstkey = tknlvltpes[tknlvl], mpdkeys[tknlvl]; lsttkntpe == 'O' {
-								if lstkey != "" {
-									mps[tknlvl][lstkey] = lstlst
-									mpdkeys[tknlvl] = ""
-								}
-							} else if lsttkntpe == 'A' {
-								lsts[tknlvl] = append(lsts[tknlvl], lstlst)
-							}
-						}
-					}
-				} else if lsttkntpe == 'O' {
-					if lstkey = mpdkeys[tknlvl]; lstkey != "" {
-						if tkn != nil {
-							if flt, fltok := tkn.(float64); fltok {
-								mps[tknlvl][lstkey] = flt
-							} else if blnt, blntok := tkn.(bool); blntok {
-								mps[tknlvl][lstkey] = blnt
-							} else if strt, strtok := tkn.(string); strtok {
-								mps[tknlvl][lstkey] = strt
-							} else if jsnnr, jsnnrtok := tkn.(json.Number); jsnnrtok {
-								if flt, _ := jsnnr.Float64(); flt >= 0.0 {
-									mps[tknlvl][lstkey], _ = jsnnr.Int64()
-								} else {
-									mps[tknlvl][lstkey] = flt
-								}
-							}
-						} else {
-							mps[tknlvl][lstkey] = nil
-						}
-						mpdkeys[tknlvl] = ""
-					} else if lstkey, _ = tkn.(string); lstkey != "" {
-						mpdkeys[tknlvl] = lstkey
-					}
-				} else if lsttkntpe == 'A' {
-					if tkn != nil {
-						if jsnnr, jsnnrtok := tkn.(json.Number); jsnnrtok {
-							if flt, flterr := jsnnr.Float64(); flterr == nil {
-								if flt == 0 || flt-float64(int64(flt)) == 0 {
-									lsts[tknlvl] = append(lsts[tknlvl], int64(flt))
-								} else {
-									lsts[tknlvl] = append(lsts[tknlvl], int64(flt))
-								}
-							} else if intt, intterr := jsnnr.Int64(); intterr == nil {
-								lsts[tknlvl] = append(lsts[tknlvl], intt)
-							}
-						} else if flt, fltok := tkn.(float64); fltok {
-							if flt == 0 || flt-float64(int64(flt)) == 0 {
-								lsts[tknlvl] = append(lsts[tknlvl], int64(flt))
-							} else {
-								lsts[tknlvl] = append(lsts[tknlvl], int64(flt))
-							}
-						} else if blnt, blntok := tkn.(bool); blntok {
-							lsts[tknlvl] = append(lsts[tknlvl], blnt)
-						} else if strt, strtok := tkn.(string); strtok {
-							lsts[tknlvl] = append(lsts[tknlvl], strt)
-						}
-					} else {
-						lsts[tknlvl] = append(lsts[tknlvl], nil)
-					}
-				}
-			} else {
-				if tknerr == io.EOF {
-					if tknlvl > -1 {
-						data = nil
-						if lstkey != "" {
-							lstkey = ""
-						}
-						var clearmap func(map[string]interface{}) = nil
-						var cleararr func(arr []interface{}) = nil
-
-						cleararr = func(arr []interface{}) {
-							if arrl := len(arr); arrl > 0 {
-								for arrl > 0 {
-									arrl--
-									if vm, _ := arr[0].(map[string]interface{}); vm != nil {
-										clearmap(vm)
-									} else if va, _ := arr[0].([]interface{}); va != nil {
-										cleararr(va)
-									}
-									arr = arr[1:]
-								}
-							}
-						}
-
-						clearmap = func(m map[string]interface{}) {
-							for k, v := range m {
-								if vm, _ := v.(map[string]interface{}); vm != nil {
-									clearmap(vm)
-								} else if va, _ := v.([]interface{}); va != nil {
-									cleararr(va)
-								}
-								m[k] = nil
-								delete(m, k)
-							}
-						}
-						for tknlvl > -1 {
-							if lsttkntpe = tknlvltpes[tknlvl]; lsttkntpe == 'O' {
-								lstmp := mps[tknlvl]
-								clearmap(lstmp)
-								delete(mps, tknlvl)
-							} else if lsttkntpe == 'A' {
-								lstls := lsts[tknlvl]
-								cleararr(lstls)
-								delete(lsts, tknlvl)
-							}
-							tknlvl--
-						}
-					}
-				}
-				break
-			}
-		}
+		data, err = Marshal(mltiargrdr)
 	} else if strings.EqualFold(format, "raw") {
 		data, err = mltiargrdr.ReadAll()
 	}
 	return
 }
 
+// RunesHasPrefix report if runes []rune argument has subrunes []rune as prefix rune(s)
 func RunesHasPrefix(runes []rune, subrunes ...rune) bool {
 	if lnrns, lnsubrns := len(runes), len(subrunes); lnrns >= lnsubrns {
-		lnrns = lnsubrns
-		for _, r := range runes[:lnsubrns] {
-			for srn, sr := range subrunes {
-				if sr != r {
-					break
-				}
-				if srn == lnsubrns-1 {
-					return true
-				}
+		for rni := range lnsubrns {
+			if runes[rni] != subrunes[rni] {
+				return false
 			}
 		}
+		return true
 	}
 	return false
 }
 
+// RunesHasSuffix report if runes []rune argument has subrunes []rune as suffix rune(s)
 func RunesHasSuffix(runes []rune, subrunes ...rune) bool {
 	if lnrns, lnsubrns := len(runes), len(subrunes); lnrns >= lnsubrns {
-		maxrns := lnrns
-		lnrns = lnsubrns
-		for _, r := range runes[maxrns-lnsubrns:] {
-			for srn, sr := range subrunes {
-				if sr != r {
-					break
-				}
-				if srn == lnsubrns-1 {
-					return true
-				}
+		adjsi := lnrns - lnsubrns
+		for rni := range lnsubrns {
+			if runes[rni+adjsi] != subrunes[rni] {
+				return false
 			}
 		}
+		return true
 	}
 	return false
 }
 
+// IndexOfRunes return -1 or the first index where subrunes []rune argument occur in runes []rune argument
 func IndexOfRunes(runes []rune, subrunes ...rune) int {
 	if lnrns, lnsubrns := len(runes), len(subrunes); lnrns >= lnsubrns {
 		srn := 0
@@ -1094,25 +756,27 @@ func IndexOfRunes(runes []rune, subrunes ...rune) int {
 	return -1
 }
 
+// LastIndexOfRunes return -1 or the last index where subrunes []rune argument occur in runes []rune argument
 func LastIndexOfRunes(runes []rune, subrunes ...rune) int {
 	if lnrns, lnsubrns := len(runes), len(subrunes); lnrns >= lnsubrns {
-		for rn := range runes {
-			tstrn := lnrns - (rn + lnsubrns)
-			r := runes[tstrn]
-			srn := 0
-			if sr := subrunes[srn]; sr == r {
-				srn++
-				if srn == lnsubrns {
-					return tstrn - (srn - 1)
-				}
-				continue
+		for rn := range lnrns {
+			if rn < lnsubrns-1 {
+				break
 			}
-			srn = 0
+			for srn := range subrunes {
+				if sr, r := subrunes[lnsubrns-(srn+1)], runes[lnrns-(rn+1)]; sr != r {
+					break
+				}
+				if srn == lnsubrns-1 {
+					return rn
+				}
+			}
 		}
 	}
 	return -1
 }
 
+// ReadRunes reads p[]rune from any argument that implements io.RuneReader
 func ReadRunes(p []rune, rds ...interface{}) (n int, err error) {
 	if pl := len(p); pl > 0 {
 		var rd io.RuneReader = nil
@@ -1142,32 +806,6 @@ func ReadRunes(p []rune, rds ...interface{}) (n int, err error) {
 					err = nil
 				}
 			}
-		}
-	}
-	return
-}
-
-func ReadText(rdr io.RuneReader, txtpar rune, readtxt func(txtpar bool, r rune, size int, rerr error) (err error)) (foundtxtpar bool, err error) {
-	if rdr == nil || readtxt == nil {
-		return false, io.EOF
-	}
-	txtr := txtpar
-	prvr := rune(0)
-	var r rune
-	var size int
-	for err == nil {
-		r, size, err = rdr.ReadRune()
-		if size > 0 && (err == nil || err == io.EOF) {
-			if prvr != '\\' && txtr == r {
-				if foundtxtpar, err = true, readtxt(true, r, size, err); err != nil {
-					return foundtxtpar, err
-				}
-				return foundtxtpar, io.EOF
-			}
-			if foundtxtpar, err = false, readtxt(false, r, size, err); err != nil {
-				return foundtxtpar, err
-			}
-			prvr = r
 		}
 	}
 	return
