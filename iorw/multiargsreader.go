@@ -158,7 +158,7 @@ func (mltiargsr *MultiArgsReader) Read(p []byte) (n int, err error) {
 						break
 					}
 				}
-				_, n, mltiargsr.bufi = CopyBytes(p, n, mltiargsr.buf[:mltiargsr.bufl], mltiargsr.bufi)
+				_, n, mltiargsr.bufi = copyBytes(p, n, mltiargsr.buf[:mltiargsr.bufl], mltiargsr.bufi)
 			}
 		}
 		if n == 0 && err == nil {

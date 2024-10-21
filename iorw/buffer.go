@@ -1829,7 +1829,7 @@ func (bufr *BuffReader) Read(p []byte) (n int, err error) {
 						}
 						var cl = 0
 						for n < pl && bufr.rbytesi < rbtsl {
-							if cl, n, bufr.rbytesi = CopyBytes(p[:pl], n, bufr.rbytes[:rbtsl], bufr.rbytesi); cl > 0 {
+							if cl, n, bufr.rbytesi = copyBytes(p[:pl], n, bufr.rbytes[:rbtsl], bufr.rbytesi); cl > 0 {
 								if bufr.MaxRead > 0 {
 									bufr.MaxRead -= int64(cl)
 									if bufr.MaxRead < 0 {
