@@ -726,41 +726,6 @@ func (buff *Buffer) Println(a ...interface{}) (err error) {
 	return
 }
 
-func internalSubWrite(w io.Writer, buff *Buffer, bufcur *bufferCursor, offset ...int64) (err error) {
-	if buff != nil && w != nil {
-		if len(offset) > 0 && len(offset)%2 == 0 {
-			if sl := buff.Size(); sl > 0 {
-				var offs int64 = offset[0]
-				if offs == -1 {
-					offs = 0
-				}
-				var offe int64 = offset[1]
-				if offe == -1 || offe > sl {
-					offe = sl
-				}
-				if offs >= 0 && offe > 0 && offe <= sl && offe > offs {
-					if bufcur == nil {
-						bufcur = newBufferCursor(buff, true, offs, offe)
-						for bufcur.fromOffset < bufcur.toOffset {
-							bts, btslst := bufcur.nextBytes()
-							pn, pnerr := w.Write(bts)
-							if pnerr != nil {
-								err = pnerr
-								break
-							}
-							offs += int64(pn)
-							if btslst {
-								break
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return
-}
-
 // SubString - return buffer as string value based on offset ...int64
 func (buff *Buffer) SubString(offset ...int64) (s string, err error) {
 	if buff != nil {
