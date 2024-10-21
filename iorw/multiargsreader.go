@@ -133,6 +133,13 @@ func multiArgsRead(mltiargsr *MultiArgsReader, p []byte) (n int, err error) {
 	return
 }
 
+func (mltiargsr *MultiArgsReader) Marshal() (result interface{}, err error) {
+	if mltiargsr != nil {
+		result, err = Marshal(mltiargsr)
+	}
+	return
+}
+
 func (mltiargsr *MultiArgsReader) Read(p []byte) (n int, err error) {
 	if pl := len(p); pl > 0 {
 		for n < pl && err == nil {
