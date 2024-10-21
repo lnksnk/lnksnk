@@ -3,7 +3,6 @@ package iorw
 import (
 	"bufio"
 	"io"
-	"strings"
 	"unicode/utf8"
 )
 
@@ -582,19 +581,4 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 		return rnsrdr
 	}
 	return orgrdr
-}
-
-func valToRuneReader(val interface{}, clear bool) io.RuneReader {
-	if s, _ := val.(string); s != "" {
-		return strings.NewReader(s)
-	}
-	if int32s, _ := val.([]int32); len(int32s) > 0 {
-		rns := make([]rune, len(int32s))
-		copy(rns, int32s)
-		return NewRunesReader(rns...)
-	}
-	if bf, _ := val.(*Buffer); bf != nil {
-		return bf.Clone(clear).Reader(true)
-	}
-	return nil
 }
