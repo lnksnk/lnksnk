@@ -1819,7 +1819,14 @@ func (bufr *BuffReader) Read(p []byte) (n int, err error) {
 
 // SubString - return buffer as string value based on offset ...int64
 func (bufr *BuffReader) SubString(offset ...int64) (s string) {
-	if sl := bufr.buffer.Size(); bufr != nil && bufr.buffer != nil {
+	if bufr == nil {
+		return
+	}
+	if buffer := bufr.buffer; buffer != nil {
+		sl := buffer.Size()
+		if sl == 0 {
+			return
+		}
 		if len(offset)%2 == 1 && offset[len(offset)-1] >= 0 {
 			if bufr.MaxRead > 0 {
 				if offset[len(offset)-1]+bufr.MaxRead > sl {
