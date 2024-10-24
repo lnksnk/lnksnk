@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -147,15 +148,32 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 			}
 		}
 	} else if strings.Contains(network, "quic") {
-		if len(tlsconf) > 0 {
-			server := http3.Server{
-				Handler:    h2c.NewHandler(handler, &http2.Server{}),
-				Addr:       addr,
-				TLSConfig:  http3.ConfigureTLSConfig(tlsconf[0].Clone()), // use your tls.Config here
-				QUICConfig: &quic.Config{},
-			}
-			go server.ListenAndServe()
+		//if len(tlsconf) > 0 {
+		handler = h2c.NewHandler(handler, &http2.Server{})
+		adrhost, adrport, _ := net.SplitHostPort(addr)
+		server := http3.Server{
+			Handler:    handler,
+			Addr:       adrhost + ":" + adrport,
+			TLSConfig:  http3.ConfigureTLSConfig(&tls.Config{}), // use your tls.Config here
+			QUICConfig: &quic.Config{},
 		}
+
+		htpport, _ := strconv.ParseInt(adrport, 10, 64)
+		h1and2 := http.Server{
+			Addr: fmt.Sprintf("%s:%d", adrhost, int(htpport+1)),
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				err := server.SetQUICHeaders(w.Header())
+				if err != nil { /* handle error */
+					handler.ServeHTTP(w, r)
+					return
+				}
+				server.Handler.ServeHTTP(w, r)
+			})}
+
+		go h1and2.ListenAndServe()
+
+		go server.ListenAndServe()
+		//}
 		//http3.ListenAndServeQUIC(addr, "/path/to/cert", "/path/to/key", handler)
 	}
 }
