@@ -18,9 +18,24 @@ func finfoopen(path string, a ...interface{}) (io.ReadCloser, error) {
 	return os.Open(path)
 }
 
+func DUMMYFINFO(name string, path string, absolutepath string, rsroot string, size int64, mod os.FileMode, modtime time.Time, active bool, raw bool, a ...interface{}) (finfo FileInfo) {
+	if len(a) > 0 {
+		altfsopenr, _ := a[0].(func(string, ...interface{}) (io.ReadCloser, error))
+		finfo = newFileInfo(name, path, absolutepath, rsroot, size, mod, modtime, active, raw, altfsopenr)
+	} else {
+		finfo = newFileInfo(name, path, absolutepath, rsroot, size, mod, modtime, active, raw, nil)
+	}
+	return
+}
+
 // LS List dir content
 func LS(path string, altpaths ...interface{}) (finfos []FileInfo, err error) {
 	path = strings.Replace(path, "\\", "/", -1)
+	var msk = ""
+	if pthi := strings.LastIndex(path, "/"); pthi > -1 {
+		msk = path[pthi+1:]
+		path = path[:pthi+1]
+	}
 	var altpath = []string{}
 	var altpth = ""
 	var altfsopenr func(string, ...interface{}) (io.ReadCloser, error) = nil
@@ -37,9 +52,49 @@ func LS(path string, altpaths ...interface{}) (finfos []FileInfo, err error) {
 	if len(altpath) == 1 && altpath[0] != "" {
 		altpth = strings.Replace(altpath[0], "\\", "/", -1)
 	}
-
+	isfilter := strings.ContainsAny(msk, "*?")
+	if !isfilter {
+		path += msk
+		msk = ""
+	}
 	if fi, fierr := os.Stat(path); fierr == nil {
 		if fi.IsDir() {
+			if msk == "" {
+				finfos = append(finfos, newFileInfo(fi.Name(), altpth, altpth, altpth, fi.Size(), fi.Mode(), fi.ModTime(), false, false, altfsopenr))
+				return
+			}
+			if f, ferr := os.Open(path); ferr == nil {
+				fifaltpath := altpth + fi.Name() + "/"
+				defer f.Close()
+				if fis, fiserr := f.Readdir(0); fiserr == nil && len(fis) > 0 {
+					if isfilter {
+						if strings.Contains(msk, ".") {
+							for _, fnfo := range fis {
+								if fnfo.IsDir() {
+									continue
+								}
+
+							}
+							return
+						}
+						for _, fnfo := range fis {
+							if fnfo.IsDir() {
+
+							}
+						}
+						return
+					}
+					for _, fnfo := range fis {
+						if fnfo.IsDir() {
+							continue
+						}
+						if strings.EqualFold(fnfo.Name(), msk) {
+							finfos = append(finfos, newFileInfo(fnfo.Name(), fifaltpath+fnfo.Name(), fifaltpath+fnfo.Name(), fifaltpath, fnfo.Size(), fnfo.Mode(), fnfo.ModTime(), false, false, altfsopenr))
+						}
+					}
+					return
+				}
+			}
 			if fifis, fifpath, fifaltpath, fifiserr := internalFind(fi, path, altpth); fifiserr == nil {
 				if !strings.HasSuffix(fifpath, "/") {
 					fifpath += "/"
@@ -47,7 +102,6 @@ func LS(path string, altpaths ...interface{}) (finfos []FileInfo, err error) {
 				if fifaltpath != "" && !strings.HasSuffix(fifaltpath, "/") {
 					fifaltpath += "/"
 				}
-
 				for fifin := range fifis {
 					fifi := fifis[fifin]
 					if finfos == nil {
@@ -309,6 +363,12 @@ func (finfo *fileInfo) PathExt() string {
 func (finfo *fileInfo) PathRoot() string {
 	if finfo != nil {
 		if pthsep := strings.LastIndex(finfo.path, "/"); pthsep > -1 {
+			if finfo.IsDir() && finfo.path != "" && pthsep+1 == len(finfo.path) {
+				if pthsep = strings.LastIndex(finfo.path[:pthsep], "/"); pthsep > -1 {
+					return finfo.path[:pthsep+1]
+				}
+				return ""
+			}
 			return finfo.path[:pthsep+1]
 		}
 	}
