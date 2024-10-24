@@ -142,10 +142,10 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 				if tlsconfL := len(tlsconf); tlsconfL > 0 && tlsconf[0] != nil {
 					ln = tls.NewListener(ln, tlsconf[0].Clone())
 				}
-
-				httpsrv := &http.Server{Handler: h2c.NewHandler(handler, &http2.Server{})}
+				/*httpsrv := &http.Server{Handler: h2c.NewHandler(handler, &http2.Server{})}
 				listerens.Set(ln.Addr().String(), httpsrv)
-				go httpsrv.Serve(ln)
+				go httpsrv.Serve(ln)*/
+				go http.Serve(ln, handler)
 				return
 			}
 		}
