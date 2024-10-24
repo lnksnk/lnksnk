@@ -479,9 +479,6 @@ func (rscngmngr *ResourcingManager) fsls(paths ...interface{}) (finfos []fsutils
 	}
 	if epnts, epntpaths, paths, _ := rscngmngr.findrsendpntpaths(path...); epnts != nil && paths != nil {
 		if len(epnts) > 0 && len(paths) == len(epnts) {
-			if finfos == nil {
-				finfos = []fsutils.FileInfo{}
-			}
 			for nepnt := range epnts {
 				nwa := []interface{}{}
 				//for _, extpntpth := range epntpaths[nepnt] {

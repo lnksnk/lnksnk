@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -444,6 +445,48 @@ func (rscngepnt *ResourcingEndpoint) fsabs(path ...string) (abspath string, err 
 	return
 }
 
+func localLs(pathroot, path string) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+	if path != "" && strings.ContainsAny(path, "*.?") {
+		if strings.ContainsAny(path, "*?") {
+			if path == "*" {
+				if f, ferr := os.Open(pathroot); f != nil && ferr == nil {
+					defer f.Close()
+					if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
+						lclfsinfo = append(lclfsinfo, flclfinfos...)
+					}
+				}
+				return
+			}
+			if strings.ContainsAny(path, "*.?") {
+				if f, ferr := os.Open(pathroot + path); f != nil && ferr == nil {
+					defer f.Close()
+					if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
+						for _, flclfi := range flclfinfos {
+							if flclfi.IsDir() {
+								continue
+							}
+							if ext := filepath.Ext(flclfi.Name()); ext == path {
+								lclfsinfo = append(lclfsinfo, flclfi)
+							}
+						}
+					}
+				}
+				return
+			}
+		}
+	}
+	if fi, _ := os.Stat(pathroot + path); fi != nil {
+		if fi.IsDir() {
+			if path == "" {
+				lsroot = fi
+				return
+			}
+		}
+		lclfsinfo = append(lclfsinfo, fi)
+	}
+	return
+}
+
 func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutils.FileInfo) {
 	rsroot := rscngepnt.rsngmngr.rsngendpaths[rscngepnt]
 	path := []string{}
@@ -463,7 +506,7 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 		}
 	}
 	if rscngepnt.isLocal {
-		lklpath := rscngepnt.path + strings.TrimSpace(strings.Replace(path[0], "\\", "/", -1))
+		/*lklpath := rscngepnt.path + strings.TrimSpace(strings.Replace(path[0], "\\", "/", -1))
 		if strings.LastIndex(lklpath, "/") > 0 && strings.HasSuffix(lklpath, "/") {
 			lklpath = lklpath[:len(lklpath)-1]
 		}
@@ -471,14 +514,38 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 			finfos, _ = fsutils.LS(lklpath, append([]interface{}{strings.TrimSpace(strings.Replace(addpth+path[0], "\\", "/", -1)), rscngepnt.fsopener}, a...)...)
 		} else if len(path) == 2 {
 			finfos, _ = fsutils.LS(lklpath, append([]interface{}{strings.TrimSpace(strings.Replace(addpth+path[1], "\\", "/", -1)), rscngepnt.fsopener}, a...)...)
+		}*/
+		subpath := strings.TrimFunc(strings.Replace(path[0], "\\", "/", -1), iorw.IsSpace)
+		subroot := ""
+		if subi := strings.LastIndex(subpath, "/"); subi > -1 {
+			subroot = subpath[:subi+1]
+			subpath = subpath[subi+1:]
+		}
+		subdone := map[string]bool{}
+		for _, subpth := range strings.Split(subpath, ",") {
+			subpth := strings.TrimFunc(subpth, iorw.IsSpace)
+			if subdone[subpth] {
+				continue
+			}
+			subdone[subpth] = true
+			lclroot, lclfsinfos := localLs(rscngepnt.path+subroot, subpth)
+			if lclroot != nil {
+				finfos = append(finfos, fsutils.DUMMYFINFO("", rsroot+subroot, rsroot+subroot, rsroot, lclroot.Size(), lclroot.Mode(), lclroot.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
+			}
+			for _, lclfin := range lclfsinfos {
+				if lclfin != nil {
+					if lclfin.IsDir() {
+						finfos = append(finfos, fsutils.DUMMYFINFO(lclfin.Name(), rsroot+subroot+lclfin.Name()+"/", rsroot+subroot+lclfin.Name()+"/", rsroot, lclfin.Size(), lclfin.Mode(), lclfin.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
+						continue
+					}
+					finfos = append(finfos, fsutils.DUMMYFINFO(lclfin.Name(), rsroot+subroot+lclfin.Name(), rsroot+subroot+lclfin.Name(), rsroot, lclfin.Size(), lclfin.Mode(), lclfin.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
+				}
+			}
 		}
 	}
 	if rscngepnt.embeddedResources != nil {
 		if pthl := len(path); pthl > 0 {
 			for embdrspth, emdbrs := range rscngepnt.embeddedResources {
-				if finfos == nil {
-					finfos = []fsutils.FileInfo{}
-				}
 				if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
 					lkppath := embdrspth
 					if pthl == 1 {
@@ -493,7 +560,7 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 						} else {
 							lkppath = path[1][:len(path[1])-len(embdrspth)] + embdrspth
 						}
-						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
+						finfos = append(finfos, fsutils.DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 					}
 				}
 			}
