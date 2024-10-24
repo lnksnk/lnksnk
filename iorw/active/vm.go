@@ -89,10 +89,10 @@ func NewVM(a ...interface{}) (vm *VM) {
 		DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...)
 		return true
 	})
-	/*vm.Set("impstmnt", func(modname string, namedimports ...[][]string) bool {
-		DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...)
-		return true
-	})*/
+	vm.vm.SetRequire(func(modname string) (exports *ja.Object) {
+		exports, _ = DefaultModuleManager.Require(vm.vm, vm.FS, modname)
+		return
+	})
 
 	vm.Set("include", func(modname string) bool {
 		IncludeModule(vm.vm, modname)
@@ -368,6 +368,60 @@ func (prgmodmngr *programModElemManager) InvokeModule(fs *fsutils.FSUtils, speci
 	return
 }
 
+func (prgmodmngr *programModElemManager) Require(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string) (export *ja.Object, err error) {
+	if prgmodmngr == nil {
+		return
+	}
+	if specifier == "" {
+		if vm != nil {
+			vm.Try(func() {
+				panic(fmt.Errorf("%s", "No specifier provided"))
+			})
+		}
+		return
+	}
+	if fs != nil {
+		prgmodelm := prgmodmngr.Module(specifier)
+		if prgmodelm == nil {
+			if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, fs, nil); prgmodelm == nil || err != nil {
+				if vm != nil {
+					vm.Try(func() {
+						panic(fmt.Errorf("%s", "Unable to load "+specifier))
+					})
+				}
+				return
+			}
+			prgmodmngr.prgmodelms.Store(specifier, prgmodelm)
+			export = prgmodelm.RequireMod(vm, fs)
+			return
+		}
+	retry:
+		if fs.EXIST(specifier) {
+			fi := fs.LS(specifier)[0]
+			if fi.IsDir() {
+				specifier = fi.Path() + "index.js"
+				fi = nil
+				goto retry
+			}
+			if fi.ModTime() != prgmodelm.modfied {
+				prgmodelms := prgmodmngr.prgmodelms
+				if prgmodelms != nil {
+					prgmodelms.Delete(specifier)
+				}
+				if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, nil, fi); err != nil {
+					return
+				}
+				prgmodelms.Store(specifier, prgmodelm)
+				export = prgmodelm.RequireMod(vm, fs)
+				return
+			}
+			export = prgmodelm.RequireMod(vm, fs)
+			return
+		}
+	}
+	return
+}
+
 func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string, namedimports ...[][]string) (err error) {
 	if prgmodmngr == nil {
 		return
@@ -415,33 +469,6 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 				prgmodelm.RunMod(vm, fs, namedimports...)
 			}
 			prgmodelm.RunMod(vm, fs, namedimports...)
-			/*m := prgmodelm.m
-			if vm != nil {
-				func() {
-					evalprms := m.Evaluate(vm)
-					if evalprms.State() == ja.PromiseStateFulfilled {
-						nmspce := vm.NamespaceObjectFor(m)
-						if nmspce != nil {
-							for _, nmdimprt := range namedimports {
-								for _, imprtthis := range nmdimprt {
-									if imprtthisl := len(imprtthis); imprtthisl > 0 {
-										idntys := imprtthis[0]
-										if idntys != "" {
-											if imprtthisl > 1 {
-												if aliass := imprtthis[1]; aliass != "" {
-													vm.Set(idntys, nmspce.Get(idntys))
-													continue
-												}
-											}
-											vm.Set(idntys, nmspce.Get(idntys))
-										}
-									}
-								}
-							}
-						}
-					}
-				}()
-			}*/
 			return
 		}
 	}
@@ -522,7 +549,6 @@ func newProgramModElement(prgmodmngr *programModElemManager, specifier string, f
 			prgmodelm = &programModElement{modfied: fi.ModTime(), m: p, prgmodmngr: prgmodmngr}
 		}
 	}
-
 	return
 }
 
@@ -556,32 +582,40 @@ func (prgmodElm *programModElement) RunMod(vm *ja.Runtime, fs *fsutils.FSUtils, 
 		return
 	}
 
-	m := prgmodElm.m
-
-	if vm != nil {
-		evalprms := m.Evaluate(vm)
-		if evalprms.State() == ja.PromiseStateFulfilled {
-			nmspce := vm.NamespaceObjectFor(m)
-			if nmspce != nil {
-				for _, nmdimprt := range namedimports {
-					for _, imprtthis := range nmdimprt {
-						if imprtthisl := len(imprtthis); imprtthisl > 0 {
-							idntys := imprtthis[0]
-							if idntys != "" {
-								if imprtthisl > 1 {
-									if aliass := imprtthis[1]; aliass != "" {
-										vm.Set(aliass, nmspce.Get(idntys))
-										continue
-									}
-								}
-								vm.Set(idntys, nmspce.Get(idntys))
+	if nmspce := prgmodElm.RequireMod(vm, fs); nmspce != nil {
+		for _, nmdimprt := range namedimports {
+			for _, imprtthis := range nmdimprt {
+				if imprtthisl := len(imprtthis); imprtthisl > 0 {
+					idntys := imprtthis[0]
+					if idntys != "" {
+						if imprtthisl > 1 {
+							if aliass := imprtthis[1]; aliass != "" {
+								vm.Set(aliass, nmspce.Get(idntys))
+								continue
 							}
 						}
+						vm.Set(idntys, nmspce.Get(idntys))
 					}
 				}
 			}
 		}
 	}
+}
+
+func (prgmodElm *programModElement) RequireMod(vm *ja.Runtime, fs *fsutils.FSUtils) (exports *ja.Object) {
+	if prgmodElm == nil {
+		return
+	}
+
+	m := prgmodElm.m
+
+	if vm != nil {
+		evalprms := m.Evaluate(vm)
+		if evalprms.State() == ja.PromiseStateFulfilled {
+			exports = vm.NamespaceObjectFor(m)
+		}
+	}
+	return
 }
 
 type parseerr struct {

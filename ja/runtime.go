@@ -179,6 +179,7 @@ type Now func() time.Time
 
 type Runtime struct {
 	importModule    func(modname string, namedimports ...[][]string) bool
+	require         func(modname string) *Object
 	global          global
 	globalObject    *Object
 	stringSingleton *stringObject
@@ -223,7 +224,21 @@ func (r *Runtime) ImportModule(modname string, namedimports ...[][]string) bool 
 func (r *Runtime) SetImportModule(importModule func(modname string, namedimports ...[][]string) bool) {
 	if r != nil && importModule != nil {
 		r.importModule = importModule
-		r.Set("impstmnt", importModule)
+		r.Set("impstmnt", r.ImportModule)
+	}
+}
+
+func (r *Runtime) Require(modname string) *Object {
+	if r.require != nil {
+		return r.require(modname)
+	}
+	return nil
+}
+
+func (r *Runtime) SetRequire(require func(modname string) *Object) {
+	if r != nil && require != nil {
+		r.require = require
+		r.Set("require", r.Require)
 	}
 }
 
