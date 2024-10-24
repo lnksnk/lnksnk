@@ -151,16 +151,16 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 		//if len(tlsconf) > 0 {
 		handler = h2c.NewHandler(handler, &http2.Server{})
 		adrhost, adrport, _ := net.SplitHostPort(addr)
+		htpport, _ := strconv.ParseInt(adrport, 10, 64)
 		server := http3.Server{
 			Handler:    handler,
-			Addr:       adrhost + ":" + adrport,
+			Addr:       fmt.Sprintf("%s:%d", adrhost, int(htpport-1)),
 			TLSConfig:  http3.ConfigureTLSConfig(&tls.Config{}), // use your tls.Config here
 			QUICConfig: &quic.Config{},
 		}
 
-		htpport, _ := strconv.ParseInt(adrport, 10, 64)
 		h1and2 := http.Server{
-			Addr: fmt.Sprintf("%s:%d", adrhost, int(htpport+1)),
+			Addr: addr,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				err := server.SetQUICHeaders(w.Header())
 				if err != nil { /* handle error */
