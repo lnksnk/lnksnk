@@ -54,7 +54,9 @@ func ProcessRequesterConn(conn net.Conn, activemap map[string]interface{}) {
 			conn.Close()
 			return
 		} else if rqst != nil {
-			ProcessRequest("", rqst, NewResponseWriter(rqst, conn), activemap)
+			rspns := NewResponseWriter(rqst, conn)
+			defer rspns.Close()
+			ProcessRequest("", rqst, rspns, activemap)
 		}
 	}
 }
@@ -98,7 +100,8 @@ func ProcessRequestPath(path string, activemap map[string]interface{}, a ...inte
 	if fs == nil {
 		fs = gblfs
 	}
-	err = internalServeRequest(path, nil, nil, fs, activemap)
+	err = internalRequest(path, nil, nil, fs, activemap)
+	//err = internalServeRequest(path, nil, nil, fs, activemap)
 	return
 }
 
@@ -125,9 +128,10 @@ func ProcessRequest(path string, httprqst *http.Request, httprspns http.Response
 			return
 		}
 		prcsrdr := serveio.NewReader(httprqst)
+		defer prcsrdr.Close()
 		prcswtr := serveio.NewWriter(httprspns)
-
-		err = internalServeRequest(path, prcsrdr, prcswtr, fs, activemap, a...)
+		defer prcswtr.Close()
+		err = internalRequest(path, prcsrdr, prcswtr, fs, activemap, a...)
 	}
 	return
 }
