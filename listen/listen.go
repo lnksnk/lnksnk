@@ -152,27 +152,27 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 		handler = h2c.NewHandler(handler, &http2.Server{})
 		adrhost, adrport, _ := net.SplitHostPort(addr)
 		htpport, _ := strconv.ParseInt(adrport, 10, 64)
-		server := http3.Server{
-			Handler:    handler,
-			Addr:       fmt.Sprintf("%s:%d", adrhost, int(htpport-1)),
-			TLSConfig:  http3.ConfigureTLSConfig(&tls.Config{}), // use your tls.Config here
-			QUICConfig: &quic.Config{},
-		}
 
+		server := http3.Server{
+			Addr:       fmt.Sprintf("%s:%d", adrhost, int(htpport+1)),
+			TLSConfig:  http3.ConfigureTLSConfig(&tls.Config{}), // use your tls.Config here
+			QUICConfig: &quic.Config{Versions: []quic.Version{quic.Version1, quic.Version2}},
+		}
+		server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server.SetQUICHeaders(w.Header())
+			handler.ServeHTTP(w, r)
+		})
 		h1and2 := http.Server{
 			Addr: addr,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				err := server.SetQUICHeaders(w.Header())
-				if err != nil { /* handle error */
-					handler.ServeHTTP(w, r)
-					return
-				}
-				server.Handler.ServeHTTP(w, r)
+				server.SetQUICHeaders(w.Header())
+				handler.ServeHTTP(w, r)
 			})}
+
+		go server.ListenAndServe()
 
 		go h1and2.ListenAndServe()
 
-		go server.ListenAndServe()
 		//}
 		//http3.ListenAndServeQUIC(addr, "/path/to/cert", "/path/to/key", handler)
 	}
