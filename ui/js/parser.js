@@ -591,7 +591,8 @@ function _parseEval(){
             var xhttp = new XMLHttpRequest();
             xhttp.onreadystatechange = function() {
                 if ((xhttp.readyState === XMLHttpRequest.DONE) && (this.status==0 || this.status == 200)) {
-                    template.push(this.responseText&&this.responseText!==null?this.responseText:"");
+                    //template.push(this.responseText&&this.responseText!==null?this.responseText:"");
+                    prepTargetContent(target,processContent(this.responseText&&this.responseText!==null?this.responseText:""));
                 }
             };
             xhttp.onerror==function(){
@@ -609,7 +610,7 @@ function _parseEval(){
                 }
             }
             if(frmdata!==null||jsonref!==null) {
-                xhttp.open("POST",urlrf,false);
+                xhttp.open("POST",urlrf,true);
                 if (jsonref!==null){
                     xhttp.setRequestHeader("Content-Type", "application/json; charset=UTF-8");
                     xhttp.send(jsonref);
