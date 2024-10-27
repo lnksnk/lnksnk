@@ -19,7 +19,53 @@ import (
 	"github.com/lnksnk/lnksnk/serve/serveio"
 )
 
+type internalWork struct {
+	path      string
+	ctxcnl    context.CancelCauseFunc
+	In        serveio.Reader
+	Out       serveio.Writer
+	fs        *fsutils.FSUtils
+	activemap map[string]interface{}
+	a         []interface{}
+	ctx       context.Context
+}
+
+func initInternWork(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (intrnwrk *internalWork) {
+	ctx, ctxcnl := context.WithCancelCause(context.Background())
+	intrnwrk = &internalWork{ctx: ctx, ctxcnl: ctxcnl, path: path, In: In, Out: Out, fs: fs, activemap: activemap}
+	intrnwrk.a = append(intrnwrk.a, a...)
+	return
+}
+
 func internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (err error) {
+	ctx, ctxcnxl := context.WithCancelCause(context.Background())
+	go func() {
+		ctxcnxl(_internalRequest(path, In, Out, fs, activemap, a...))
+	}()
+	<-ctx.Done()
+	if ctxerr := ctx.Err(); ctxerr != context.Canceled {
+		err = ctxerr
+	}
+	return
+}
+
+func (intrnwk *internalWork) close() {
+	if intrnwk != nil {
+		intrnwk.a = nil
+		intrnwk.activemap = nil
+		intrnwk.In = nil
+		intrnwk.Out = nil
+		intrnwk.ctx = nil
+		intrnwk.ctxcnl = nil
+		intrnwk.fs = nil
+	}
+}
+
+func (intrnwk *internalWork) do() {
+	intrnwk.ctxcnl(_internalRequest(intrnwk.path, intrnwk.In, intrnwk.Out, intrnwk.fs, intrnwk.activemap, intrnwk.a...))
+}
+
+func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (err error) {
 	var caching *concurrent.Map
 	var invokecaching = func() *concurrent.Map {
 		if caching == nil {
