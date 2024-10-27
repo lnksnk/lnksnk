@@ -129,6 +129,8 @@ func NewListen(handerfunc http.HandlerFunc) *listen {
 	return &listen{handler: handerfunc, TLSConfig: &tls.Config{}}
 }
 
+var lstnr *listener
+
 func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Config) {
 	if handler == nil && DefaultHandler != nil {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -138,11 +140,17 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 	if strings.Contains(network, "tcp") {
 
 		if handler != nil {
-			if ln, err := Listen(network, addr); err == nil { //net.Listen(network, addr); err == nil {
+			if ln, err := net.Listen(network, addr); err == nil { //net.Listen(network, addr); err == nil {
 
 				if tlsconfL := len(tlsconf); tlsconfL > 0 && tlsconf[0] != nil {
 					ln = tls.NewListener(ln, tlsconf[0].Clone())
 				}
+				if lstnr == nil {
+					lstnr = &listener{accepts: make(chan net.Conn), accepteds: make(chan net.Conn)}
+					lstnr.Start()
+				}
+				ln = lstnr.Listen(ln)
+				//http2.ConfigureServer(&http.Server{})
 				go http.Serve(ln, h2c.NewHandler(handler, &http2.Server{}))
 				return
 			}
