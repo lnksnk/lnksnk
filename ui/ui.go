@@ -12,5 +12,5 @@ var uijsfs embed.FS
 
 func init() {
 	gblrsngfs := resources.GLOBALRSNG().FS()
-	embedutils.ImportResource(gblrsngfs, uijsfs, true, "/ui/js", "js")
+	embedutils.ImportResource(gblrsngfs, uijsfs, true, "/ui", "js")
 }
