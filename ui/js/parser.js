@@ -618,7 +618,7 @@ function _parseEval(){
                     xhttp.send(frmdata);
                 }
             } else {
-                xhttp.open("GET",urlrf,false);
+                xhttp.open("GET",urlrf,true);
                 xhttp.send();
             }
         });
