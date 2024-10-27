@@ -506,15 +506,6 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 		}
 	}
 	if rscngepnt.isLocal {
-		/*lklpath := rscngepnt.path + strings.TrimSpace(strings.Replace(path[0], "\\", "/", -1))
-		if strings.LastIndex(lklpath, "/") > 0 && strings.HasSuffix(lklpath, "/") {
-			lklpath = lklpath[:len(lklpath)-1]
-		}
-		if len(path) == 1 {
-			finfos, _ = fsutils.LS(lklpath, append([]interface{}{strings.TrimSpace(strings.Replace(addpth+path[0], "\\", "/", -1)), rscngepnt.fsopener}, a...)...)
-		} else if len(path) == 2 {
-			finfos, _ = fsutils.LS(lklpath, append([]interface{}{strings.TrimSpace(strings.Replace(addpth+path[1], "\\", "/", -1)), rscngepnt.fsopener}, a...)...)
-		}*/
 		subpath := strings.TrimFunc(strings.Replace(path[0], "\\", "/", -1), iorw.IsSpace)
 		subroot := ""
 		if subi := strings.LastIndex(subpath, "/"); subi > -1 {
