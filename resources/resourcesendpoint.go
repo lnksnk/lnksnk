@@ -536,22 +536,26 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 	}
 	if rscngepnt.embeddedResources != nil {
 		if pthl := len(path); pthl > 0 {
-			for embdrspth, emdbrs := range rscngepnt.embeddedResources {
-				if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
-					lkppath := embdrspth
-					if pthl == 1 {
-						finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
-					} else if pthl == 2 {
-						if path[0] == "" {
-							if strings.HasSuffix(path[1], "/") {
-								lkppath = path[1][:len(path[1])-1] + "/" + lkppath
+			if pthl == 1 && path[0] == "" && len(rscngepnt.embeddedResources) > 0 {
+				finfos = append(finfos, fsutils.DUMMYFINFO("", rsroot+"/", rsroot+"/", rsroot+"/", 0, os.ModeDir, time.Now(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
+			} else {
+				for embdrspth, emdbrs := range rscngepnt.embeddedResources {
+					if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
+						lkppath := embdrspth
+						if pthl == 1 {
+							finfos = append(finfos, fsutils.NewFSUtils().DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
+						} else if pthl == 2 {
+							if path[0] == "" {
+								if strings.HasSuffix(path[1], "/") {
+									lkppath = path[1][:len(path[1])-1] + "/" + lkppath
+								} else {
+									lkppath = path[1] + "/" + lkppath
+								}
 							} else {
-								lkppath = path[1] + "/" + lkppath
+								lkppath = path[1][:len(path[1])-len(embdrspth)] + embdrspth
 							}
-						} else {
-							lkppath = path[1][:len(path[1])-len(embdrspth)] + embdrspth
+							finfos = append(finfos, fsutils.DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 						}
-						finfos = append(finfos, fsutils.DUMMYFINFO(emdbrs.Name(), addpth+lkppath, addpth+lkppath, rsroot, emdbrs.Size(), 0, emdbrs.modified, rscngepnt.isActive, rscngepnt.isRaw, emdbrs.fsopener))
 					}
 				}
 			}
