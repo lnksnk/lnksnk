@@ -596,33 +596,37 @@ func (r *Runtime) getPromise() *Object {
 	return ret
 }
 
-func (r *Runtime) wrapPromiseReaction(fObj *Object) func(interface{}) {
+func (r *Runtime) wrapPromiseReaction(fObj *Object) func(interface{}) error {
 	f, _ := AssertFunction(fObj)
-	return func(x interface{}) {
-		_, _ = f(nil, r.ToValue(x))
+	return func(x interface{}) error {
+		_, err := f(nil, r.ToValue(x))
+		return err
 	}
 }
 
 // NewPromise creates and returns a Promise and resolving functions for it.
+// The returned errors will be uncatchable errors, such as InterruptedError or StackOverflowError, which should be propagated upwards.
+// Exceptions are handled through [PromiseRejectionTracker].
 //
 // WARNING: The returned values are not goroutine-safe and must not be called in parallel with VM running.
-// In order to make use of this method you need an event loop such as the one in goja_nodejs (https://github/lnksnk/lnksnk/ja_nodejs)
+// In order to make use of this method you need an event loop such as the one in sobek_nodejs (https://github.com/grafana/sobek_nodejs)
 // where it can be used like this:
 //
 //	loop := NewEventLoop()
 //	loop.Start()
 //	defer loop.Stop()
-//	loop.RunOnLoop(func(vm *goja.Runtime) {
+//	loop.RunOnLoop(func(vm *sobek.Runtime) {
 //	    p, resolve, _ := vm.NewPromise()
 //	    vm.Set("p", p)
 //	    go func() {
 //	        time.Sleep(500 * time.Millisecond)   // or perform any other blocking operation
-//	        loop.RunOnLoop(func(*goja.Runtime) { // resolve() must be called on the loop, cannot call it here
-//	            resolve(result)
+//	        loop.RunOnLoop(func(*sobek.Runtime) { // resolve() must be called on the loop, cannot call it here
+//	            err := resolve(result)
+//	            // Handle uncatchable errors (e.g. by stopping the loop, panicking or setting a flag)
 //	        })
 //	    }()
 //	}
-func (r *Runtime) NewPromise() (promise *Promise, resolve func(result interface{}), reject func(reason interface{})) {
+func (r *Runtime) NewPromise() (promise *Promise, resolve, reject func(reason interface{}) error) {
 	p := r.newPromise(r.getPromisePrototype())
 	resolveF, rejectF := p.createResolvingFunctions()
 	return p, r.wrapPromiseReaction(resolveF), r.wrapPromiseReaction(rejectF)

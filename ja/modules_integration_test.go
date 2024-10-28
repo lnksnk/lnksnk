@@ -351,7 +351,7 @@ func (si *cyclicModuleInstanceImpl) HasTLA() bool {
 	return false
 }
 
-func (si *cyclicModuleInstanceImpl) ExecuteModule(rt *ja.Runtime, res, rej func(interface{})) (ja.CyclicModuleInstance, error) {
+func (si *cyclicModuleInstanceImpl) ExecuteModule(rt *ja.Runtime, _, _ func(interface{}) error) (ja.CyclicModuleInstance, error) {
 	si.rt = rt
 	return si, nil
 }
