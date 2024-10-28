@@ -853,7 +853,23 @@ func (c *compiler) compileImportDeclaration(expr *ast.ImportDeclaration) {
 	if expr.FromClause == nil {
 		return // import "specifier";
 	}
-	if c.hostResolveImportedModule == nil {
+
+	var namedimports []_namedImport
+	for _, nmdimprt := range expr.ImportClause.NamedImports.ImportsList {
+		namedimports = append(namedimports, _namedImport{identifier: nmdimprt.IdentifierName, alias: nmdimprt.Alias})
+	}
+	var importclause = _importClause{}
+	if expr.ImportClause.ImportedDefaultBinding != nil {
+		importclause.defaultbind = expr.ImportClause.ImportedDefaultBinding.Name
+	}
+
+	if expr.ImportClause.NameSpaceImport != nil {
+		importclause.namespacebind = expr.ImportClause.NameSpaceImport.ImportedBinding
+	}
+	importclause.namedimports = namedimports
+	imprtdcl := _importDecl{fromclause: expr.FromClause.ModuleSpecifier, specifier: expr.ModuleSpecifier, importclause: importclause}
+	c.emit(imprtdcl)
+	/*if c.hostResolveImportedModule == nil {
 		return
 	}
 	module, err := c.hostResolveImportedModule(c.module, expr.FromClause.ModuleSpecifier.String())
@@ -947,7 +963,7 @@ func (c *compiler) compileImportDeclaration(expr *ast.ImportDeclaration) {
 				c.emit(initIndirect{getter: localB.getIndirect})
 			}
 		}
-	}
+	}*/
 }
 
 func (c *compiler) compileVarBinding(expr *ast.Binding) {
