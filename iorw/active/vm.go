@@ -12,15 +12,12 @@ import (
 	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw"
 
-	"github.com/lnksnk/lnksnk/iorw/active/require"
-
 	"github.com/lnksnk/lnksnk/ja"
 	"github.com/lnksnk/lnksnk/ja/parser"
 )
 
 type VM struct {
 	vm            *ja.Runtime
-	vmreq         *require.RequireModule
 	objmap        map[string]interface{}
 	DisposeObject func(string, interface{})
 	W             io.Writer
@@ -78,9 +75,6 @@ func NewVM(a ...interface{}) (vm *VM) {
 						vm.ErrPrint = errprint
 					}
 				}
-			} else if strings.EqualFold(stngk, "$") {
-				vm.vmreq.SetObj("$", stngv)
-				vm.Set("$", stngv)
 			}
 		}
 		delete(stngs, stngk)
@@ -792,9 +786,6 @@ func (vm *VM) Close() {
 				buf.Close()
 			}
 			vm.buffs = nil
-		}
-		if vm.vmreq != nil {
-			vm.vmreq = nil
 		}
 		if gojavm := vm.vm; gojavm != nil {
 			vm.vm = nil
