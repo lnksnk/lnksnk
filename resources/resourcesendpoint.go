@@ -537,7 +537,9 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 	if rscngepnt.embeddedResources != nil {
 		if pthl := len(path); pthl > 0 {
 			if pthl == 1 && path[0] == "" && len(rscngepnt.embeddedResources) > 0 {
-				finfos = append(finfos, fsutils.DUMMYFINFO("", rsroot+"/", rsroot+"/", rsroot+"/", 0, os.ModeDir, time.Now(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
+				if len(finfos) == 0 {
+					finfos = append(finfos, fsutils.DUMMYFINFO("", rsroot+"/", rsroot+"/", rsroot+"/", 0, os.ModeDir, time.Now(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
+				}
 			} else {
 				for embdrspth, emdbrs := range rscngepnt.embeddedResources {
 					if strings.HasPrefix(embdrspth, path[0]) && (embdrspth == path[0] || path[0] == "" && strings.LastIndex(embdrspth, "/") == -1 && strings.LastIndex(embdrspth, "/") < strings.LastIndex(embdrspth, ".")) {
