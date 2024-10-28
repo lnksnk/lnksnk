@@ -129,29 +129,7 @@ func (self *_parser) parseStatement() ast.Statement {
 					return &ast.BadStatement{From: self.idx, To: self.idx + 1}
 				}
 				imp := self.parseImportDeclaration()
-
-				nmdimprt := ""
-				for nmpi, nmmp := range imp.ImportClause.NamedImports.ImportsList {
-
-					if nmdimprt != "" {
-						nmdimprt += ","
-					}
-					if nmpi == 0 {
-						nmdimprt += "["
-					}
-					nmdimprt += fmt.Sprintf("['%s','%s']", nmmp.IdentifierName.String(), nmmp.Alias.String())
-				}
-				if nmdimprt != "" {
-					nmdimprt = "," + nmdimprt + "]"
-				}
 				self.scope.importEntries = append(self.scope.importEntries, imp)
-
-				if nmdimprt = fmt.Sprintf("impstmnt('%s'%s)", imp.FromClause.ModuleSpecifier.String(), nmdimprt); nmdimprt != "" {
-					if prgmimpast, _ := _newParser("", nmdimprt, 1, WithDisableSourceMaps).parse(); prgmimpast != nil {
-						return prgmimpast.Body[0]
-					}
-				}
-
 				return imp
 			}
 		}
