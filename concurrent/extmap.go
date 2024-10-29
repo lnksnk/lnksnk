@@ -99,7 +99,7 @@ func (enmmp *Map) Del(key ...interface{}) {
 }
 
 func (enmmp *Map) Find(k ...interface{}) (value interface{}, found bool) {
-	if len(k) == 0 {
+	if len(k) == 1 {
 		if ks, _ := k[0].(string); ks != "" && strings.Contains(ks, ",") {
 			ksarr := strings.Split(ks, ",")
 			k = make([]interface{}, len(ksarr))

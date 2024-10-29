@@ -140,7 +140,7 @@ func (slce *Slice) Field(index int, field string, a ...interface{}) (result []in
 }
 
 func (slce *Slice) Find(k ...interface{}) (value interface{}, found bool) {
-	if len(k) == 0 {
+	if len(k) == 1 {
 		if ks, _ := k[0].(string); ks != "" && strings.Contains(ks, ",") {
 			ksarr := strings.Split(ks, ",")
 			k = make([]interface{}, len(ksarr))
