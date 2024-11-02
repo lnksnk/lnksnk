@@ -1,6 +1,7 @@
 package active
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -80,8 +81,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 		delete(stngs, stngk)
 	}
 	vm.vm.SetImportModule(func(modname string, namedimports ...[][]string) bool {
-		DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...)
-		return true
+		return DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...) == nil
 	})
 	vm.vm.SetRequire(func(modname string) (exports *ja.Object) {
 		exports, _ = DefaultModuleManager.Require(vm.vm, vm.FS, modname)
@@ -367,10 +367,10 @@ func (prgmodmngr *programModElemManager) Require(vm *ja.Runtime, fs *fsutils.FSU
 		return
 	}
 	if specifier == "" {
+		err = fmt.Errorf("%s", "No specifier provided")
 		if vm != nil {
-			vm.Try(func() {
-				panic(fmt.Errorf("%s", "No specifier provided"))
-			})
+			vm.Interrupt(err)
+			vm.ClearInterrupt()
 		}
 		return
 	}
@@ -378,10 +378,10 @@ func (prgmodmngr *programModElemManager) Require(vm *ja.Runtime, fs *fsutils.FSU
 		prgmodelm := prgmodmngr.Module(specifier)
 		if prgmodelm == nil {
 			if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, fs, nil); prgmodelm == nil || err != nil {
+				err = errors.Join(err, fmt.Errorf("%s", "Unable to load "+specifier))
 				if vm != nil {
-					vm.Try(func() {
-						panic(fmt.Errorf("%s", "Unable to load "+specifier))
-					})
+					vm.Interrupt(err)
+					vm.ClearInterrupt()
 				}
 				return
 			}
@@ -421,10 +421,10 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 		return
 	}
 	if specifier == "" {
+		err = fmt.Errorf("%s", "No specifier provided")
 		if vm != nil {
-			vm.Try(func() {
-				panic(fmt.Errorf("%s", "No specifier provided"))
-			})
+			vm.Interrupt(err)
+			vm.ClearInterrupt()
 		}
 		return
 	}
@@ -432,10 +432,10 @@ func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.F
 		prgmodelm := prgmodmngr.Module(specifier)
 		if prgmodelm == nil {
 			if prgmodelm, err = newProgramModElement(prgmodmngr, specifier, fs, nil); prgmodelm == nil || err != nil {
+				err = errors.Join(err, fmt.Errorf("%s", "Unable to load "+specifier))
 				if vm != nil {
-					vm.Try(func() {
-						panic(fmt.Errorf("%s", "Unable to load "+specifier))
-					})
+					vm.Interrupt(err)
+					vm.ClearInterrupt()
 				}
 				return
 			}
