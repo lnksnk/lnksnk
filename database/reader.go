@@ -290,6 +290,36 @@ func NewReader(strmrdrd interface{}, strmtpe string, strmsttngs map[string]inter
 	return
 }
 
+func (rdr *Reader) FullIterate() func(func(int64, *Reader, bool, bool) bool) {
+	return func(yield func(int64, *Reader, bool, bool) bool) {
+		nxt := false
+		for {
+			if nxt, _ = rdr.Next(); nxt {
+				if !yield(rdr.RowNr, rdr, rdr.first, rdr.last) {
+					return
+				}
+				continue
+			}
+			return
+		}
+	}
+}
+
+func (rdr *Reader) Iterate() func(func(*Reader) bool) {
+	return func(yield func(*Reader) bool) {
+		nxt := false
+		for {
+			if nxt, _ = rdr.Next(); nxt {
+				if !yield(rdr) {
+					return
+				}
+				continue
+			}
+			return
+		}
+	}
+}
+
 func (rdr *Reader) callFinalise() {
 	if rdr != nil {
 		if EventFinalize := rdr.EventFinalize; EventFinalize != nil {
