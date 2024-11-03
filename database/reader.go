@@ -290,28 +290,6 @@ func NewReader(strmrdrd interface{}, strmtpe string, strmsttngs map[string]inter
 	return
 }
 
-func (rdr *Reader) FullIterate(evterr ...func(error)) func(func(int64, *Reader, bool, bool) bool) {
-	return func(yield func(int64, *Reader, bool, bool) bool) {
-		nxt := false
-		nxterr := error(nil)
-		for {
-			if nxt, nxterr = rdr.Next(); nxt {
-				if !yield(rdr.RowNr, rdr, rdr.first, rdr.last) {
-					return
-				}
-				continue
-			}
-			if nxterr != nil {
-				if len(evterr) > 0 && evterr[0] != nil {
-					evterr[0](nxterr)
-				}
-				return
-			}
-			return
-		}
-	}
-}
-
 func (rdr *Reader) Iterate(evterr ...func(error)) func(func(*Reader) bool) {
 	return func(yield func(*Reader) bool) {
 		nxt := false
