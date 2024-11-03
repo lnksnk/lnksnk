@@ -290,7 +290,7 @@ func NewReader(strmrdrd interface{}, strmtpe string, strmsttngs map[string]inter
 	return
 }
 
-func (rdr *Reader) FullIterate() func(func(int64, *Reader, bool, bool) bool) {
+func (rdr *Reader) FullIterate(evterr ...func(error)) func(func(int64, *Reader, bool, bool) bool) {
 	return func(yield func(int64, *Reader, bool, bool) bool) {
 		nxt := false
 		for {
@@ -305,7 +305,7 @@ func (rdr *Reader) FullIterate() func(func(int64, *Reader, bool, bool) bool) {
 	}
 }
 
-func (rdr *Reader) Iterate() func(func(*Reader) bool) {
+func (rdr *Reader) Iterate(evterr ...func(error)) func(func(*Reader) bool) {
 	return func(yield func(*Reader) bool) {
 		nxt := false
 		for {
@@ -792,19 +792,28 @@ func (rdr *Reader) ForEachColumn(eachitem func(string, int, bool, bool), cols ..
 func (rdr *Reader) ForEach(eachitem func(*Reader, bool, bool) bool) (err error) {
 	if rdr != nil && eachitem != nil {
 		var eachdone = false
-		var nxt = false
+		//var nxt = false
 		var prvEventRow = rdr.EventRow
 		rdr.EventRow = func(r *Reader) (evterr error) {
 			eachdone = eachitem(rdr, rdr.first, rdr.last)
 			return
 		}
-		for err == nil {
+		for r := range rdr.Iterate(func(itrerr error) {
+			if itrerr != nil {
+				err = itrerr
+			}
+		}) {
+			if r != nil && eachdone {
+				break
+			}
+		}
+		/*for err == nil {
 			if nxt, err = rdr.Next(); nxt && err == nil && !eachdone {
 				continue
 			} else if !nxt || eachdone {
 				break
 			}
-		}
+		}*/
 		rdr.EventRow = prvEventRow
 		eachitem = nil
 	}
@@ -815,20 +824,29 @@ func (rdr *Reader) ForEachData(eachitem func([]interface{}, int64, bool, bool) b
 	if rdr != nil && eachitem != nil {
 		if cls := rdr.Columns(cols...); len(cls) > 0 {
 			var eachdone = false
-			var nxt = false
+			//var nxt = false
 			var prvEventRow = rdr.EventRow
 			rdr.EventRow = func(r *Reader) (evterr error) {
 				eachdone = eachitem(rdr.Data(cls...), rdr.RowNr, rdr.first, rdr.last)
 				return
 			}
-			for err == nil {
+			for r := range rdr.Iterate(func(itrerr error) {
+				if itrerr != nil {
+					err = itrerr
+				}
+			}) {
+				if r != nil && eachdone {
+					break
+				}
+			}
+			/*for err == nil {
 				if nxt, err = rdr.Next(); nxt && err == nil && !eachdone {
 					continue
 				}
 				if !nxt || eachdone {
 					break
 				}
-			}
+			}*/
 			rdr.EventRow = prvEventRow
 			cls = nil
 		}
@@ -842,20 +860,29 @@ func (rdr *Reader) ForEachDataMap(eachitem func(map[string]interface{}, int64, b
 	if rdr != nil && eachitem != nil {
 		if cls := rdr.Columns(cols...); len(cls) > 0 {
 			var eachdone = false
-			var nxt = false
+			//var nxt = false
 			var prvEventRow = rdr.EventRow
 			rdr.EventRow = func(r *Reader) (evterr error) {
 				eachdone = eachitem(rdr.DataMap(cls...), rdr.RowNr, rdr.first, rdr.last)
 				return
 			}
-			for err == nil {
+			for r := range rdr.Iterate(func(itrerr error) {
+				if itrerr != nil {
+					err = itrerr
+				}
+			}) {
+				if r != nil && eachdone {
+					break
+				}
+			}
+			/*for err == nil {
 				if nxt, err = rdr.Next(); nxt && err == nil && !eachdone {
 					continue
 				}
 				if !nxt || eachdone {
 					break
 				}
-			}
+			}*/
 			rdr.EventRow = prvEventRow
 			cls = nil
 		}
@@ -867,20 +894,29 @@ func (rdr *Reader) ForEachDataMapSet(eachitem func([]map[string]interface{}, int
 	if rdr != nil && eachitem != nil {
 		if cls := rdr.Columns(cols...); len(cls) > 0 {
 			var eachdone = false
-			var nxt = false
+			//var nxt = false
 			var prvEventRow = rdr.EventRow
 			rdr.EventRow = func(r *Reader) (evterr error) {
 				eachdone = eachitem(rdr.DataSetMap(cls...), rdr.RowNr, rdr.first, rdr.last)
 				return
 			}
-			for err == nil {
+			for r := range rdr.Iterate(func(itrerr error) {
+				if itrerr != nil {
+					err = itrerr
+				}
+			}) {
+				if r != nil && eachdone {
+					break
+				}
+			}
+			/*for err == nil {
 				if nxt, err = rdr.Next(); nxt && err == nil && !eachdone {
 					continue
 				}
 				if !nxt || eachdone {
 					break
 				}
-			}
+			}*/
 			rdr.EventRow = prvEventRow
 			cls = nil
 		}
