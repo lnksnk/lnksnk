@@ -810,3 +810,20 @@ func ReadRunes(p []rune, rds ...interface{}) (n int, err error) {
 	}
 	return
 }
+
+func IterReadRunes(rdr io.RuneReader, evterr func(error)) func(func(rune, int) bool) {
+	return func(yield func(rune, int) bool) {
+		for {
+			r, size, rerr := rdr.ReadRune()
+			if size > 0 && !yield(r, size) {
+				return
+			}
+			if size == 0 || rerr != nil {
+				if rerr != nil && evterr != nil {
+					evterr(rerr)
+				}
+				return
+			}
+		}
+	}
+}
