@@ -469,7 +469,7 @@ func (prgmodmngr *programModElemManager) RunModule(vm *es.Runtime, fs *fsutils.F
 	return
 }
 
-var DefaultParseModeCode = func(prgmodmngr *programModElemManager, fi fsutils.FileInfo, fs *fsutils.FSUtils) (cde string, prserr error) {
+var DefaultParseModCode = func(prgmodmngr *programModElemManager, fi fsutils.FileInfo, fs *fsutils.FSUtils) (cde string, prserr error) {
 	if DefaultParseFileInfo != nil {
 		bfout := iorw.NewBuffer()
 		prserr = DefaultParseFileInfo(fi, fs, ".js", bfout, true, func(a ...interface{}) (result interface{}, err error) {
@@ -512,8 +512,8 @@ func newProgramModElement(prgmodmngr *programModElemManager, specifier string, f
 	doit:
 		if fi != nil {
 			src := ""
-			if DefaultParseModeCode != nil {
-				if src, err = DefaultParseModeCode(prgmodmngr, fi, fs); err != nil {
+			if DefaultParseModCode != nil {
+				if src, err = DefaultParseModCode(prgmodmngr, fi, fs); err != nil {
 					return nil, err
 				}
 			}
