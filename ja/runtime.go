@@ -224,7 +224,7 @@ func (r *Runtime) ImportModule(modname string, namedimports ...[][]string) bool 
 func (r *Runtime) SetImportModule(importModule func(modname string, namedimports ...[][]string) bool) {
 	if r != nil && importModule != nil {
 		r.importModule = importModule
-		r.Set("impstmnt", r.ImportModule)
+		//r.Set("impstmnt", r.ImportModule)
 	}
 }
 

@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/text/collate"
 
-	js_ast "github.com/lnksnk/lnksnk/es/ast"
+	es_ast "github.com/lnksnk/lnksnk/es/ast"
 	"github.com/lnksnk/lnksnk/es/file"
 	"github.com/lnksnk/lnksnk/es/parser"
 	"github.com/lnksnk/lnksnk/es/unistring"
@@ -178,6 +178,8 @@ type RandSource func() float64
 type Now func() time.Time
 
 type Runtime struct {
+	importModule    func(modname string, namedimports ...[][]string) bool
+	require         func(modname string) *Object
 	global          global
 	globalObject    *Object
 	stringSingleton *stringObject
@@ -197,10 +199,47 @@ type Runtime struct {
 	hash  *maphash.Hash
 	idSeq uint64
 
+	modules          map[ModuleRecord]ModuleInstance
+	moduleNamespaces map[ModuleRecord]*namespaceObject
+	importMetas      map[ModuleRecord]*Object
+
+	getImportMetaProperties func(ModuleRecord) []MetaProperty
+	finalizeImportMeta      func(*Object, ModuleRecord)
+	importModuleDynamically ImportModuleDynamicallyCallback
+	evaluationState         *evaluationState
+
 	jobQueue []func()
 
 	promiseRejectionTracker PromiseRejectionTracker
 	asyncContextTracker     AsyncContextTracker
+}
+
+func (r *Runtime) ImportModule(modname string, namedimports ...[][]string) bool {
+	if r.importModule != nil {
+		return r.importModule(modname, namedimports...)
+	}
+	return false
+}
+
+func (r *Runtime) SetImportModule(importModule func(modname string, namedimports ...[][]string) bool) {
+	if r != nil && importModule != nil {
+		r.importModule = importModule
+		//r.Set("impstmnt", r.ImportModule)
+	}
+}
+
+func (r *Runtime) Require(modname string) *Object {
+	if r.require != nil {
+		return r.require(modname)
+	}
+	return nil
+}
+
+func (r *Runtime) SetRequire(require func(modname string) *Object) {
+	if r != nil && require != nil {
+		r.require = require
+		r.Set("require", r.Require)
+	}
 }
 
 type StackFrame struct {
@@ -1309,7 +1348,7 @@ func Compile(name, src string, strict bool) (*Program, error) {
 // CompileAST creates an internal representation of the JavaScript code that can be later run using the Runtime.RunProgram()
 // method. This representation is not linked to a runtime in any way and can be run in multiple runtimes (possibly
 // at the same time).
-func CompileAST(prg *js_ast.Program, strict bool) (*Program, error) {
+func CompileAST(prg *es_ast.Program, strict bool) (*Program, error) {
 	return compileAST(prg, strict, true, nil)
 }
 
@@ -1333,7 +1372,7 @@ func MustCompile(name, src string, strict bool) *Program {
 //	// ...
 //
 // Otherwise use Compile which combines both steps.
-func Parse(name, src string, options ...parser.Option) (prg *js_ast.Program, err error) {
+func Parse(name, src string, options ...parser.Option) (prg *es_ast.Program, err error) {
 	prg, err1 := parser.ParseFile(nil, name, src, 0, options...)
 	if err1 != nil {
 		// FIXME offset
@@ -1355,7 +1394,7 @@ func compile(name, src string, strict, inGlobal bool, evalVm *vm, parserOptions 
 	return compileAST(prg, strict, inGlobal, evalVm)
 }
 
-func compileAST(prg *js_ast.Program, strict, inGlobal bool, evalVm *vm) (p *Program, err error) {
+func compileAST(prg *es_ast.Program, strict, inGlobal bool, evalVm *vm) (p *Program, err error) {
 	c := newCompiler()
 
 	defer func() {
@@ -1647,7 +1686,7 @@ func(FunctionCall, *Runtime) Value is treated as above, except the *Runtime is a
 func(ConstructorCall) *Object is treated as a native constructor, allowing to use it with the new
 operator:
 
-	func MyObject(call goja.ConstructorCall) *goja.Object {
+	func MyObject(call es.ConstructorCall) *es.Object {
 	   // call.This contains the newly created object as per http://www.ecma-international.org/ecma-262/5.1/index.html#sec-13.2.2
 	   // call.Arguments contain arguments passed to the function
 
@@ -1657,7 +1696,7 @@ operator:
 
 	   // If return value is a non-nil *Object, it will be used instead of call.This
 	   // This way it is possible to return a Go struct or a map converted
-	   // into goja.Value using ToValue(), however in this case
+	   // into es.Value using ToValue(), however in this case
 	   // instanceof will not work as expected, unless you set the prototype:
 	   //
 	   // instance := &myCustomStruct{}

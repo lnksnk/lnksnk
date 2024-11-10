@@ -8,7 +8,6 @@ import (
 )
 
 func (c *compiler) compileStatement(v ast.Statement, needResult bool) {
-
 	switch v := v.(type) {
 	case *ast.BlockStatement:
 		c.compileBlockStatement(v, needResult)
@@ -52,6 +51,10 @@ func (c *compiler) compileStatement(v ast.Statement, needResult bool) {
 	case *ast.WithStatement:
 		c.compileWithStatement(v, needResult)
 	case *ast.DebuggerStatement:
+	case *ast.ImportDeclaration:
+		c.compileImportDeclaration(v)
+	case *ast.ExportDeclaration:
+		c.compileExportDeclaration(v)
 	default:
 		c.assert(false, int(v.Idx0())-1, "Unknown statement type: %T", v)
 		panic("unreachable")
@@ -166,7 +169,7 @@ func (c *compiler) compileTryStatement(v *ast.TryStatement, needResult bool) {
 			}
 			c.compileLexicalDeclarations(list, true)
 			c.compileFunctions(funcs)
-			c.compileStatements(list, bodyNeedResult)
+			c.compileStatements(bodyNeedResult, list...)
 			c.leaveScopeBlock(enter)
 			if c.scope.dynLookup || c.scope.bindings[0].inStash {
 				c.p.code[lbl+catchOffset] = &enterCatchBlock{
@@ -780,6 +783,174 @@ func (c *compiler) emitVarAssign(name unistring.String, offset int, init compile
 	}
 }
 
+func (c *compiler) compileExportDeclaration(expr *ast.ExportDeclaration) {
+	switch {
+	case expr.Variable != nil:
+		c.compileVariableStatement(expr.Variable)
+	case expr.LexicalDeclaration != nil:
+		c.compileLexicalDeclaration(expr.LexicalDeclaration)
+	case expr.ClassDeclaration != nil:
+		cls := expr.ClassDeclaration
+		if expr.IsDefault {
+			if cls.Class.Name == nil {
+				c.emitLexicalAssign("default", int(cls.Class.Class)-1, c.compileClassLiteral(cls.Class, false))
+				return
+			}
+			c.compileClassDeclaration(cls)
+			c.emitLexicalAssign("default", int(cls.Class.Class)-1, c.compileIdentifierExpression(cls.Class.Name))
+		} else {
+			c.compileClassDeclaration(cls)
+		}
+	case expr.HoistableDeclaration != nil: // already handled
+	case expr.AssignExpression != nil:
+		assign := expr.AssignExpression
+		c.compileLexicalDeclaration(&ast.LexicalDeclaration{
+			Idx:   assign.Idx0(),
+			Token: token.CONST,
+			List: []*ast.Binding{
+				{
+					Target: &ast.Identifier{
+						Name: unistring.String("default"),
+						Idx:  assign.Idx0(),
+					},
+					Initializer: assign,
+				},
+			},
+		})
+	case expr.ExportFromClause != nil:
+		from := expr.ExportFromClause
+		module, err := c.hostResolveImportedModule(c.module, expr.FromClause.ModuleSpecifier.String())
+		if err != nil {
+			c.throwSyntaxError(int(expr.Idx0()), err.Error())
+		}
+		if from.NamedExports == nil { // star export - nothing to do
+			return
+		}
+		for _, name := range from.NamedExports.ExportsList {
+			value, ambiguous := module.ResolveExport(name.IdentifierName.String())
+
+			if ambiguous || value == nil { // also ambiguous
+				continue // ambiguous import already reported
+			}
+
+			n := name.Alias
+			if n.String() == "" {
+				n = name.IdentifierName
+			}
+			localB, _ := c.scope.lookupName(n)
+			if localB == nil {
+				c.throwSyntaxError(int(expr.Idx0()), "couldn't lookup  %s", n)
+			}
+			identifier := name.IdentifierName.String()
+			localB.getIndirect = func(vm *vm) Value {
+				return vm.r.modules[module].GetBindingValue(identifier)
+			}
+		}
+	}
+}
+
+func (c *compiler) compileImportDeclaration(expr *ast.ImportDeclaration) {
+	/*if expr.FromClause == nil {
+		return // import "specifier";
+	}
+	module, err := c.hostResolveImportedModule(c.module, expr.FromClause.ModuleSpecifier.String())
+	if err != nil {
+		c.throwSyntaxError(int(expr.Idx0()), err.Error())
+	}
+	if expr.ImportClause != nil {
+		if namespace := expr.ImportClause.NameSpaceImport; namespace != nil {
+			idx := expr.Idx
+			c.emitLexicalAssign(
+				namespace.ImportedBinding,
+				int(idx),
+				c.compileEmitterExpr(func() {
+					c.emit(importNamespace{
+						module: module,
+					})
+				}, idx),
+			)
+		}
+		if named := expr.ImportClause.NamedImports; named != nil {
+			for _, name := range named.ImportsList {
+				value, ambiguous := module.ResolveExport(name.IdentifierName.String())
+
+				if ambiguous || value == nil {
+					continue // ambiguous import already reports
+				}
+				n := name.Alias
+				if n.String() == "" {
+					n = name.IdentifierName
+				}
+				if value.BindingName == "*namespace*" {
+					idx := expr.Idx
+					c.emitLexicalAssign(
+						n,
+						int(idx),
+						c.compileEmitterExpr(func() {
+							c.emit(importNamespace{
+								module: value.Module,
+							})
+						}, idx),
+					)
+					continue
+				}
+
+				c.checkIdentifierLName(n, int(expr.Idx))
+				localB, _ := c.scope.lookupName(n)
+				if localB == nil {
+					c.throwSyntaxError(int(expr.Idx0()), "couldn't lookup  %s", n)
+				}
+				identifier := unistring.NewFromString(value.BindingName).String()
+				localB.getIndirect = func(vm *vm) Value {
+					m := vm.r.modules[value.Module]
+					return m.GetBindingValue(identifier)
+				}
+				localB.markAccessPoint()
+				c.emit(initIndirect{getter: localB.getIndirect})
+
+			}
+		}
+
+		if def := expr.ImportClause.ImportedDefaultBinding; def != nil {
+			value, ambiguous := module.ResolveExport("default")
+
+			if ambiguous || value == nil {
+				return // already handled
+			}
+
+			localB, _ := c.scope.lookupName(def.Name)
+			if localB == nil {
+				c.throwSyntaxError(int(expr.Idx0()), "couldn't lookup  %s", def.Name)
+			}
+			if value.BindingName == "*namespace*" {
+				idx := expr.Idx
+				c.emitLexicalAssign(
+					def.Name,
+					int(idx),
+					c.compileEmitterExpr(func() {
+						c.emit(importNamespace{
+							module: value.Module,
+						})
+					}, idx),
+				)
+			} else {
+				identifier := unistring.NewFromString(value.BindingName).String()
+				localB.getIndirect = func(vm *vm) Value {
+					m := vm.r.modules[value.Module]
+					v := m.GetBindingValue(identifier)
+					return v
+				}
+				localB.markAccessPoint()
+				c.emit(initIndirect{getter: localB.getIndirect})
+			}
+		}
+	}*/
+	if expr.FromClause == nil {
+		return // import "specifier";
+	}
+	c.emit(importDeclFromAst(expr))
+}
+
 func (c *compiler) compileVarBinding(expr *ast.Binding) {
 	switch target := expr.Target.(type) {
 	case *ast.Identifier:
@@ -898,7 +1069,7 @@ func (c *compiler) scanStatements(list []ast.Statement) (lastProducingIdx int, b
 	return
 }
 
-func (c *compiler) compileStatementsNeedResult(list []ast.Statement, lastProducingIdx int) {
+func (c *compiler) compileStatementsNeedResult(lastProducingIdx int, list ...ast.Statement) {
 	if lastProducingIdx >= 0 {
 		for _, st := range list[:lastProducingIdx] {
 			if _, ok := st.(*ast.FunctionDeclaration); ok {
@@ -927,13 +1098,13 @@ func (c *compiler) compileStatementsNeedResult(list []ast.Statement, lastProduci
 	}
 }
 
-func (c *compiler) compileStatements(list []ast.Statement, needResult bool) {
+func (c *compiler) compileStatements(needResult bool, list ...ast.Statement) {
 	lastProducingIdx, blk := c.scanStatements(list)
 	if blk != nil {
 		needResult = blk.needResult
 	}
 	if needResult {
-		c.compileStatementsNeedResult(list, lastProducingIdx)
+		c.compileStatementsNeedResult(lastProducingIdx, list...)
 		return
 	}
 	for _, st := range list {
@@ -976,7 +1147,7 @@ func (c *compiler) compileBlockStatement(v *ast.BlockStatement, needResult bool)
 		c.emit(enter)
 	}
 	c.compileFunctions(funcs)
-	c.compileStatements(v.List, needResult)
+	c.compileStatements(needResult, v.List...)
 	if scopeDeclared {
 		c.leaveScopeBlock(enter)
 		c.popScope()
@@ -1108,7 +1279,7 @@ func (c *compiler) compileSwitchStatement(v *ast.SwitchStatement, needResult boo
 		if s.Test != nil || i != 0 {
 			c.p.code[jumps[i]] = jump(len(c.p.code) - jumps[i])
 		}
-		c.compileStatements(s.Consequent, needResult)
+		c.compileStatements(needResult, s.Consequent...)
 	}
 
 	if jumpNoMatch != -1 {

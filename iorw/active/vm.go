@@ -10,15 +10,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lnksnk/lnksnk/es"
 	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw"
 
-	"github.com/lnksnk/lnksnk/ja"
-	"github.com/lnksnk/lnksnk/ja/parser"
+	"github.com/lnksnk/lnksnk/es/parser"
 )
 
 type VM struct {
-	vm            *ja.Runtime
+	vm            *es.Runtime
 	objmap        map[string]interface{}
 	DisposeObject func(string, interface{})
 	W             io.Writer
@@ -26,7 +26,7 @@ type VM struct {
 	buffs         map[*iorw.Buffer]*iorw.Buffer
 	ErrPrint      func(...interface{}) error
 	FS            *fsutils.FSUtils
-	ImportModule  func(referencingScriptOrModule interface{}, specifier ja.Value, promiseCapability interface{})
+	ImportModule  func(referencingScriptOrModule interface{}, specifier es.Value, promiseCapability interface{})
 }
 
 func NewVM(a ...interface{}) (vm *VM) {
@@ -53,7 +53,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 			}
 		}
 	}
-	vm = &VM{vm: ja.New(), W: w, R: r, objmap: map[string]interface{}{}}
+	vm = &VM{vm: es.New(), W: w, R: r, objmap: map[string]interface{}{}}
 	vm.Set("console", map[string]interface{}{
 		"log": func(a ...interface{}) {
 			iorw.Fprintln(os.Stdout, a...)
@@ -66,7 +66,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 		},
 	})
 	vm.vm.RunProgram(adhocPrgm)
-	var fldmppr = &fieldmapper{fldmppr: ja.UncapFieldNameMapper()}
+	var fldmppr = &fieldmapper{fldmppr: es.UncapFieldNameMapper()}
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {
 		if stngv != nil {
@@ -83,7 +83,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 	vm.vm.SetImportModule(func(modname string, namedimports ...[][]string) bool {
 		return DefaultModuleManager.RunModule(vm.vm, vm.FS, modname, namedimports...) == nil
 	})
-	vm.vm.SetRequire(func(modname string) (exports *ja.Object) {
+	vm.vm.SetRequire(func(modname string) (exports *es.Object) {
 		exports, _ = DefaultModuleManager.Require(vm.vm, vm.FS, modname)
 		return
 	})
@@ -160,7 +160,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 }
 
 type fieldmapper struct {
-	fldmppr ja.FieldNameMapper
+	fldmppr es.FieldNameMapper
 }
 
 // FieldName returns a JavaScript name for the given struct field in the given type.
@@ -206,7 +206,7 @@ func uncapitalize(s string) (nme string) {
 	return nme
 }
 
-func (vm *VM) ImportModuleDynamically(referencingScriptOrModule interface{}, specifier ja.Value, promiseCapability interface{}) {
+func (vm *VM) ImportModuleDynamically(referencingScriptOrModule interface{}, specifier es.Value, promiseCapability interface{}) {
 
 }
 
@@ -242,21 +242,21 @@ func (vm *VM) Set(objname string, obj interface{}) {
 func (vm *VM) InvokeFunction(functocall interface{}, args ...interface{}) (result interface{}) {
 	if functocall != nil {
 		if vm != nil && vm.vm != nil {
-			var fnccallargs []ja.Value = nil
+			var fnccallargs []es.Value = nil
 			var argsn = 0
 
 			for argsn < len(args) {
 				if fnccallargs == nil {
-					fnccallargs = make([]ja.Value, len(args))
+					fnccallargs = make([]es.Value, len(args))
 				}
 				fnccallargs[argsn] = vm.vm.ToValue(args[argsn])
 				argsn++
 			}
-			if atvfunc, atvfuncok := functocall.(func(ja.FunctionCall) ja.Value); atvfuncok {
+			if atvfunc, atvfuncok := functocall.(func(es.FunctionCall) es.Value); atvfuncok {
 				if len(fnccallargs) == 0 || fnccallargs == nil {
-					fnccallargs = []ja.Value{}
+					fnccallargs = []es.Value{}
 				}
-				var funccll = ja.FunctionCall{This: ja.Undefined(), Arguments: fnccallargs}
+				var funccll = es.FunctionCall{This: es.Undefined(), Arguments: fnccallargs}
 				if rsltval := atvfunc(funccll); rsltval != nil {
 					result = rsltval.Export()
 				}
@@ -362,7 +362,7 @@ func (prgmodmngr *programModElemManager) InvokeModule(fs *fsutils.FSUtils, speci
 	return
 }
 
-func (prgmodmngr *programModElemManager) Require(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string) (export *ja.Object, err error) {
+func (prgmodmngr *programModElemManager) Require(vm *es.Runtime, fs *fsutils.FSUtils, specifier string) (export *es.Object, err error) {
 	if prgmodmngr == nil {
 		return
 	}
@@ -416,7 +416,7 @@ func (prgmodmngr *programModElemManager) Require(vm *ja.Runtime, fs *fsutils.FSU
 	return
 }
 
-func (prgmodmngr *programModElemManager) RunModule(vm *ja.Runtime, fs *fsutils.FSUtils, specifier string, namedimports ...[][]string) (err error) {
+func (prgmodmngr *programModElemManager) RunModule(vm *es.Runtime, fs *fsutils.FSUtils, specifier string, namedimports ...[][]string) (err error) {
 	if prgmodmngr == nil {
 		return
 	}
@@ -526,7 +526,7 @@ func newProgramModElement(prgmodmngr *programModElemManager, specifier string, f
 					}
 				}
 			}
-			p, perr := ja.ParseModule(specifier, src, func(referencingScriptOrModule interface{}, modspecifier string) (ja.ModuleRecord, error) {
+			p, perr := es.ParseModule(specifier, src, func(referencingScriptOrModule interface{}, modspecifier string) (es.ModuleRecord, error) {
 				if prgmodelm = prgmodmngr.Module(modspecifier); prgmodelm != nil {
 					return prgmodelm.m, nil
 				}
@@ -563,15 +563,15 @@ var DefaultModuleManager = &programModElemManager{prgmodelms: &sync.Map{}}
 type programModElement struct {
 	prgmodmngr *programModElemManager
 	modfied    time.Time
-	m          ja.ModuleRecord
-	prgm       *ja.Program
+	m          es.ModuleRecord
+	prgm       *es.Program
 }
 
 func (prgmodElm *programModElement) Invoke(fs *fsutils.FSUtils, specifier string) {
 
 }
 
-func (prgmodElm *programModElement) RunMod(vm *ja.Runtime, fs *fsutils.FSUtils, namedimports ...[][]string) {
+func (prgmodElm *programModElement) RunMod(vm *es.Runtime, fs *fsutils.FSUtils, namedimports ...[][]string) {
 	if prgmodElm == nil {
 		return
 	}
@@ -596,7 +596,7 @@ func (prgmodElm *programModElement) RunMod(vm *ja.Runtime, fs *fsutils.FSUtils, 
 	}
 }
 
-func (prgmodElm *programModElement) RequireMod(vm *ja.Runtime, fs *fsutils.FSUtils) (exports *ja.Object) {
+func (prgmodElm *programModElement) RequireMod(vm *es.Runtime, fs *fsutils.FSUtils) (exports *es.Object) {
 	if prgmodElm == nil {
 		return
 	}
@@ -605,7 +605,7 @@ func (prgmodElm *programModElement) RequireMod(vm *ja.Runtime, fs *fsutils.FSUti
 
 	if vm != nil {
 		evalprms := m.Evaluate(vm)
-		if evalprms.State() == ja.PromiseStateFulfilled {
+		if evalprms.State() == es.PromiseStateFulfilled {
 			exports = vm.NamespaceObjectFor(m)
 		}
 	}
@@ -625,13 +625,13 @@ func (prserr *parseerr) Code() string {
 	return prserr.cde
 }
 
-func Compile(a ...interface{}) (p *ja.Program, perr error) {
+func Compile(a ...interface{}) (p *es.Program, perr error) {
 	var ai, ail = 0, len(a)
 	var cdes = ""
-	var chdprgm *ja.Program = nil
+	var chdprgm *es.Program = nil
 	var setchdprgm func(interface{}, error, error)
 	for ai < ail {
-		if chdpgrmd, chdpgrmdok := a[ai].(*ja.Program); chdpgrmdok {
+		if chdpgrmd, chdpgrmdok := a[ai].(*es.Program); chdpgrmdok {
 			if chdprgm == nil && chdpgrmd != nil {
 				chdprgm = chdpgrmd
 			}
@@ -654,7 +654,6 @@ func Compile(a ...interface{}) (p *ja.Program, perr error) {
 			var cde = iorw.NewMultiArgsReader(a...)
 			defer cde.Close()
 			cdes, _ = cde.ReadAll()
-
 			prsd, prsderr := parser.ParseFile(nil, "", cdes, 0, parser.WithDisableSourceMaps, parser.IsModule)
 			if prsderr != nil {
 				if setchdprgm != nil {
@@ -663,7 +662,7 @@ func Compile(a ...interface{}) (p *ja.Program, perr error) {
 				perr = &parseerr{cde: cdes, err: prsderr}
 				return
 			}
-			p, perr = ja.CompileAST(prsd, false)
+			p, perr = es.CompileAST(prsd, false)
 			if perr != nil {
 				if setchdprgm != nil {
 					setchdprgm(nil, nil, perr)
@@ -683,7 +682,7 @@ func Compile(a ...interface{}) (p *ja.Program, perr error) {
 func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 	if vm != nil && vm.vm != nil {
 		//var cdes = ""
-		//var chdprgm *ja.Program = nil
+		//var chdprgm *es.Program = nil
 		//var setchdprgm func(interface{}, error, error)
 		var ai, ail = 0, len(a)
 
@@ -795,7 +794,7 @@ func (vm *VM) Close() {
 
 var gobalMods *sync.Map
 
-var adhocPrgm *ja.Program = nil
+var adhocPrgm *es.Program = nil
 
 func LoadGlobalModule(modname string, a ...interface{}) {
 	if _, ok := gobalMods.Load(modname); ok {
@@ -804,8 +803,8 @@ func LoadGlobalModule(modname string, a ...interface{}) {
 		func() {
 			var cdebuf = iorw.NewBuffer()
 			defer cdebuf.Close()
-			if prgmast, _ := ja.Parse(modname, cdebuf.String()); prgmast != nil {
-				if prgm, _ := ja.CompileAST(prgmast, false); prgm != nil {
+			if prgmast, _ := es.Parse(modname, cdebuf.String()); prgmast != nil {
+				if prgm, _ := es.CompileAST(prgmast, false); prgm != nil {
 					gobalMods.Store(modname, prgm)
 				}
 			}
@@ -813,9 +812,9 @@ func LoadGlobalModule(modname string, a ...interface{}) {
 	}
 }
 
-func IncludeModule(vm *ja.Runtime, modname string) {
+func IncludeModule(vm *es.Runtime, modname string) {
 	if prgv, ok := gobalMods.Load(modname); ok {
-		if prg, _ := prgv.(*ja.Program); prg != nil {
+		if prg, _ := prgv.(*es.Program); prg != nil {
 			vm.RunProgram(prg)
 		}
 	}
@@ -825,7 +824,7 @@ func init() {
 
 	gobalMods = &sync.Map{}
 
-	if adhocast, _ := ja.Parse(``, `_methods = (obj) => {
+	if adhocast, _ := es.Parse(``, `_methods = (obj) => {
 		let properties = new Set()
 		let currentObj = obj
 		Object.entries(currentObj).forEach((key)=>{
@@ -860,7 +859,7 @@ func init() {
 		}
 		return [...properties.keys()].filter(item => item!=='__proto__' && typeof obj[item] !== 'function')
 	}`); adhocast != nil {
-		adhocPrgm, _ = ja.CompileAST(adhocast, false)
+		adhocPrgm, _ = es.CompileAST(adhocast, false)
 	}
 
 }
