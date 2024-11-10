@@ -13,7 +13,6 @@ import (
 	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw"
 	"github.com/lnksnk/lnksnk/iorw/active"
-	"github.com/lnksnk/lnksnk/ja"
 	"github.com/lnksnk/lnksnk/mimes"
 	"github.com/lnksnk/lnksnk/parameters"
 	"github.com/lnksnk/lnksnk/serve/serveio"
@@ -479,12 +478,4 @@ func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fs
 		}
 	}
 	return
-}
-
-var testprgm *ja.Program = nil
-
-func init() {
-	testprgm, _ = ja.Compile("", `print("<html><body>"); print("<ul>"); var rec=db.qry("lnksnk_etl","select now() d;"); while(rec.next()) {
-		print("<li>",rec.data()[0],"</li>");
-	} print("</ul>"); print("</body></html>");`, false)
 }
