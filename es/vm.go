@@ -377,7 +377,7 @@ type vm struct {
 
 	curAsyncRunner *asyncRunner
 
-	profTracker *profTracker
+	//profTracker *profTracker
 }
 
 type instruction interface {
@@ -611,21 +611,21 @@ func (vm *vm) halted() bool {
 }
 
 func (vm *vm) run() {
-	if vm.profTracker != nil && !vm.runWithProfiler() {
-		return
-	}
-	count := 0
+	//if vm.profTracker != nil && !vm.runWithProfiler() {
+	//	return
+	//}
+	//count := 0
 	interrupted := false
 	for {
-		if count == 0 {
-			if atomic.LoadInt32(&globalProfiler.enabled) == 1 && !vm.runWithProfiler() {
-				return
-			}
-			count = 100
-			goto dorun
-		}
-	dorun:
-		count--
+		//if count == 0 {
+		//if atomic.LoadInt32(&globalProfiler.enabled) == 1 && !vm.runWithProfiler() {
+		//	return
+		//}
+		//count = 100
+		//goto dorun
+		//}
+		//dorun:
+		//	count--
 		if interrupted = atomic.LoadUint32(&vm.interrupted) != 0; interrupted {
 			goto dointerrupt
 		}
@@ -647,7 +647,7 @@ dointerrupt:
 	}
 }
 
-func (vm *vm) runWithProfiler() bool {
+/*func (vm *vm) runWithProfiler() bool {
 	pt := vm.profTracker
 	if pt == nil {
 		pt = globalProfiler.p.registerVm()
@@ -681,7 +681,7 @@ func (vm *vm) runWithProfiler() bool {
 	}
 
 	return false
-}
+}*/
 
 func (vm *vm) Interrupt(v interface{}) {
 	vm.interruptLock.Lock()
