@@ -445,29 +445,20 @@ func (rscngepnt *ResourcingEndpoint) fsabs(path ...string) (abspath string, err 
 	return
 }
 
+func checkPathMask(path string, mask string) (vld bool) {
+	vld, _ = filepath.Match(mask, path)
+	return
+}
+
 func localLs(pathroot, path string) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
 	if path != "" && strings.ContainsAny(path, "*.?") {
 		if strings.ContainsAny(path, "*?") {
-			if path == "*" {
-				if f, ferr := os.Open(pathroot); f != nil && ferr == nil {
-					defer f.Close()
-					if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
-						lclfsinfo = append(lclfsinfo, flclfinfos...)
-					}
-				}
-				return
-			}
-			if strings.ContainsAny(path, "*.?") {
-				if f, ferr := os.Open(pathroot + path); f != nil && ferr == nil {
-					defer f.Close()
-					if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
-						for _, flclfi := range flclfinfos {
-							if flclfi.IsDir() {
-								continue
-							}
-							if ext := filepath.Ext(flclfi.Name()); ext == path {
-								lclfsinfo = append(lclfsinfo, flclfi)
-							}
+			if f, ferr := os.Open(pathroot); f != nil && ferr == nil {
+				defer f.Close()
+				if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
+					for _, flclfi := range flclfinfos {
+						if checkPathMask(flclfi.Name(), path) {
+							lclfsinfo = append(lclfsinfo, flclfi)
 						}
 					}
 				}
