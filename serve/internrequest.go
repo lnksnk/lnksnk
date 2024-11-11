@@ -81,9 +81,6 @@ func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fs
 	defer params.CleanupParameters()
 	var ctx context.Context = nil
 
-	if ctx != nil {
-		ctx = nil
-	}
 	if In != nil {
 		ctx = In.Context()
 		defer In.Close()

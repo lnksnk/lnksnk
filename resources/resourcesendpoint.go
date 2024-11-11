@@ -521,13 +521,22 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 			subdone[subpth] = true
 			lclroot, lclfsinfos := localLs(rscngepnt.path+subroot, subpth)
 			if lclroot != nil {
+				if subroot == "" && rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+					subroot = "/"
+				}
 				finfos = append(finfos, fsutils.DUMMYFINFO("", rsroot+subroot, rsroot+subroot, rsroot, lclroot.Size(), lclroot.Mode(), lclroot.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
 			}
 			for _, lclfin := range lclfsinfos {
 				if lclfin != nil {
 					if lclfin.IsDir() {
+						if subroot == "" && rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+							subroot = "/"
+						}
 						finfos = append(finfos, fsutils.DUMMYFINFO(lclfin.Name(), rsroot+subroot+lclfin.Name()+"/", rsroot+subroot+lclfin.Name()+"/", rsroot, lclfin.Size(), lclfin.Mode(), lclfin.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
 						continue
+					}
+					if subroot == "" && rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+						subroot = "/"
 					}
 					finfos = append(finfos, fsutils.DUMMYFINFO(lclfin.Name(), rsroot+subroot+lclfin.Name(), rsroot+subroot+lclfin.Name(), rsroot, lclfin.Size(), lclfin.Mode(), lclfin.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
 				}
