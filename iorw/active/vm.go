@@ -703,6 +703,7 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 			p, perr := Compile(a...)
 			if perr != nil {
 				err = perr
+				return
 			}
 			gojaval, gojaerr := vm.vm.RunProgram(p)
 			if gojaerr == nil {
