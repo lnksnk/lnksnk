@@ -12,7 +12,6 @@ import (
 	_ "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pkg/errors"
 	//_ "github.com/lib/pq"
 )
@@ -37,7 +36,10 @@ func Open(datasource string) (db *sql.DB, err error) {
 
 func OpenPool(datasource string) (db *sql.DB, err error) {
 	if !strings.Contains(datasource, "pool_max_conn_lifetime=") {
-		datasource += " pool_max_conn_lifetime=10s"
+		datasource += " pool_max_conn_lifetime=10s pool_health_check_period=20s"
+	}
+	if !strings.Contains(datasource, "pool_health_check_period=") {
+		datasource += " pool_health_check_period=20s"
 	}
 	if !strings.Contains(datasource, "sslmode=") {
 		datasource += " sslmode=disable"
