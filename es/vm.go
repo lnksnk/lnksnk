@@ -627,23 +627,19 @@ func (vm *vm) run() {
 		//dorun:
 		//	count--
 		if interrupted = atomic.LoadUint32(&vm.interrupted) != 0; interrupted {
-			goto dointerrupt
+			vm.interruptLock.Lock()
+			v := &InterruptedError{
+				iface: vm.interruptVal,
+			}
+			v.stack = vm.captureStack(nil, 0)
+			vm.interruptLock.Unlock()
+			panic(v)
 		}
 		pc := vm.pc
 		if pc < 0 || pc >= len(vm.prg.code) {
 			break
 		}
 		vm.prg.code[pc].exec(vm)
-	}
-dointerrupt:
-	if interrupted {
-		vm.interruptLock.Lock()
-		v := &InterruptedError{
-			iface: vm.interruptVal,
-		}
-		v.stack = vm.captureStack(nil, 0)
-		vm.interruptLock.Unlock()
-		panic(v)
 	}
 }
 
