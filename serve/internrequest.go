@@ -329,6 +329,12 @@ func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fs
 				dbhnlr = nil
 			}
 		}()
+		vm.Set("isMobile", func() bool {
+			if In != nil {
+				return In.IsMobile()
+			}
+			return false
+		})
 		vm.Set("_cache", map[string]interface{}{
 			"count": func() (cnt int) {
 				if caching != nil {

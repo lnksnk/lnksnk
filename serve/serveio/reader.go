@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -14,10 +15,12 @@ type Reader interface {
 	RangeType() string
 	io.ReadCloser
 	io.RuneReader
+	Header() http.Header
 	Context() context.Context
 	Cancel()
 	HttpR() *http.Request
 	Path() string
+	IsMobile() bool
 }
 
 type reader struct {
@@ -42,6 +45,32 @@ func (rqr *reader) HttpR() (httpr *http.Request) {
 		httpr = rqr.httpr
 	}
 	return
+}
+
+var mobileRE, _ = regexp.Compile(`/(android|bb\d+|meego).+mobile|armv7l|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|redmi|series[46]0|samsungbrowser.*mobile|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i`)
+var notMobileRE, _ = regexp.Compile(`/CrOS/`)
+var tabletRE, _ = regexp.Compile(`/android|ipad|playbook|silk/i`)
+
+func (rqr *reader) IsMobile() (mobile bool) {
+	if rqr != nil {
+		if hr := rqr.Header(); hr != nil {
+			if au := hr.Get("User-Agent"); au != "" {
+				if mobile = (mobileRE.MatchString(au) && !notMobileRE.MatchString(au)) || tabletRE.MatchString(au); !mobile {
+					mobile = strings.Contains(strings.ToLower(au), "mobile")
+				}
+			}
+		}
+	}
+	return
+}
+
+func (rqr *reader) Header() http.Header {
+	if rqr != nil {
+		if httpr := rqr.httpr; httpr != nil {
+			return httpr.Header
+		}
+	}
+	return nil
 }
 
 func (rqr *reader) Path() string {
