@@ -1035,6 +1035,7 @@ func internalProcessParsing(
 	}()
 	var chdrnsi = 0
 	var ctntflush func(flscde ...bool) (flsherr error)
+	var ctntrplc = map[string]string{"${": "\\${", "`": "\\`", `"\`: `"\\`}
 	ctntflush = func(flscde ...bool) (flsherr error) {
 		if len(flscde) == 1 && flscde[0] {
 			if fndcode && cdernsi > 0 {
@@ -1067,43 +1068,14 @@ func internalProcessParsing(
 			var cntntrdr io.RuneReader = nil
 			if hstmpltfx {
 				cntntrdr = ctntbuf.Clone(true).Reader(true)
-			} else {
-				//ts := ctntbuf.String()
-
-				cntntrdr = iorw.ReadRunesUntil(ctntbuf.Clone(true).Reader(true), "`", "${", `"\`,
-					func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) interface{} {
-						if phrase == "`" {
-							flushrdr.PreAppendArgs("\\`")
-							return nil
-						}
-						if phrase == "${" {
-							brsbuf, brserr := iorw.NewBufferError(iorw.ReadRunesUntil(orgrdr, "}", "`", func(brphrase string, brsuntilrdr io.RuneReader, brsorgrdr iorw.SliceRuneReader, brsorgerr error, brsflushrdr iorw.SliceRuneReader) error {
-								if phrase == "`" {
-									brsflushrdr.PreAppendArgs("\\`")
-									return nil
-								}
-								return fmt.Errorf("%s", phrase)
-							}))
-							if brserr != nil {
-								if brserr.Error() == "}" {
-									brsbuf.Print("}")
-								}
-							}
-							flushrdr.PreAppendArgs("\\${", brsbuf.Reader(true))
-							return nil
-						}
-						if phrase == `"\` {
-							flushrdr.PreAppendArgs(`"\\`)
-							return nil
-						}
+			} else if contains, found := ctntbuf.ContainsAny("${", "`", `"\`); contains {
+				cntntrdr = iorw.ReadRunesUntil(ctntbuf.Clone(true).Reader(true), found,
+					func(phrase string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
+						flushrdr.PreAppendArgs(ctntrplc[phrase])
 						return nil
 					})
-				//tbf := iorw.NewBuffer(cntntrdr)
-				//if eql, _ := tbf.Equals(ts); !eql {
-				//	fmt.Println(ts)
-				//	fmt.Println(tbf.String())
-				//}
-				//cntntrdr = tbf.Reader(true)
+			} else {
+				cntntrdr = ctntbuf.Clone(true).Reader(true)
 			}
 			if cdelstr > 0 {
 				cdelstr = 0
@@ -1299,7 +1271,7 @@ func internalProcessParsing(
 
 	if !cdebuf.Empty() {
 		if DefaultMinifyCde != nil {
-			prsngerr = DefaultMinifyCde(".js", cdebuf, nil)
+			//prsngerr = DefaultMinifyCde(".js", cdebuf, nil)
 		}
 		if evalcode != nil && prsngerr == nil {
 			var evalresult interface{} = nil
