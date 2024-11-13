@@ -76,6 +76,31 @@ func (buff *Buffer) BuffersLen() (s int) {
 	return len(buff.buffer)
 }
 
+// ContainsAny return true if *Buffer contains any teststring and found []string
+func (buff *Buffer) ContainsAny(teststring ...string) (contains bool, found []string) {
+	if tstl := len(teststring); buff != nil && tstl > 0 && func() bool {
+		tsti := 0
+		for tsti < tstl {
+			if teststring[tsti] == "" {
+				teststring = append(teststring[:tsti], teststring[tsti+1:]...)
+				tstl--
+			}
+			tsti++
+		}
+		return tstl > 0
+	}() {
+		for _, tst := range teststring {
+			if buff.ContainsBytes([]byte(tst)...) {
+				if !contains {
+					contains = true
+				}
+				found = append(found, tst)
+			}
+		}
+	}
+	return
+}
+
 // Contains return true if *Buffer contains teststring
 func (buff *Buffer) Contains(teststring string) (contains bool) {
 	if buff != nil && teststring != "" {
@@ -293,6 +318,21 @@ func foundSuffix(chkbts *checkbytes, bts ...byte) (fnd bool) {
 // ContainsBytes return true if *Buffer contains testbts...
 func (buff *Buffer) ContainsBytes(testbts ...byte) (contains bool) {
 	contains = internalContainsBytes(buff, testbts)
+	return
+}
+
+// ContainsAnyBytes return true and found[][]byte if *Buffer contains testbts...[]byte
+func (buff *Buffer) ContainsAnyBytes(testbts ...[]byte) (contains bool, found [][]byte) {
+	for _, tstb := range testbts {
+		if len(tstb) > 0 {
+			if internalContainsBytes(buff, tstb) {
+				if !contains {
+					contains = true
+				}
+				found = append(found, tstb)
+			}
+		}
+	}
 	return
 }
 
