@@ -290,6 +290,10 @@ func NewReader(strmrdrd interface{}, strmtpe string, strmsttngs map[string]inter
 	return
 }
 
+func (rdr *Reader) Iter(evterr ...func(error)) func(func(*Reader) bool) {
+	return rdr.Iterate(evterr...)
+}
+
 func (rdr *Reader) Iterate(evterr ...func(error)) func(func(*Reader) bool) {
 	return func(yield func(*Reader) bool) {
 		nxt := false
