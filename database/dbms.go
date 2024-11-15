@@ -203,6 +203,17 @@ func (dbmshndlr *DBMSHandler) QueryMap(alias string, a ...interface{}) (mp map[s
 	return
 }
 
+func (dbmshndlr *DBMSHandler) Iter(alias string, a ...interface{}) func(func(*Reader) bool) {
+	return dbmshndlr.Iterate(alias, a...)
+}
+
+func (dbmshndlr *DBMSHandler) Iterate(alias string, a ...interface{}) func(func(*Reader) bool) {
+	if rdr := dbmshndlr.Query(alias, a...); rdr != nil {
+		return rdr.Iterate(rdr.EventError)
+	}
+	return nil
+}
+
 func (dbmshndlr *DBMSHandler) Qry(alias string, a ...interface{}) *Reader {
 	return dbmshndlr.Query(alias, a...)
 }
@@ -478,6 +489,13 @@ func (dbms *DBMS) RegisterDriver(driver string, invokedbcall func(string, ...int
 			drivers.Store(driver, &dbdriver{dbInvoker: invokedbcall, dbParseSqlParam: parseDbSqlParamCall})
 		}
 	}
+}
+
+func (dbms *DBMS) Iterate(alias string, a ...interface{}) func(func(*Reader) bool) {
+	if rdr := dbms.Query(alias, a...); rdr != nil {
+		return rdr.Iterate()
+	}
+	return nil
 }
 
 func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
