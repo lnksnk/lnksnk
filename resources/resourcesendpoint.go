@@ -1122,6 +1122,25 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 			}
 		}*/
 	} else if lkpzpi == -1 {
+		orgpath := path
+		if pthspi := strings.LastIndex(path, "/"); pthspi > -1 {
+			if lklpath != "" {
+				if path[0] == '/' {
+					if lklpath[len(lklpath)-1] == '/' {
+						lklpath += path[1 : pthspi+1]
+					} else {
+						lklpath += path[:pthspi+1]
+					}
+				} else {
+					if lklpath[len(lklpath)-1] == '/' {
+						lklpath += path[:pthspi+1]
+					} else {
+						lklpath += "/" + path[:pthspi+1]
+					}
+				}
+				path = path[pthspi+1:]
+			}
+		}
 		localLs(lklpath, path, func(fi fs.FileInfo, f io.ReadCloser, ferr error) {
 			if !fi.IsDir() {
 				modified = fi.ModTime()
@@ -1151,9 +1170,7 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 				f.Close()
 			}
 		})
-		if fi, fierr := os.Stat(lklpath + path); fierr == nil && !fi.IsDir() {
-
-		}
+		path = orgpath
 	}
 	if rs == nil && cachableExtsBuffs != nil && path != "" {
 		cachableExtsBuffs.Del(path)
