@@ -403,8 +403,9 @@ func (rscngmngr *ResourcingManager) fsmkdir(path ...interface{}) (mkd bool) {
 		var pth2 = ""
 		if pthl > 1 {
 			if pth2, _ = path[1].(string); pth2 != "" {
-				pth2 = strings.Replace(os.Args[0], "\\", "/", -1)
+				pth2 = strings.Replace(pth2, "\\", "/", -1)
 				if pth2 = strings.TrimSpace(pth2); pth2 == "./" {
+					pth2 = strings.Replace(os.Args[0], "\\", "/", -1)
 					if lsti := strings.LastIndex(pth2, "/"); lsti > 0 {
 						pth2 = pth2[:lsti]
 					} else if lsti == -1 {
@@ -414,6 +415,7 @@ func (rscngmngr *ResourcingManager) fsmkdir(path ...interface{}) (mkd bool) {
 			}
 			path[1] = pth2
 		}
+
 		if pth1 != "" && !strings.HasPrefix(pth1, "/") {
 			pth1 = "/" + pth1
 		}
