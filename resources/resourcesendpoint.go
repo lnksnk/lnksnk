@@ -1387,6 +1387,6 @@ func nextResourcingEndpoint(rsngmngr *ResourcingManager, path string, raw bool, 
 	return
 }
 
-var cachableExts = map[string]bool{".sql": true, ".html": true, ".htm": true, ".svg": true, ".xml": true, ".js": true}
+var cachableExts = map[string]bool{".sql": true, ".html": true, ".htm": true, ".svg": true, ".xml": true, ".js": true, ".css": true}
 
 var cachableExtsBuffs = iocaching.NewBufferCache()
