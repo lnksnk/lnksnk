@@ -499,17 +499,15 @@ func (r *Runtime) continueDynamicImport(promiseCapability *promiseCapability, re
 		// a. a. Let link be Completion(module.Link()).
 		err := module.Link()
 		if err != nil {
-			if err != nil {
-				switch x1 := err.(type) {
-				case *CompilerSyntaxError:
-					err = &Exception{
-						val: r.builtin_new(r.getSyntaxError(), []Value{newStringValue(x1.Error())}),
-					}
-				case *CompilerReferenceError:
-					err = &Exception{
-						val: r.newError(r.getReferenceError(), x1.Message),
-					} // TODO proper message
+			switch x1 := err.(type) {
+			case *CompilerSyntaxError:
+				err = &Exception{
+					val: r.builtin_new(r.getSyntaxError(), []Value{newStringValue(x1.Error())}),
 				}
+			case *CompilerReferenceError:
+				err = &Exception{
+					val: r.newError(r.getReferenceError(), x1.Message),
+				} // TODO proper message
 			}
 			promiseCapability.reject(r.ToValue(err))
 			return nil
