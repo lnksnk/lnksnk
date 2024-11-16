@@ -448,7 +448,7 @@ func checkPathMask(path string, mask string) (vld bool) {
 	return
 }
 
-func localCompressLs(pathroot, pzpext, path string, fnrd ...func(f io.ReadCloser, err error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+func localCompressLs(pathroot, pzpext, path string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, err error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
 	lstpzi := 0
 
 	for {
@@ -523,9 +523,8 @@ func localCompressLs(pathroot, pzpext, path string, fnrd ...func(f io.ReadCloser
 									}
 								}
 								if len(fnrd) == 1 && fnrd[0] != nil {
-									lclfsinfo = append(lclfsinfo, zfi)
 									f, ferr := zf.Open()
-									fnrd[0](f, ferr)
+									fnrd[0](zfi, f, ferr)
 									if ferr == nil {
 										return true
 									}
@@ -550,24 +549,58 @@ func localCompressLs(pathroot, pzpext, path string, fnrd ...func(f io.ReadCloser
 	}
 }
 
-func localLs(pathroot, path string) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+func localLs(pathroot, path string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, err error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
 	if lkpzpi, lkpzpext := lkpzpextindex(pathroot); lkpzpi > 0 {
-		return localCompressLs(pathroot, lkpzpext, path)
+		return localCompressLs(pathroot, lkpzpext, path, fnrd...)
 	}
-	if path != "" && strings.ContainsAny(path, "*.?") {
-		if strings.ContainsAny(path, "*?") {
-			if f, ferr := os.Open(pathroot); f != nil && ferr == nil {
-				defer f.Close()
-				if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
-					for _, flclfi := range flclfinfos {
+
+	if path != "" {
+		chpthmsk := false
+		if path != "" && strings.ContainsAny(path, "*.?") {
+			chpthmsk = strings.ContainsAny(path, "*?")
+		}
+
+		if path != "" && path[0] == '/' {
+			path = path[1:]
+			if pathroot != "" && pathroot[len(pathroot)-1] != '/' {
+				pathroot += "/"
+			}
+		}
+		if f, ferr := os.Open(pathroot); f != nil && ferr == nil {
+			defer func() {
+				if len(fnrd) > 0 && fnrd[0] != nil {
+					fnrd[0] = nil
+				}
+				f.Close()
+			}()
+			if flclfinfos, _ := f.Readdir(0); len(flclfinfos) > 0 {
+				for _, flclfi := range flclfinfos {
+					if chpthmsk {
 						if checkPathMask(flclfi.Name(), path) {
 							lclfsinfo = append(lclfsinfo, flclfi)
 						}
+						continue
+					}
+					if path != "" {
+						if path == flclfi.Name() {
+							if len(fnrd) > 0 && fnrd[0] != nil {
+								f, ferr := os.Open(pathroot + path)
+								if ferr == nil {
+									fnrd[0](flclfi, f, ferr)
+									return
+								}
+								return
+							}
+							lclfsinfo = append(lclfsinfo, flclfi)
+							return
+						}
+						continue
 					}
 				}
-				return
 			}
+			return
 		}
+		return
 	}
 	if fi, _ := os.Stat(pathroot + path); fi != nil {
 		if fi.IsDir() {
@@ -931,35 +964,32 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 				path = path[pthspi+1:]
 			}
 		}
-		_, cprsfis := localCompressLs(lklpath, lkpzpext, path, func(zf io.ReadCloser, ferr error) {
-			if ferr != nil {
-				return
-			}
-			if cachableExtsBuffs != nil && cachableExts[filepath.Ext(orgpath)] {
-				if bufr, bofmod := cachableExtsBuffs.Reader(orgpath); bufr == nil || (modified != bofmod) {
-					func() {
-						defer zf.Close()
-						if prebf, prebferr := iorw.NewBufferError(zf); prebferr == nil {
-							cachableExtsBuffs.Set(orgpath, modified, prebf.Reader())
-							if fsNotifyEvent != nil {
-								go fsNotifyEvent(orgpath, modified)
-							}
-						}
-					}()
-					rs, _ = cachableExtsBuffs.Reader(orgpath)
-				} else if bufr != nil {
-					rs = bufr
+		if path != "" {
+			localCompressLs(lklpath, lkpzpext, path, func(zfi fs.FileInfo, zf io.ReadCloser, ferr error) {
+				if ferr != nil {
+					return
 				}
-			} else {
-				rs = zf
-			}
-			return
-		})
-		for _, cprfi := range cprsfis {
-			if !cprfi.IsDir() {
-
-			}
-			return
+				modified = zfi.ModTime()
+				if cachableExtsBuffs != nil && cachableExts[filepath.Ext(orgpath)] {
+					if bufr, bofmod := cachableExtsBuffs.Reader(orgpath); bufr == nil || (modified != bofmod) {
+						func() {
+							defer zf.Close()
+							if prebf, prebferr := iorw.NewBufferError(zf); prebferr == nil {
+								cachableExtsBuffs.Set(orgpath, modified, prebf.Reader())
+								if fsNotifyEvent != nil {
+									go fsNotifyEvent(orgpath, modified)
+								}
+							}
+						}()
+						rs, _ = cachableExtsBuffs.Reader(orgpath)
+					} else {
+						rs = bufr
+					}
+				} else {
+					rs = zf
+				}
+			})
+			path = orgpath
 		}
 		/*var tmppath = ""
 		var zpext = ""
@@ -1092,30 +1122,37 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 			}
 		}*/
 	} else if lkpzpi == -1 {
-		if fi, fierr := os.Stat(lklpath + path); fierr == nil && !fi.IsDir() {
-			modified = fi.ModTime()
-			if cachableExtsBuffs != nil && cachableExts[filepath.Ext(path)] {
-				if bufr, bufmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufmod != fi.ModTime()) {
-					if f, ferr := os.Open(lklpath + path); ferr == nil && f != nil {
-						func() {
-							defer f.Close()
-							if prebf, prebferr := iorw.NewBufferError(f); prebferr == nil {
-								cachableExtsBuffs.Set(path, fi.ModTime(), prebf.Reader())
-								if fsNotifyEvent != nil {
-									go fsNotifyEvent(path, modified)
+		localLs(lklpath, path, func(fi fs.FileInfo, f io.ReadCloser, ferr error) {
+			if !fi.IsDir() {
+				modified = fi.ModTime()
+				if cachableExtsBuffs != nil && cachableExts[filepath.Ext(path)] {
+					if bufr, bufmod := cachableExtsBuffs.Reader(path); bufr == nil || (bufmod != fi.ModTime()) {
+						if f != nil {
+							func() {
+								defer f.Close()
+								if prebf, prebferr := iorw.NewBufferError(f); prebferr == nil {
+									cachableExtsBuffs.Set(path, fi.ModTime(), prebf.Reader())
+									if fsNotifyEvent != nil {
+										go fsNotifyEvent(path, modified)
+									}
 								}
-							}
-						}()
-						rs, _ = cachableExtsBuffs.Reader(path)
+							}()
+							rs, _ = cachableExtsBuffs.Reader(path)
+						}
+					} else {
+						rs = bufr
 					}
-				} else {
-					rs = bufr
+				} else if ferr == nil {
+					rs = f
+				} else if ferr != nil {
+					err = ferr
 				}
-			} else if f, ferr := os.Open(lklpath + path); ferr == nil && f != nil {
-				rs = f
-			} else if ferr != nil {
-				err = ferr
+			} else if f != nil {
+				f.Close()
 			}
+		})
+		if fi, fierr := os.Stat(lklpath + path); fierr == nil && !fi.IsDir() {
+
 		}
 	}
 	if rs == nil && cachableExtsBuffs != nil && path != "" {
