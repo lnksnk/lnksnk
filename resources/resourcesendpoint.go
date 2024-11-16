@@ -1,9 +1,7 @@
 package resources
 
 import (
-	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -450,7 +448,112 @@ func checkPathMask(path string, mask string) (vld bool) {
 	return
 }
 
+func localCompressLs(pathroot, pzpext, path string, fnrd ...func(f io.ReadCloser, err error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+	lstpzi := 0
+
+	for {
+		if nxtpzi := strings.Index(pathroot[lstpzi:], pzpext); nxtpzi > 0 {
+			if curntpzpath := pathroot[lstpzi : nxtpzi+len(pzpext)]; curntpzpath != "" {
+				if pzpext == ".zip" {
+					rmndrpath := pathroot[nxtpzi+len(pzpext)+1:]
+					rmndrpthl := len(rmndrpath)
+					zpr, zprerr := zip.OpenReader(curntpzpath)
+					if func() bool {
+						defer func() {
+							if len(fnrd) == 0 || fnrd[0] == nil {
+								zpr.Close()
+							}
+						}()
+
+						if zprerr != nil {
+							return true
+						}
+						zpfls := zpr.File
+						var iterzp = func(yield func(*zip.File) bool) {
+							lzp := len(zpfls)
+							chpthmsk := false
+							if path != "" && strings.ContainsAny(path, "*.?") {
+								chpthmsk = strings.ContainsAny(path, "*?")
+							}
+							for lzp > 0 {
+								zf := zpfls[0]
+
+								zpfls = zpfls[1:]
+								lzp--
+								zfnml, zfnm := len(zf.Name), zf.Name
+								if zfnml >= rmndrpthl && zfnm[:rmndrpthl] == rmndrpath {
+									tstnme := zf.Name[rmndrpthl:]
+									zpthi := strings.Index(tstnme, "/")
+									if (zpthi > -1 && tstnme == tstnme[:zpthi+1]) || zpthi == -1 {
+										if chpthmsk {
+											if checkPathMask(tstnme, path) {
+												if !yield(zf) {
+													return
+												}
+												continue
+											}
+											continue
+										}
+										if path == "" {
+											if tstnme == "" {
+												if !yield(zf) {
+													return
+												}
+												return
+											}
+											continue
+										}
+										if tstnme != "" && tstnme == path {
+											if !yield(zf) {
+												return
+											}
+											return
+										}
+									}
+								}
+							}
+						}
+						for zf := range iterzp {
+							zfi := zf.FileHeader.FileInfo()
+							if zfi != nil {
+								if zfi.IsDir() {
+									if path == "" {
+										lsroot = zfi
+										return true
+									}
+								}
+								if len(fnrd) == 1 && fnrd[0] != nil {
+									lclfsinfo = append(lclfsinfo, zfi)
+									f, ferr := zf.Open()
+									fnrd[0](f, ferr)
+									if ferr == nil {
+										return true
+									}
+									fnrd[0] = nil
+									return true
+								}
+								lclfsinfo = append(lclfsinfo, zfi)
+								continue
+							}
+
+						}
+						return false
+					}() {
+						return
+					}
+				}
+				lstpzi = nxtpzi + len(pzpext)
+			}
+			continue
+		}
+		return
+	}
+}
+
 func localLs(pathroot, path string) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+	if lkpzpi, lkpzpext := lkpzpextindex(pathroot); lkpzpi > 0 {
+		return localCompressLs(pathroot, lkpzpext, path)
+	}
 	if path != "" && strings.ContainsAny(path, "*.?") {
 		if strings.ContainsAny(path, "*?") {
 			if f, ferr := os.Open(pathroot); f != nil && ferr == nil {
@@ -510,24 +613,43 @@ func (rscngepnt *ResourcingEndpoint) fsls(paths ...interface{}) (finfos []fsutil
 				continue
 			}
 			subdone[subpth] = true
-			lclroot, lclfsinfos := localLs(rscngepnt.path+subroot, subpth)
-			if lclroot != nil {
-				if subroot == "" && rsroot != "" && rsroot[len(rsroot)-1] != '/' {
-					subroot = "/"
+
+			lclroot, lclfsinfos := localLs(func() string {
+				if subroot != "" && rscngepnt.path[len(rscngepnt.path)-1] != '/' && subroot[0] != '/' {
+					return rscngepnt.path + "/" + subroot
 				}
+				return rscngepnt.path + subroot
+			}(), subpth)
+			if lclroot != nil {
+				if subroot == "" {
+					if rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+						subroot = "/"
+					}
+				} else if rsroot != "" && rsroot[len(rsroot)-1] != '/' && subroot[0] != '/' {
+					subroot = "/" + subroot
+				}
+
 				finfos = append(finfos, fsutils.DUMMYFINFO("", rsroot+subroot, rsroot+subroot, rsroot, lclroot.Size(), lclroot.Mode(), lclroot.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
 			}
 			for _, lclfin := range lclfsinfos {
 				if lclfin != nil {
 					if lclfin.IsDir() {
-						if subroot == "" && rsroot != "" && rsroot[len(rsroot)-1] != '/' {
-							subroot = "/"
+						if subroot == "" {
+							if rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+								subroot = "/"
+							}
+						} else if rsroot != "" && rsroot[len(rsroot)-1] != '/' && subroot[0] != '/' {
+							subroot = "/" + subroot
 						}
 						finfos = append(finfos, fsutils.DUMMYFINFO(lclfin.Name(), rsroot+subroot+lclfin.Name()+"/", rsroot+subroot+lclfin.Name()+"/", rsroot, lclfin.Size(), lclfin.Mode(), lclfin.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
 						continue
 					}
-					if subroot == "" && rsroot != "" && rsroot[len(rsroot)-1] != '/' {
-						subroot = "/"
+					if subroot == "" {
+						if rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+							subroot = "/"
+						}
+					} else if rsroot != "" && rsroot[len(rsroot)-1] != '/' && subroot[0] != '/' {
+						subroot = "/" + subroot
 					}
 					finfos = append(finfos, fsutils.DUMMYFINFO(lclfin.Name(), rsroot+subroot+lclfin.Name(), rsroot+subroot+lclfin.Name(), rsroot, lclfin.Size(), lclfin.Mode(), lclfin.ModTime(), rscngepnt.isActive, rscngepnt.isRaw, rscngepnt.fsopener))
 				}
@@ -787,10 +909,59 @@ func OpenReader(name string) (*iorw.EOFCloseSeekReader, error) {
 
 func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.BufferCache, fsNotifyEvent func(path string, modified time.Time)) (rs io.ReadCloser, modified time.Time, err error) {
 	lkpzpi, lkpzpext := lkpzpextindex(lklpath)
-	pthzpi, pthzpext := lkpzpextindex(path)
+	pthzpi, _ := lkpzpextindex(path)
 
 	if lkpzpi > -1 || pthzpi > -1 {
-		var tmppath = ""
+		orgpath := path
+		if pthspi := strings.LastIndex(path, "/"); pthspi > -1 {
+			if lklpath != "" {
+				if path[0] == '/' {
+					if lklpath[len(lklpath)-1] == '/' {
+						lklpath += path[1 : pthspi+1]
+					} else {
+						lklpath += path[:pthspi+1]
+					}
+				} else {
+					if lklpath[len(lklpath)-1] == '/' {
+						lklpath += path[:pthspi+1]
+					} else {
+						lklpath += "/" + path[:pthspi+1]
+					}
+				}
+				path = path[pthspi+1:]
+			}
+		}
+		_, cprsfis := localCompressLs(lklpath, lkpzpext, path, func(zf io.ReadCloser, ferr error) {
+			if ferr != nil {
+				return
+			}
+			if cachableExtsBuffs != nil && cachableExts[filepath.Ext(orgpath)] {
+				if bufr, bofmod := cachableExtsBuffs.Reader(orgpath); bufr == nil || (modified != bofmod) {
+					func() {
+						defer zf.Close()
+						if prebf, prebferr := iorw.NewBufferError(zf); prebferr == nil {
+							cachableExtsBuffs.Set(orgpath, modified, prebf.Reader())
+							if fsNotifyEvent != nil {
+								go fsNotifyEvent(orgpath, modified)
+							}
+						}
+					}()
+					rs, _ = cachableExtsBuffs.Reader(orgpath)
+				} else if bufr != nil {
+					rs = bufr
+				}
+			} else {
+				rs = zf
+			}
+			return
+		})
+		for _, cprfi := range cprsfis {
+			if !cprfi.IsDir() {
+
+			}
+			return
+		}
+		/*var tmppath = ""
 		var zpext = ""
 		var lklpth = ""
 		var tmppaths = strings.Split(func() (pathtouse string) {
@@ -919,7 +1090,7 @@ func getLocalResource(lklpath string, path string, cachableExtsBuffs *iocaching.
 			} else {
 				break
 			}
-		}
+		}*/
 	} else if lkpzpi == -1 {
 		if fi, fierr := os.Stat(lklpath + path); fierr == nil && !fi.IsDir() {
 			modified = fi.ModTime()
@@ -958,7 +1129,7 @@ func (rscngepnt *ResourcingEndpoint) findRS(path string) (rs io.ReadCloser, modi
 		func() {
 			if path = strings.TrimSpace(strings.Replace(path, "\\", "/", -1)); path != "" {
 				embedpath := path
-				if strings.HasPrefix(embedpath, "/") {
+				if embedpath != "" && embedpath[1] == '/' {
 					embedpath = embedpath[1:]
 				}
 				if rscngepnt.fs != nil {
