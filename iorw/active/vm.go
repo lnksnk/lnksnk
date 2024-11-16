@@ -700,6 +700,11 @@ func (vm *VM) Eval(a ...interface{}) (val interface{}, err error) {
 		}
 
 		if func() {
+			defer func() {
+				if x := recover(); x != nil {
+					err, _ = x.(parser.Error)
+				}
+			}()
 			p, perr := Compile(a...)
 			if perr != nil {
 				err = perr
