@@ -1,7 +1,9 @@
 package resources
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -448,105 +450,266 @@ func checkPathMask(path string, mask string) (vld bool) {
 	return
 }
 
+var lkzpextsdefualtfunc = func(pzext, path, curntpzpath, rmndrpath string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, ferr error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+	if r, rerr := OpenReader(curntpzpath + pzext); rerr == nil {
+
+		chpthmsk := false
+		if path != "" && strings.ContainsAny(path, "*.?") {
+			chpthmsk = strings.ContainsAny(path, "*?")
+		}
+		var tarr *tar.Reader = nil
+		defer func() {
+			if len(fnrd) == 0 || fnrd[0] == nil {
+				if tarr != nil {
+					tarr = nil
+				}
+				if r != nil {
+					r.Close()
+				}
+			}
+		}()
+		if pzext == ".tgz" || pzext == ".gz" {
+			if gzr, gzrerr := gzip.NewReader(r); gzrerr != nil {
+
+			} else {
+				tarr = tar.NewReader(iorw.NewEOFCloseSeekReader(gzr, true))
+			}
+		} else if pzext == ".tar" {
+			tarr = tar.NewReader(r)
+		}
+		if tarr != nil {
+			for {
+				trhead, trerr := tarr.Next()
+				if trerr == io.EOF {
+					break
+				} else if trerr != nil {
+					break
+				}
+				if trhead != nil {
+					switch trhead.Typeflag {
+					case tar.TypeReg:
+
+						fpath := trhead.Name
+						finfo := trhead.FileInfo()
+						if path != "" {
+							if chpthmsk {
+								if checkPathMask(fpath, path) {
+									lclfsinfo = append(lclfsinfo, finfo)
+									continue
+								}
+								continue
+							}
+							if path == fpath {
+
+								if len(fnrd) == 1 && fnrd[0] != nil {
+									rdr := iorw.ReadFunc(tarr.Read)
+									f := iorw.NewEOFCloseSeekReader(rdr, true)
+									fnrd[0](finfo, f, nil)
+									fnrd[0] = nil
+									return
+								}
+								lclfsinfo = append(lclfsinfo, finfo)
+							}
+							continue
+						}
+					}
+				} else {
+					continue
+				}
+			}
+		}
+	}
+	return
+}
+var lklzpextsfunc = map[string]func(path, curntpzpath, rmndrpath string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, ferr error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo){".zip": func(path, curntpzpath, rmndrpath string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, ferr error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
+	rmndrpthl := len(rmndrpath)
+	zpr, zprerr := zip.OpenReader(curntpzpath)
+	if func() bool {
+		defer func() {
+			if len(fnrd) == 0 || fnrd[0] == nil {
+				zpr.Close()
+			}
+		}()
+
+		if zprerr != nil {
+			return true
+		}
+		zpfls := zpr.File
+		var iterzp = func(yield func(*zip.File) bool) {
+			lzp := len(zpfls)
+			chpthmsk := false
+			if path != "" && strings.ContainsAny(path, "*.?") {
+				chpthmsk = strings.ContainsAny(path, "*?")
+			}
+			for lzp > 0 {
+				zf := zpfls[0]
+
+				zpfls = zpfls[1:]
+				lzp--
+				zfnml, zfnm := len(zf.Name), zf.Name
+				if zfnml >= rmndrpthl && zfnm[:rmndrpthl] == rmndrpath {
+					tstnme := zf.Name[rmndrpthl:]
+					zpthi := strings.Index(tstnme, "/")
+					if (zpthi > -1 && tstnme == tstnme[:zpthi+1]) || zpthi == -1 {
+						if chpthmsk {
+							if checkPathMask(tstnme, path) {
+								if !yield(zf) {
+									return
+								}
+								continue
+							}
+							continue
+						}
+						if path == "" {
+							if tstnme == "" {
+								if !yield(zf) {
+									return
+								}
+								return
+							}
+							continue
+						}
+						if tstnme != "" && tstnme == path {
+							if !yield(zf) {
+								return
+							}
+							return
+						}
+					}
+				}
+			}
+		}
+		for zf := range iterzp {
+			zfi := zf.FileHeader.FileInfo()
+			if zfi != nil {
+				if zfi.IsDir() {
+					if path == "" {
+						lsroot = zfi
+						return true
+					}
+				}
+				if len(fnrd) == 1 && fnrd[0] != nil {
+					f, ferr := zf.Open()
+					fnrd[0](zfi, f, ferr)
+					if ferr == nil {
+						return true
+					}
+					fnrd[0] = nil
+					return true
+				}
+				lclfsinfo = append(lclfsinfo, zfi)
+				continue
+			}
+		}
+		return false
+	}() {
+		return
+	}
+	return
+}}
+
 func localCompressLs(pathroot, pzpext, path string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, err error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
 	lstpzi := 0
 
-	for {
-		if nxtpzi := strings.Index(pathroot[lstpzi:], pzpext); nxtpzi > 0 {
-			if curntpzpath := pathroot[lstpzi : nxtpzi+len(pzpext)]; curntpzpath != "" {
-				if pzpext == ".zip" {
-					rmndrpath := pathroot[nxtpzi+len(pzpext)+1:]
-					rmndrpthl := len(rmndrpath)
-					zpr, zprerr := zip.OpenReader(curntpzpath)
-					if func() bool {
-						defer func() {
-							if len(fnrd) == 0 || fnrd[0] == nil {
-								zpr.Close()
-							}
-						}()
-
-						if zprerr != nil {
-							return true
+	if nxtpzi := strings.Index(pathroot[lstpzi:], pzpext); nxtpzi > 0 {
+		if curntpzpath := pathroot[lstpzi : nxtpzi+len(pzpext)]; curntpzpath != "" {
+			rmndrpath := pathroot[nxtpzi+len(pzpext)+1:]
+			if nxtfsfnk := lklzpextsfunc[pzpext]; nxtfsfnk != nil {
+				lsroot, lclfsinfo = nxtfsfnk(path, curntpzpath, rmndrpath, fnrd...)
+				return
+			}
+			lsroot, lclfsinfo = lkzpextsdefualtfunc(pzpext, path, curntpzpath, rmndrpath, fnrd...)
+			/*if pzpext == ".zip" {
+				rmndrpthl := len(rmndrpath)
+				zpr, zprerr := zip.OpenReader(curntpzpath)
+				if func() bool {
+					defer func() {
+						if len(fnrd) == 0 || fnrd[0] == nil {
+							zpr.Close()
 						}
-						zpfls := zpr.File
-						var iterzp = func(yield func(*zip.File) bool) {
-							lzp := len(zpfls)
-							chpthmsk := false
-							if path != "" && strings.ContainsAny(path, "*.?") {
-								chpthmsk = strings.ContainsAny(path, "*?")
-							}
-							for lzp > 0 {
-								zf := zpfls[0]
+					}()
 
-								zpfls = zpfls[1:]
-								lzp--
-								zfnml, zfnm := len(zf.Name), zf.Name
-								if zfnml >= rmndrpthl && zfnm[:rmndrpthl] == rmndrpath {
-									tstnme := zf.Name[rmndrpthl:]
-									zpthi := strings.Index(tstnme, "/")
-									if (zpthi > -1 && tstnme == tstnme[:zpthi+1]) || zpthi == -1 {
-										if chpthmsk {
-											if checkPathMask(tstnme, path) {
-												if !yield(zf) {
-													return
-												}
-												continue
-											}
-											continue
-										}
-										if path == "" {
-											if tstnme == "" {
-												if !yield(zf) {
-													return
-												}
+					if zprerr != nil {
+						return true
+					}
+					zpfls := zpr.File
+					var iterzp = func(yield func(*zip.File) bool) {
+						lzp := len(zpfls)
+						chpthmsk := false
+						if path != "" && strings.ContainsAny(path, "*.?") {
+							chpthmsk = strings.ContainsAny(path, "*?")
+						}
+						for lzp > 0 {
+							zf := zpfls[0]
+
+							zpfls = zpfls[1:]
+							lzp--
+							zfnml, zfnm := len(zf.Name), zf.Name
+							if zfnml >= rmndrpthl && zfnm[:rmndrpthl] == rmndrpath {
+								tstnme := zf.Name[rmndrpthl:]
+								zpthi := strings.Index(tstnme, "/")
+								if (zpthi > -1 && tstnme == tstnme[:zpthi+1]) || zpthi == -1 {
+									if chpthmsk {
+										if checkPathMask(tstnme, path) {
+											if !yield(zf) {
 												return
 											}
 											continue
 										}
-										if tstnme != "" && tstnme == path {
+										continue
+									}
+									if path == "" {
+										if tstnme == "" {
 											if !yield(zf) {
 												return
 											}
 											return
 										}
+										continue
+									}
+									if tstnme != "" && tstnme == path {
+										if !yield(zf) {
+											return
+										}
+										return
 									}
 								}
 							}
 						}
-						for zf := range iterzp {
-							zfi := zf.FileHeader.FileInfo()
-							if zfi != nil {
-								if zfi.IsDir() {
-									if path == "" {
-										lsroot = zfi
-										return true
-									}
-								}
-								if len(fnrd) == 1 && fnrd[0] != nil {
-									f, ferr := zf.Open()
-									fnrd[0](zfi, f, ferr)
-									if ferr == nil {
-										return true
-									}
-									fnrd[0] = nil
+					}
+					for zf := range iterzp {
+						zfi := zf.FileHeader.FileInfo()
+						if zfi != nil {
+							if zfi.IsDir() {
+								if path == "" {
+									lsroot = zfi
 									return true
 								}
-								lclfsinfo = append(lclfsinfo, zfi)
-								continue
 							}
-
+							if len(fnrd) == 1 && fnrd[0] != nil {
+								f, ferr := zf.Open()
+								fnrd[0](zfi, f, ferr)
+								if ferr == nil {
+									return true
+								}
+								fnrd[0] = nil
+								return true
+							}
+							lclfsinfo = append(lclfsinfo, zfi)
+							continue
 						}
-						return false
-					}() {
-						return
 					}
+					return false
+				}() {
+					return
 				}
-				lstpzi = nxtpzi + len(pzpext)
-			}
-			continue
+			}*/
+			lstpzi = nxtpzi + len(pzpext)
 		}
-		return
+
 	}
+	return
+
 }
 
 func localLs(pathroot, path string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, err error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {

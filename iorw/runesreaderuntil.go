@@ -40,6 +40,12 @@ func (rdrnefunc ReadRuneFunc) ReadRune() (rune, int, error) {
 	return rdrnefunc()
 }
 
+type ReadFunc func(p []byte) (n int, err error)
+
+func (rdfunc ReadFunc) Read(p []byte) (n int, err error) {
+	return rdfunc(p)
+}
+
 func RunesReaderUntil(r interface{}, eof ...interface{}) (rdr UntilRunesReader) {
 	var rd io.RuneReader = nil
 	if rd, _ = r.(io.RuneReader); rd == nil {
