@@ -634,7 +634,7 @@ func internalProcessParsing(
 			}); fnderr != nil {
 				if fnderr.Error() == ">" {
 					chkbfrns = append(chkbfrns, []rune(fnderr.Error())...)
-					if elmlvl == ctntElemUnknown {
+					if elmlvl == ctntElemUnknown || elmname == "" {
 						flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
 						return nil
 					}
@@ -643,7 +643,11 @@ func internalProcessParsing(
 				}
 				if fnderr.Error() == "prepeof" {
 					fnderr = nil
-					goto prepeof
+					if elmname != "" {
+						goto prepeof
+					}
+					flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
+					return nil
 				}
 				if fnderr.Error() == "failed" || fnderr == io.EOF {
 					flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
