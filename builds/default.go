@@ -50,7 +50,7 @@ func BuildGoApp(
 		} else {
 			if errout != nil {
 				iorw.Fprint(errout, cmderr.Error())
-			} else if cmderr != nil {
+			} else {
 				fmt.Println(cmderr.Error())
 			}
 		}
