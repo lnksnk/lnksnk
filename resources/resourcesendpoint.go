@@ -451,17 +451,21 @@ func checkPathMask(path string, mask string) (vld bool) {
 }
 
 var lkzpextsdefualtfunc = func(pzext, path, curntpzpath, rmndrpath string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, ferr error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
-	if r, rerr := OpenReader(curntpzpath + pzext); rerr == nil {
-
+	if r, rerr := OpenReader(curntpzpath); rerr == nil {
 		chpthmsk := false
 		if path != "" && strings.ContainsAny(path, "*.?") {
 			chpthmsk = strings.ContainsAny(path, "*?")
 		}
 		var tarr *tar.Reader = nil
+		var gzr *gzip.Reader
+		var gzrerr error = nil
 		defer func() {
 			if len(fnrd) == 0 || fnrd[0] == nil {
 				if tarr != nil {
 					tarr = nil
+				}
+				if gzr != nil {
+					gzr.Close()
 				}
 				if r != nil {
 					r.Close()
@@ -469,15 +473,18 @@ var lkzpextsdefualtfunc = func(pzext, path, curntpzpath, rmndrpath string, fnrd 
 			}
 		}()
 		if pzext == ".tgz" || pzext == ".gz" {
-			if gzr, gzrerr := gzip.NewReader(r); gzrerr != nil {
-
-			} else {
+			gzr, gzrerr = gzip.NewReader(r)
+			if gzrerr != nil {
+				return
+			}
+			if gzr != nil {
 				tarr = tar.NewReader(iorw.NewEOFCloseSeekReader(gzr, true))
 			}
 		} else if pzext == ".tar" {
 			tarr = tar.NewReader(r)
 		}
 		if tarr != nil {
+			rmndrpthl := len(rmndrpath)
 			for {
 				trhead, trerr := tarr.Next()
 				if trerr == io.EOF {
@@ -488,29 +495,40 @@ var lkzpextsdefualtfunc = func(pzext, path, curntpzpath, rmndrpath string, fnrd 
 				if trhead != nil {
 					switch trhead.Typeflag {
 					case tar.TypeReg:
-
-						fpath := trhead.Name
-						finfo := trhead.FileInfo()
-						if path != "" {
-							if chpthmsk {
-								if checkPathMask(fpath, path) {
-									lclfsinfo = append(lclfsinfo, finfo)
+						fpath, fpathl := trhead.Name, len(trhead.Name)
+						if fpathl >= rmndrpthl && fpath[:rmndrpthl] == rmndrpath {
+							finfo := trhead.FileInfo()
+							if path != "" {
+								if chpthmsk {
+									if checkPathMask(fpath[rmndrpthl:], path) {
+										lclfsinfo = append(lclfsinfo, finfo)
+										continue
+									}
 									continue
+								}
+								if path == fpath[rmndrpthl:] {
+									if len(fnrd) == 1 && fnrd[0] != nil {
+										rdr := iorw.ReadFunc(tarr.Read)
+										f := iorw.NewEOFCloseSeekReader(rdr, true)
+										fnrd[0](finfo, f, nil)
+										fnrd[0] = nil
+										if tarr != nil {
+											tarr = nil
+										}
+										if gzr != nil {
+											gzr = nil
+										}
+										return
+									}
+									lclfsinfo = append(lclfsinfo, finfo)
+									return
 								}
 								continue
 							}
-							if path == fpath {
-
-								if len(fnrd) == 1 && fnrd[0] != nil {
-									rdr := iorw.ReadFunc(tarr.Read)
-									f := iorw.NewEOFCloseSeekReader(rdr, true)
-									fnrd[0](finfo, f, nil)
-									fnrd[0] = nil
-									return
-								}
-								lclfsinfo = append(lclfsinfo, finfo)
+							if finfo.IsDir() {
+								lsroot = finfo
+								return
 							}
-							continue
 						}
 					}
 				} else {
@@ -523,6 +541,10 @@ var lkzpextsdefualtfunc = func(pzext, path, curntpzpath, rmndrpath string, fnrd 
 }
 var lklzpextsfunc = map[string]func(path, curntpzpath, rmndrpath string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, ferr error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo){".zip": func(path, curntpzpath, rmndrpath string, fnrd ...func(fi fs.FileInfo, f io.ReadCloser, ferr error)) (lsroot fs.FileInfo, lclfsinfo []fs.FileInfo) {
 	rmndrpthl := len(rmndrpath)
+	if rmndrpthl > 0 && rmndrpath[rmndrpthl-1] != '/' {
+		rmndrpath += "/"
+		rmndrpthl++
+	}
 	zpr, zprerr := zip.OpenReader(curntpzpath)
 	if func() bool {
 		defer func() {
