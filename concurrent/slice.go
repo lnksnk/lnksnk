@@ -108,8 +108,8 @@ func (slce *Slice) Iter(index ...int) func(func(int, any) bool) {
 	return slce.Iterate(index...)
 }
 
-func (slce *Slice) Iterate(index ...int) func(func(int, any) bool) {
-	return func(yield func(idx int, val any) bool) {
+func (slce *Slice) Iterate(index ...int) func(func(int, interface{}) bool) {
+	return func(yield func(idx int, val interface{}) bool) {
 		if slce == nil {
 			return
 		}
@@ -117,8 +117,8 @@ func (slce *Slice) Iterate(index ...int) func(func(int, any) bool) {
 		if mp := slce.Map; mp != nil {
 			if il > 0 {
 				sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
-				mp.Range(func(key, value any) bool {
-					if index[0] == key.(int) {
+				mp.Range(func(key, value interface{}) bool {
+					if index[0] == key {
 						if !yield(key.(int), value) {
 							return true
 						}
@@ -129,14 +129,14 @@ func (slce *Slice) Iterate(index ...int) func(func(int, any) bool) {
 				})
 				return
 			}
-			mp.Range(func(key, value any) bool {
+			mp.Range(func(key, value interface{}) bool {
 				return yield(key.(int), value)
 			})
 		}
 	}
 }
 
-func (slce *Slice) Range(index ...int) (vals []interface{}) {
+func (slce *Slice) Values(index ...int) (vals []interface{}) {
 	if il := len(index); slce != nil && il > 0 {
 		if mp := slce.Map; mp != nil {
 			sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
