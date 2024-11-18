@@ -39,19 +39,17 @@ func HttpBroker(fin io.ReadCloser, fout io.WriteCloser, exitphrase string, canEx
 		}
 		if exitphrase == "" {
 			break
-		} else {
-			if canExit != nil {
-				if doExit, exiterr := canExit(exitphrase, stdrdrprntr); exiterr == nil {
-					if doExit {
-						break
-					}
-				} else if exiterr != nil {
+		}
+		if canExit != nil {
+			if doExit, exiterr := canExit(exitphrase, stdrdrprntr); exiterr == nil {
+				if doExit {
 					break
 				}
-			} else {
-				break
+				continue
 			}
+			break
 		}
+		break
 	}
 	if doneBroking != nil {
 		err = doneBroking()
