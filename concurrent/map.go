@@ -178,6 +178,48 @@ func (enmmp *Map) Get(key interface{}) (value interface{}, loaded bool) {
 	return
 }
 
+func (enmmp *Map) Iter(k ...interface{}) func(func(any, any) bool) {
+	return enmmp.Iterate(k...)
+}
+
+func (enmmp *Map) Iterate(k ...interface{}) func(func(any, any) bool) {
+	return func(yield func(key any, val any) bool) {
+		if enmmp == nil {
+			return
+		}
+		if elmmp := enmmp.elmmp; elmmp != nil {
+			kl := len(k)
+			var mpks map[interface{}]bool
+			elmmp.Range(func(key, value any) bool {
+				if kl > 0 {
+					if mpks == nil {
+						mpks = map[interface{}]bool{}
+						ki := 0
+						for ki < kl {
+							if !mpks[k[ki]] {
+								mpks[k[ki]] = true
+								ki++
+								continue
+							}
+							//remove duplicate lookup k
+							k = append(k[:ki], k[ki+1:])
+							kl--
+						}
+					}
+					if mpks[key] == key {
+						if !yield(key, value) {
+							return false
+						}
+						kl--
+					}
+					return !(kl > 0)
+				}
+				return !yield(key, value)
+			})
+		}
+	}
+}
+
 func (enmmp *Map) Range(ietrfunc func(key, value any) bool) {
 	if enmmp != nil {
 		if elmmp := enmmp.elmmp; elmmp != nil && ietrfunc != nil {
