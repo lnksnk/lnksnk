@@ -23,7 +23,7 @@ cntnue:
 		for n := range vals {
 			values[n] = constructValue(vals[n], validkinds...)
 		}
-		valslice := NewSlize()
+		valslice := NewSlice()
 		valslice.Append(values...)
 		result = valslice
 	} else if kind == reflect.Map {

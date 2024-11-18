@@ -11,7 +11,7 @@ type Slice struct {
 	*Map
 }
 
-func NewSlize() (slce *Slice) {
+func NewSlice() (slce *Slice) {
 	slce = &Slice{Map: NewMap()}
 	return
 }
