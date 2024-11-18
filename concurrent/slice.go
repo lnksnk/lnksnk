@@ -104,6 +104,38 @@ func (slce *Slice) Get(index int) (value interface{}) {
 	return
 }
 
+func (slce *Slice) Iter(index ...int) func(func(int, any) bool) {
+	return slce.Iterate(index...)
+}
+
+func (slce *Slice) Iterate(index ...int) func(func(int, any) bool) {
+	return func(yield func(idx int, val any) bool) {
+		if slce == nil {
+			return
+		}
+		il := len(index)
+		if mp := slce.Map; mp != nil {
+			if il > 0 {
+				sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
+				mp.Range(func(key, value any) bool {
+					if index[0] == key.(int) {
+						if !yield(key.(int), value) {
+							return true
+						}
+						index = index[1:]
+						il--
+					}
+					return !(il > 0)
+				})
+				return
+			}
+			mp.Range(func(key, value any) bool {
+				return yield(key.(int), value)
+			})
+		}
+	}
+}
+
 func (slce *Slice) Range(index ...int) (vals []interface{}) {
 	if il := len(index); slce != nil && il > 0 {
 		if mp := slce.Map; mp != nil {
