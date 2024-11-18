@@ -5,4 +5,5 @@ sys/__debug_bin.conf.js
 sys/__debug_bin*
 sys/*.conf.js
 sys/*.exe
+sys/sys*
 .vscode/launch.json
