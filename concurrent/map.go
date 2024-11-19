@@ -34,11 +34,63 @@ func (enmmp *Map) Exist(key interface{}) (exist bool) {
 	return
 }
 
-func (enmmp *Map) Keys() (keys []interface{}) {
+func (enmmp *Map) Keys(k ...interface{}) (keys []interface{}) {
 	if enmmp != nil {
 		if elmmp := enmmp.elmmp; elmmp != nil {
+			if kl := len(k); kl > 0 {
+				mpk := map[interface{}]bool{}
+				ki := 0
+				for ki < kl {
+					if !mpk[k[ki]] {
+						mpk[k[ki]] = true
+						continue
+					}
+					k = append(k[:ki], k[ki+1:]...)
+					kl--
+				}
+				elmmp.Range(func(key, value any) bool {
+					if mpk[key] {
+						keys = append(keys, key)
+						kl--
+					}
+					return !(kl > 0)
+				})
+				return
+			}
 			elmmp.Range(func(key, value any) bool {
 				keys = append(keys, key)
+				return true
+			})
+		}
+	}
+	return
+}
+
+func (enmmp *Map) Values(k ...interface{}) (values []interface{}) {
+	if enmmp != nil {
+		if elmmp := enmmp.elmmp; elmmp != nil {
+			if kl := len(k); kl > 0 {
+				mpk := map[interface{}]bool{}
+				ki := 0
+				for ki < kl {
+					if !mpk[k[ki]] {
+						mpk[k[ki]] = true
+						continue
+					}
+					k = append(k[:ki], k[ki+1:]...)
+					kl--
+				}
+				elmmp.Range(func(key, value any) bool {
+					if mpk[key] {
+						values = append(values, value)
+						kl--
+					}
+					return !(kl > 0)
+				})
+				return
+			}
+			elmmp.Range(func(key, value any) bool {
+				values = append(values, value)
 				return true
 			})
 		}
@@ -183,65 +235,129 @@ func (enmmp *Map) Iter(k ...interface{}) func(func(any, any) bool) {
 }
 
 func (enmmp *Map) Iterate(k ...interface{}) func(func(any, any) bool) {
-	return func(yield func(key any, val any) bool) {
-		if enmmp == nil {
+	if enmmp == nil {
+		return func(yield func(key any, val any) bool) {
+			if enmmp == nil {
+				return
+			}
+		}
+	}
+	return iteratemap(enmmp.elmmp, k...)
+}
+
+func iteratemap(mp *sync.Map, k ...interface{}) func(func(any, any) bool) {
+	return func(yield func(any, any) bool) {
+		if mp == nil {
 			return
 		}
-		if elmmp := enmmp.elmmp; elmmp != nil {
-			kl := len(k)
-			var mpks map[interface{}]bool
-			elmmp.Range(func(key, value any) bool {
-				if kl > 0 {
-					if mpks == nil {
-						mpks = map[interface{}]bool{}
-						ki := 0
-						for ki < kl {
-							if !mpks[k[ki]] {
-								mpks[k[ki]] = true
-								ki++
-								continue
-							}
-							//remove duplicate lookup k
-							k = append(k[:ki], k[ki+1:])
-							kl--
-						}
-					}
-					if mpks[key] == key {
-						if !yield(key, value) {
-							return false
-						}
-						kl--
-					}
+		if kl := len(k); kl > 0 {
+			mpks := map[interface{}]bool{}
+			ki := 0
+			for ki < kl {
+				if !mpks[k[ki]] {
+					mpks[k[ki]] = true
+					ki++
+					continue
+				}
+				//remove duplicate lookup k
+				k = append(k[:ki], k[ki+1:])
+				kl--
+			}
+			mp.Range(func(key, value any) bool {
+				if mpks[key] {
+					kl--
 					return !(kl > 0)
 				}
-				return !yield(key, value)
+				return !(kl > 0)
 			})
+			return
 		}
-	}
-}
-
-func (enmmp *Map) Range(ietrfunc func(key, value any) bool) {
-	if enmmp != nil {
-		if elmmp := enmmp.elmmp; elmmp != nil && ietrfunc != nil {
-			elmmp.Range(ietrfunc)
-		}
-	}
-}
-
-func (enmmp *Map) ForEach(eachitem func(interface{}, interface{}, bool, bool) bool) {
-	if enmmp != nil && eachitem != nil {
-		mp := enmmp
-		first := true
-		cnt := mp.Count()
-		kn := 0
-		mp.Range(func(k interface{}, v interface{}) (stop bool) {
-			stop = !eachitem(v, k, first, cnt-1 == kn)
-			if first {
-				first = false
-			}
-			kn++
-			return stop || cnt-1 == kn
+		mp.Range(func(key, value any) bool {
+			return yield(key, value)
 		})
+	}
+}
+
+func (enmmp *Map) Range(f func(interface{}, interface{}) bool, k ...interface{}) {
+	if enmmp == nil || f == nil {
+		return
+	}
+	if elmmp := enmmp.elmmp; elmmp != nil {
+		for key, value := range iteratemap(elmmp, k...) {
+			if f(key, value) {
+				break
+			}
+		}
+	}
+}
+
+func (enmmp *Map) ForEach(f func(interface{}, interface{}, bool, bool) bool, k ...interface{}) {
+	if enmmp != nil && f != nil {
+		first := true
+		prv := []interface{}{}
+		nxt := []interface{}{}
+		prfrm := func(key, value any) bool {
+			if len(prv) == 0 {
+				prv = append(prv, key, value)
+				return true
+			}
+			if len(nxt) == 0 {
+				nxt = append(nxt, key, value)
+				return true
+			}
+			if first {
+				if f(prv[0], prv[1], first, false) {
+					return false
+				}
+				first = false
+				copy(prv, nxt)
+				copy(nxt, []interface{}{key, value})
+				return true
+			}
+			if f(prv[0], prv[1], first, false) {
+				return false
+			}
+			first = false
+			copy(prv, nxt)
+			copy(nxt, []interface{}{key, value})
+			return true
+		}
+		if elmmp := enmmp.elmmp; elmmp != nil {
+			if kl := len(k); kl > 0 {
+				mpk := map[interface{}]bool{}
+				ki := 0
+				for ki < kl {
+					if !mpk[k[ki]] {
+						mpk[k[ki]] = true
+						ki++
+						continue
+					}
+					k = append(k[:ki], k[ki+1:]...)
+					kl--
+				}
+				elmmp.Range(func(key, value any) bool {
+					if mpk[key] {
+						return prfrm(key, value)
+					}
+					return !(kl > 0)
+				})
+				goto wrpup
+			}
+			elmmp.Range(func(key, value any) bool {
+				return prfrm(key, value)
+			})
+		wrpup:
+			if len(prv) == 2 {
+				if len(nxt) == 2 {
+					if f(prv[0], prv[1], first, false) {
+						return
+					}
+					f(nxt[0], nxt[1], false, true)
+					return
+				}
+				f(prv[0], prv[1], true, true)
+			}
+		}
 	}
 }
 
