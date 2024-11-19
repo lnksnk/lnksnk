@@ -65,16 +65,21 @@ func (intrnwk *internalWork) do() {
 }
 
 func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (err error) {
+	serial := nextserial()
 	var caching *concurrent.Map
 	var invokecaching = func() *concurrent.Map {
 		if caching == nil {
 			caching = concurrent.NewMap()
+			CACHING.Set(serial, caching)
 		}
 		return caching
 	}
 	defer func() {
 		if caching != nil {
-			go caching.Dispose()
+			go func() {
+				CACHING.Del(serial)
+				caching.Dispose()
+			}()
 		}
 	}()
 	params := parameters.NewParameters()
@@ -200,6 +205,7 @@ func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fs
 
 	if isactive {
 		vm := active.NewVM()
+		vm.Set("_serial", serial)
 		vm.Set("_params", map[string]interface{}{
 			"get":   params.Parameter,
 			"set":   params.SetParameter,
