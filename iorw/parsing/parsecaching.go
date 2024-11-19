@@ -30,18 +30,13 @@ func (chdscrpt *CachedScript) IsValidSince(testmod time.Time, fs *fsutils.FSUtil
 			if chdsublems := chdscrpt.chdsublems; fs != nil && chdsublems != nil {
 				lstmods := map[string]time.Time{}
 				lspaths := []string{}
-				chdsublems.Range(func(key, value any) bool {
-					return func(lstpath string, lstmod time.Time) bool {
-						lspaths = append(lspaths, lstpath)
-						lstmods[lstpath] = lstmod
-						return true
-					}(key.(string), value.(time.Time))
-				})
-
 				a := []interface{}{}
-				for _, d := range lspaths {
-					a = append(a, d)
+				for key, value := range chdsublems.Iterate() {
+					a = append(a, key)
+					lspaths = append(lspaths, key.(string))
+					lstmods[key.(string)] = value.(time.Time)
 				}
+
 				fsinfos := fs.FIND(a...)
 
 				for fsinfon, fsinfo := range fsinfos {
