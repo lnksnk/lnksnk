@@ -115,7 +115,19 @@ func (slce *Slice) Iterate(index ...int) func(func(int, interface{}) bool) {
 		}
 		il := len(index)
 		if mp := slce.Map; mp != nil {
+			var ks []interface{}
 			if il > 0 {
+				ks = make([]interface{}, il)
+				for in, ix := range index {
+					ks[in] = ix
+				}
+			}
+			for ix, iv := range mp.Iterate(ks...) {
+				if !yield(ix.(int), iv) {
+					break
+				}
+			}
+			/*if il > 0 {
 				sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
 				mp.Range(func(key, value interface{}) bool {
 					if index[0] == key {
@@ -131,7 +143,7 @@ func (slce *Slice) Iterate(index ...int) func(func(int, interface{}) bool) {
 			}
 			mp.Range(func(key, value interface{}) bool {
 				return yield(key.(int), value)
-			})
+			})*/
 		}
 	}
 }
@@ -140,19 +152,16 @@ func (slce *Slice) Indexes(index ...int) (idxs []int) {
 	il := len(index)
 	if slce != nil {
 		if mp := slce.Map; mp != nil {
-			sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
-			mp.Range(func(k interface{}, v interface{}) (stop bool) {
-				if il > 0 {
-					if index[0] == k {
-						idxs = append(idxs, k.(int))
-						index = index[1:]
-						il--
-					}
-					return !(il > 0)
-				}
+			var ks []interface{}
+			if il > 0 {
+				ks = make([]interface{}, il)
+			}
+			for in, ix := range index {
+				ks[in] = ix
+			}
+			for _, k := range mp.Keys(ks...) {
 				idxs = append(idxs, k.(int))
-				return true
-			})
+			}
 		}
 	}
 	return
@@ -161,19 +170,14 @@ func (slce *Slice) Values(index ...int) (vals []interface{}) {
 	il := len(index)
 	if slce != nil {
 		if mp := slce.Map; mp != nil {
-			sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
-			mp.Range(func(k interface{}, v interface{}) (stop bool) {
-				if il > 0 {
-					if index[0] == k {
-						vals = append(vals, v)
-						index = index[1:]
-						il--
-					}
-					return !(il > 0)
+			var ks []interface{}
+			if il > 0 {
+				ks = make([]interface{}, il)
+				for in, ix := range index {
+					ks[in] = ix
 				}
-				vals = append(vals, v)
-				return true
-			})
+			}
+			vals = slce.Map.Values(ks...)
 		}
 	}
 	return
@@ -218,14 +222,13 @@ func (slce *Slice) Dispose() {
 		if mp := slce.Map; mp != nil {
 			slce.Map = nil
 			vals := []interface{}{}
-			mp.Range(func(k interface{}, v interface{}) (stop bool) {
+			for _, v := range mp.Iterate() {
 				if vmp, _ := v.(*Map); vmp != nil {
 					vals = append(vals, vmp)
 				} else if vslce, _ := v.(*Slice); v != nil {
 					vals = append(vals, vslce)
 				}
-				return
-			})
+			}
 			for _, v := range vals {
 				if vmp, _ := v.(*Map); vmp != nil {
 					vmp.Dispose()
@@ -240,18 +243,20 @@ func (slce *Slice) Dispose() {
 	}
 }
 
-func (slce *Slice) ForEach(eachitem func(interface{}, int, bool, bool) bool) {
+func (slce *Slice) ForEach(eachitem func(interface{}, int, bool, bool) bool, index ...int) {
 	if slce != nil && eachitem != nil {
 		if mp := slce.Map; mp != nil {
-			first := true
-			cnt := mp.Count()
-			mp.Range(func(k interface{}, v interface{}) (stop bool) {
-				stop = !eachitem(v, k.(int), first, cnt-1 == k)
-				if first {
-					first = false
+			var kidx []interface{}
+			if idxl := len(index); idxl > 0 {
+				kidx = make([]interface{}, idxl)
+				for idxn, idx := range index {
+					kidx[idxn] = idx
 				}
-				return stop || cnt-1 == k
-			})
+			}
+			mp.ForEach(func(k, v interface{}, first, last bool) bool {
+				return eachitem(v, k.(int), first, last)
+			}, kidx...)
+
 		}
 	}
 }
