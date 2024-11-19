@@ -390,6 +390,7 @@ func _internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fs
 				return
 			},
 		})
+		vm.Set("caching", CACHING)
 		vm.Set("_in", In)
 		vm.Set("_out", Out)
 		vm.R = In

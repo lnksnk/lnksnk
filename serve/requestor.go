@@ -824,6 +824,7 @@ func (terms *terminals) Close() {
 var chngvm = make(chan *active.VM)
 var DBMS = database.GLOBALDBMS()
 var SCHEDULING = scheduling.GLOBALSCHEDULING()
+var CACHING = concurrent.NewMap()
 
 type ListenApi interface {
 	Serve(network string, addr string, tlsconf ...*tls.Config)
