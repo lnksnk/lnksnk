@@ -8,9 +8,6 @@ func ReflectCallMethod(sender interface{}, methodname string, args ...interface{
 	if sender != nil {
 		val := reflect.ValueOf(sender)
 		valtype := reflect.TypeOf(sender)
-		//if val.Kind() == reflect.Pointer {
-		//	val = val.Elem()
-		//}
 		if mthd, mthdfnd := valtype.MethodByName(methodname); mthdfnd {
 			argsl := len(args)
 			argsvls := make([]reflect.Value, argsl)
