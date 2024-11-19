@@ -26,13 +26,19 @@ import (
 var listerens = concurrent.NewMap()
 
 func ShutdownAll() {
-	listerens.Range(func(key, value any) bool {
+	for key, value := range listerens.Iterate() {
+		if lstnr, _ := value.(*http.Server); lstnr != nil {
+			lstnr.Shutdown(context.Background())
+			fmt.Println("Shutdown - ", key)
+		}
+	}
+	/*listerens.Range(func(key, value any) bool {
 		if lstnr, _ := value.(*http.Server); lstnr != nil {
 			lstnr.Shutdown(context.Background())
 			fmt.Println("Shutdown - ", key)
 		}
 		return true
-	})
+	})*/
 }
 
 func Shutdown(keys ...interface{}) {
