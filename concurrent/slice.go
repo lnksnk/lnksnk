@@ -127,23 +127,6 @@ func (slce *Slice) Iterate(index ...int) func(func(int, interface{}) bool) {
 					break
 				}
 			}
-			/*if il > 0 {
-				sort.Slice(index, func(i, j int) bool { return index[i] < index[j] })
-				mp.Range(func(key, value interface{}) bool {
-					if index[0] == key {
-						if !yield(key.(int), value) {
-							return true
-						}
-						index = index[1:]
-						il--
-					}
-					return !(il > 0)
-				})
-				return
-			}
-			mp.Range(func(key, value interface{}) bool {
-				return yield(key.(int), value)
-			})*/
 		}
 	}
 }
