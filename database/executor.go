@@ -8,23 +8,21 @@ import (
 )
 
 type Executor struct {
-	prpOnly         bool
-	stmnt           *Statement
-	sqlresult       sql.Result
-	lastRowInserted int64
-	rowsAffected    int64
-	eventinit       ExecutorInitFunc
-	oninit          interface{}
-	eventerror      ErrorFunc
-	onerror         interface{}
-	eventexec       ExecFunc
-	onexec          interface{}
-	eventexecerror  ExecErrorFunc
-	onexecerror     interface{}
-	eventfinalize   ExecutorFinalizeFunc
-	onfinalize      interface{}
-	runtime         active.Runtime
-	EventClose      func(*Executor)
+	prpOnly        bool
+	stmnt          *Statement
+	sqlresult      sql.Result
+	eventinit      ExecutorInitFunc
+	oninit         interface{}
+	eventerror     ErrorFunc
+	onerror        interface{}
+	eventexec      ExecFunc
+	onexec         interface{}
+	eventexecerror ExecErrorFunc
+	onexecerror    interface{}
+	eventfinalize  ExecutorFinalizeFunc
+	onfinalize     interface{}
+	runtime        active.Runtime
+	EventClose     func(*Executor)
 	//LOG             logging.Logger
 }
 
@@ -34,7 +32,7 @@ type ExecErrorFunc func(error, *Executor) (bool, error)
 type ExecutorFinalizeFunc func(*Executor) error
 
 func NewExecutor(stmnt *Statement, prepOnly bool, oninit interface{}, onexec interface{}, onexecerror interface{}, onerror interface{}, onfinalize interface{}, runtime active.Runtime /*, logger logging.Logger*/) (exectr *Executor) {
-	exectr = &Executor{prpOnly: prepOnly, stmnt: stmnt, lastRowInserted: -1, rowsAffected: -1, oninit: oninit, onerror: onerror, onexec: onexec, onexecerror: onexecerror, onfinalize: onfinalize /*, LOG: logger*/}
+	exectr = &Executor{prpOnly: prepOnly, stmnt: stmnt, oninit: oninit, onerror: onerror, onexec: onexec, onexecerror: onexecerror, onfinalize: onfinalize /*, LOG: logger*/}
 	if onerror == nil {
 		exectr.eventerror = func(err error) {
 
@@ -104,7 +102,7 @@ func NewExecutor(stmnt *Statement, prepOnly bool, oninit interface{}, onexec int
 		}
 	}
 	if onexecerror == nil {
-		exectr.eventexecerror = func(err error, exctr *Executor) (bool, error) { return false, nil }
+		exectr.eventexecerror = func(err error, exctr *Executor) (bool, error) { return false, err }
 	}
 	if onexecerror != nil {
 		if donexecerror, _ := onexecerror.(ExecErrorFunc); donexecerror != nil {
@@ -127,20 +125,6 @@ func NewExecutor(stmnt *Statement, prepOnly bool, oninit interface{}, onexec int
 				return
 			}
 		}
-	}
-	return
-}
-
-func (exectr *Executor) RowsAffected() (rowsAffected int64) {
-	if exectr != nil {
-		rowsAffected = exectr.rowsAffected
-	}
-	return
-}
-
-func (exectr *Executor) LastInsertedId() (lastInsertedId int64) {
-	if exectr != nil {
-		lastInsertedId = exectr.lastRowInserted
 	}
 	return
 }
@@ -171,9 +155,30 @@ func (exectr *Executor) Exec() (err error) {
 			}
 			if prepstmnt := exectr.stmnt.prepstmnt; prepstmnt != nil && !exectr.prpOnly {
 				if exectr.sqlresult, err = prepstmnt.Exec(exectr.stmnt.Arguments()...); err == nil {
-					exectr.lastRowInserted, _ = exectr.sqlresult.LastInsertId()
-					exectr.rowsAffected, err = exectr.sqlresult.RowsAffected()
+					insertid, affected := int64(-1), int64(-1)
+					if insertid, err = exectr.sqlresult.LastInsertId(); err != nil {
+						insertid = -1
+					}
+					if affected, err = exectr.sqlresult.RowsAffected(); err != nil {
+						affected = -1
+						err = nil
+					}
+					exectr.eventexec(exectr, affected, insertid)
+					return
 				}
+				ignr, ignrerr := exectr.eventexecerror(err, exectr)
+				if ignr {
+					if ignrerr != nil {
+						err = ignrerr
+						exectr.eventerror(err)
+						exectr.Close()
+						return
+					}
+					err = nil
+					return
+				}
+				exectr.eventerror(err)
+				exectr.Close()
 			}
 		}
 	}

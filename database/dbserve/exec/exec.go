@@ -67,12 +67,12 @@ var aliascmdexec dbserve.AliasCommandFunc = func(alias, path, ext string, dbhnl 
 				errfound = err
 			},
 		})
-		exec := dbhnl.Execute(alias, qryarr...)
-		defer exec.Close()
+		errfound = dbhnl.Execute(alias, qryarr...)
 		if errfound == nil {
 			err = w.Print("{}")
 			return
 		}
+
 		if errfound != nil {
 			errorsfnd = append(errorsfnd, errfound.Error())
 			enc := json.NewEncoder(w)

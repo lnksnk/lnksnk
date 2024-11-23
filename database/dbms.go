@@ -254,11 +254,11 @@ func (dbmshndlr *DBMSHandler) Query(alias string, a ...interface{}) (reader *Rea
 	return
 }
 
-func (dbmshndlr *DBMSHandler) Exec(alias string, a ...interface{}) *Executor {
+func (dbmshndlr *DBMSHandler) Exec(alias string, a ...interface{}) error {
 	return dbmshndlr.Execute(alias, a...)
 }
 
-func (dbmshndlr *DBMSHandler) Execute(alias string, a ...interface{}) (exctr *Executor) {
+func (dbmshndlr *DBMSHandler) Execute(alias string, a ...interface{}) (err error) {
 	if dbmshndlr != nil {
 		if dbms := dbmshndlr.dbms; dbms != nil {
 			if dbmshndlr.ctx != nil {
@@ -276,19 +276,7 @@ func (dbmshndlr *DBMSHandler) Execute(alias string, a ...interface{}) (exctr *Ex
 			if dbmshndlr.CallPrepStatement != nil {
 				a = append(a, dbmshndlr.CallPrepStatement)
 			}
-			if exctr = dbms.Execute(alias, a...); exctr != nil {
-				exctrs := dbmshndlr.exctrs
-				if exctrs == nil {
-					dbmshndlr.exctrs = &sync.Map{}
-					exctrs = dbmshndlr.exctrs
-				}
-				exctrs.Store(exctr, exctr)
-				if exctr.EventClose == nil {
-					exctr.EventClose = func(exc *Executor) {
-						exctrs.CompareAndDelete(exc, exc)
-					}
-				}
-			}
+			err = dbms.Execute(alias, a...)
 		}
 	}
 	return
@@ -771,7 +759,7 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 	return
 }
 
-func (dbms *DBMS) Execute(alias string, a ...interface{}) (exectr *Executor) {
+func (dbms *DBMS) Execute(alias string, a ...interface{}) (err error) {
 	if dbms != nil && alias != "" {
 		if cnctns := dbms.cnctns; cnctns != nil {
 			var oninit interface{} = nil
@@ -877,14 +865,16 @@ func (dbms *DBMS) Execute(alias string, a ...interface{}) (exectr *Executor) {
 					}(); cn != nil {
 						var stmnt = cn.Stmnt()
 						if stmnt != nil {
-							if err := stmnt.Prepair(prms, rdr, args, a...); err == nil {
-								if exectr = NewExecutor(stmnt, false, oninit, onexec, onexecerror, onerror, onfinalize, runtime /*, logger*/); exectr != nil {
-									if err = exectr.Exec(); err != nil {
+							if err = stmnt.Prepair(prms, rdr, args, a...); err == nil {
+								if exectr := NewExecutor(stmnt, false, oninit, onexec, onexecerror, onerror, onfinalize, runtime /*, logger*/); exectr != nil {
+									exectr.eventinit(exectr)
+									if err = exectr.Exec(); err == nil {
+										exectr.eventfinalize(exectr)
 										exectr.Close()
-										invokeErrorEvent(onerror, err, runtime)
 									}
+									return
 								}
-							} else {
+							} else if onerror != nil {
 								invokeErrorEvent(onerror, err, runtime)
 							}
 						}
@@ -1016,10 +1006,8 @@ func (dbms *DBMS) Prepair(alias string, a ...interface{}) (exectr *Executor) {
 						if stmnt != nil {
 							if err := stmnt.Prepair(prms, rdr, args, a...); err == nil {
 								if exectr = NewExecutor(stmnt, true, oninit, onexec, onexecerror, onerror, onfinalize, runtime /*, logger*/); exectr != nil {
-									if err = exectr.Exec(); err != nil {
-										defer exectr.Close()
-										invokeErrorEvent(onerror, err, runtime)
-									} else {
+									exectr.eventinit(exectr)
+									if err = exectr.Exec(); err == nil {
 										exectr.prpOnly = false
 									}
 								}
