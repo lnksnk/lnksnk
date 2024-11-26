@@ -319,17 +319,13 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 		}
 		if foundmatchfncd, _ := eofd.(RunesUntilFunc); foundmatchfncd != nil {
 			if foundmatch == nil {
-				foundmatch = func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchfncd(prevphrasefnd, phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
-				}
+				foundmatch = foundmatchfncd
 			}
 			continue
 		}
 		if foundmatchfncd, _ := eofd.(func(string, string, io.RuneReader, SliceRuneReader, error, SliceRuneReader) error); foundmatchfncd != nil {
 			if foundmatch == nil {
-				foundmatch = func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchfncd(prevphrasefnd, phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
-				}
+				foundmatch = foundmatchfncd
 			}
 			continue
 		}
