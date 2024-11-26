@@ -216,7 +216,7 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		qrybdr := qrybuf.Clone(true).Reader(true)
 
 		bsy := false
-		qrybuf.Print(iorw.ReadRunesUntil(qrybdr, iorw.RunesUntilSliceFlushFunc(func(phrase string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) (fnerr error) {
+		qrybuf.Print(iorw.ReadRunesUntil(qrybdr, iorw.RunesUntilFunc(func(prevphrase, phrase string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) (fnerr error) {
 			if phrase == "@" {
 				if foundTxt {
 					flushrdr.PreAppendArgs(phrase)

@@ -258,34 +258,10 @@ func (rdrrnsuntil *runesreaderuntil) Read(p []rune) (n int, err error) {
 	return
 }
 
-type ReadRunesUntilHandler interface {
-	StartNextSearch()
-	FoundPhrase(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error
-	CanCheckRune(prvr, r rune) bool
-}
+type RunesUntilFunc func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error
 
-type RunesUntilFunc func(phrasefnd string, untilrdr, orgrd io.RuneReader, orgerr error) error
-
-func (rdrnsuntlfunc RunesUntilFunc) Foundmatch(phrasefnd string, untilrdr, orgrd io.RuneReader, orgerr error) error {
-	return rdrnsuntlfunc(phrasefnd, untilrdr, orgrd, orgerr)
-}
-
-type RunesUntilFlushFunc func(phrasefnd string, untilrdr, orgrd io.RuneReader, orgerr error, flushrdr SliceRuneReader) error
-
-func (rdrnsuntlflshfunc RunesUntilFlushFunc) Foundmatch(phrasefnd string, untilrdr, orgrd io.RuneReader, orgerr error, flushrdr SliceRuneReader) error {
-	return rdrnsuntlflshfunc(phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
-}
-
-type RunesUntilSliceFunc func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error) error
-
-func (rdrnsuntlslcfunc RunesUntilSliceFunc) Foundmatch(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error) error {
-	return rdrnsuntlslcfunc(phrasefnd, untilrdr, orgrd, orgerr)
-}
-
-type RunesUntilSliceFlushFunc func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error
-
-func (rdrnsuntlslcflshfunc RunesUntilSliceFlushFunc) Foundmatch(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-	return rdrnsuntlslcflshfunc(phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
+func (rdrnsuntlfunc RunesUntilFunc) Foundmatch(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
+	return rdrnsuntlfunc(prevphrasefnd, phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
 }
 
 func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
@@ -300,7 +276,7 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 	}
 	var startnxtsrch func()
 	var cancheckrune func(prvr, r rune) bool
-	var foundmatch func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error = nil
+	var foundmatch func(prevphasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error = nil
 	var eofrunes [][]rune = nil
 	oefmtchd := map[string]bool{}
 	for _, eofd := range eof {
@@ -329,64 +305,30 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 			}
 			continue
 		}
-		if foundmatchd, _ := eofd.(func(phrase string, unitlrdr, orgrdr io.RuneReader, orgerr error) error); foundmatchd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchd(phrasefnd, untilrdr, orgrd, orgerr)
-				}
-			}
-		}
-		if foundmatchflshd, _ := eofd.(func(phrasefnd string, untilrdr, orgrdr io.RuneReader, orgerr error, flushrdr SliceRuneReader) error); foundmatchflshd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchflshd(phrasefnd, untilrdr, orgrdr, orgerr, flushrdr)
-				}
+		if rplcmp, rplcmpok := eofd.(map[string]interface{}); rplcmpok {
+			for rplk := range rplcmp {
+				eofrunes = append(eofrunes, []rune(rplk))
 			}
 			continue
 		}
-		if foundmatchslcd, _ := eofd.(func(phrase string, unitlrdr io.RuneReader, orgrdr SliceRuneReader, orgerr error) error); foundmatchslcd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchslcd(phrasefnd, untilrdr, orgrd, orgerr)
-				}
-			}
-		}
-		if foundmatchslcflshd, _ := eofd.(func(phrasefnd string, untilrdr io.RuneReader, orgrdr SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error); foundmatchslcflshd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchslcflshd(phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
-				}
+		if rplcmp, rplcmpok := eofd.(map[string]string); rplcmpok {
+			for rplk := range rplcmp {
+				eofrunes = append(eofrunes, []rune(rplk))
 			}
 			continue
 		}
 		if foundmatchfncd, _ := eofd.(RunesUntilFunc); foundmatchfncd != nil {
 			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchfncd(phrasefnd, untilrdr, orgrd, orgerr)
+				foundmatch = func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
+					return foundmatchfncd(prevphrasefnd, phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
 				}
 			}
 			continue
 		}
-		if foundmatchflshfncd, _ := eofd.(RunesUntilFlushFunc); foundmatchflshfncd != nil {
+		if foundmatchfncd, _ := eofd.(func(string, string, io.RuneReader, SliceRuneReader, error, SliceRuneReader) error); foundmatchfncd != nil {
 			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchflshfncd(phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
-				}
-			}
-			continue
-		}
-		if foundmatchslcfncd, _ := eofd.(RunesUntilSliceFunc); foundmatchslcfncd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchslcfncd(phrasefnd, untilrdr, orgrd, orgerr)
-				}
-			}
-			continue
-		}
-		if foundmatchslcflshfncd, _ := eofd.(RunesUntilSliceFlushFunc); foundmatchslcflshfncd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return foundmatchslcflshfncd(phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
+				foundmatch = func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
+					return foundmatchfncd(prevphrasefnd, phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
 				}
 			}
 			continue
@@ -403,19 +345,6 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 			}
 			continue
 		}
-		if rdrnseofhndlrd, _ := eofd.(ReadRunesUntilHandler); rdrnseofhndlrd != nil {
-			if foundmatch == nil {
-				foundmatch = func(phrasefnd string, untilrdr io.RuneReader, orgrd SliceRuneReader, orgerr error, flushrdr SliceRuneReader) error {
-					return rdrnseofhndlrd.FoundPhrase(phrasefnd, untilrdr, orgrd, orgerr, flushrdr)
-				}
-			}
-			if startnxtsrch == nil {
-				startnxtsrch = rdrnseofhndlrd.StartNextSearch
-			}
-			if cancheckrune == nil {
-				cancheckrune = rdrnseofhndlrd.CanCheckRune
-			}
-		}
 	}
 	if eofl := len(eofrunes); eofl > 0 && foundmatch != nil && orgrdr != nil {
 		orgslcrdr, _ := orgrdr.(SliceRuneReader)
@@ -426,6 +355,7 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 			cancheckrune = func(prvr, r rune) bool { return true }
 		}
 		lsteofphrse := ""
+		eofphrsesfnd := []string{"", ""}
 		var rnsrdr io.RuneReader = nil
 
 		bfrdrns := []rune{}
@@ -497,7 +427,16 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 					if flshrdr == nil {
 						flshrdr = NewSliceRuneReader()
 					}
-					if fnderr := foundmatch(string(eofrunes[msteofi]), rnsrdr, orgslcrdr, err, flshrdr); fnderr != nil {
+
+					if fnderr := foundmatch(func() (prvs string) {
+						prvs = eofphrsesfnd[0]
+						eofphrsesfnd[1] = string(eofrunes[msteofi])
+						return
+					}(), func() (nxts string) {
+						nxts = eofphrsesfnd[1]
+						eofphrsesfnd[0] = nxts
+						return
+					}(), rnsrdr, orgslcrdr, err, flshrdr); fnderr != nil {
 						return 0, 0, fnderr
 					}
 					return rnsrdr.ReadRune()
@@ -561,7 +500,15 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 							if flshrdr == nil {
 								flshrdr = NewSliceRuneReader()
 							}
-							if fnderr := foundmatch(lsteofphrse, rnsrdr, orgslcrdr, err, flshrdr); fnderr != nil {
+							if fnderr := foundmatch(func() (prvs string) {
+								prvs = eofphrsesfnd[0]
+								eofphrsesfnd[1] = lsteofphrse
+								return
+							}(), func() (nxts string) {
+								nxts = eofphrsesfnd[1]
+								eofphrsesfnd[0] = nxts
+								return
+							}(), rnsrdr, orgslcrdr, err, flshrdr); fnderr != nil {
 								return 0, 0, fnderr
 							}
 							return rnsrdr.ReadRune()
