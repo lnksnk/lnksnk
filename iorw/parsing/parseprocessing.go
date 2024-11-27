@@ -130,9 +130,9 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		coresttngs := ctntelm.coresttngs
 		if coresttngs == nil {
 			coresttngs = map[string]interface{}{}
-			coresttngs["elm-pathroot"] = pathroot
-			coresttngs["elm-root"] = root
-			coresttngs["elm-elem-root"] = func() (elmroot string) {
+			coresttngs["path-root"] = pathroot
+			coresttngs["root"] = root
+			coresttngs["elem-root"] = func() (elmroot string) {
 				if path == "" {
 					if strings.HasSuffix(pathroot, "/") {
 						if pthi := strings.LastIndex(pathroot[:len(pathroot)-1], "/"); pthi > -1 {
@@ -152,8 +152,8 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 				}
 				return
 			}()
-			coresttngs["elm-elem-base"] = func() (elembase string) {
-				elmbases := strings.Split(coresttngs["elm-elem-root"].(string), ":")
+			coresttngs["elem-base"] = func() (elembase string) {
+				elmbases := strings.Split(coresttngs["elem-root"].(string), ":")
 				enajst := 0
 				for en, elmb := range elmbases {
 					if elmb == "" {
@@ -393,7 +393,7 @@ func internalProcessParsing(
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
 	}
 	tmpmatchthis := map[string]interface{}{}
-	tmpmatchthis["pg-pathroot"] = pathroot
+	tmpmatchthis["pg-path-root"] = pathroot
 	tmpmatchthis["pg-root"] = root
 
 	var elempath = func() (elmroot string) {
