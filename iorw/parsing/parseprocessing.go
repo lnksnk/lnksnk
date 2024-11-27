@@ -393,8 +393,8 @@ func internalProcessParsing(
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
 	}
 	tmpmatchthis := map[string]interface{}{}
-	tmpmatchthis["pathroot"] = pathroot
-	tmpmatchthis["root"] = root
+	tmpmatchthis["pg-pathroot"] = pathroot
+	tmpmatchthis["pg-root"] = root
 
 	var elempath = func() (elmroot string) {
 		if path == "" {
@@ -416,8 +416,8 @@ func internalProcessParsing(
 		}
 		return
 	}()
-	tmpmatchthis["pageroot"] = elempath
-	tmpmatchthis["pagebase"] = func() (elembase string) {
+	tmpmatchthis["pg-elem-root"] = elempath
+	tmpmatchthis["pg-elem-base"] = func() (elembase string) {
 		elmbases := strings.Split(elempath, ":")
 		enajst := 0
 		for en, elmb := range elmbases {
