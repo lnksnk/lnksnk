@@ -605,44 +605,36 @@ func internalProcessParsing(
 					if !strings.Contains(elmname, "::") {
 						return true
 					}
-					spltnmes := strings.Split(elmname, "::")
-					for spltn, spltnme := range spltnmes {
-						if spltnme = strings.TrimFunc(spltnme, iorw.IsSpace); spltnme == "" {
-							if spltn == 0 || spltn == len(spltnmes)-1 {
-								spltnmes[spltn] = spltnme
-								continue
-							}
-							return false
-						}
-						if crntnextelm != nil {
-							if coresttngs := crntnextelm.coresttngs; len(coresttngs) > 0 {
-								if tmpv, tmpok := coresttngs[spltnme]; tmpok {
-									if ts, _ := tmpv.(string); ts != "" {
-										spltnmes[spltn] = ts
+					spltelmname := strings.Split(elmname, "::")
+					if spltl := len(spltelmname); spltl >= 2 {
+						for spn, spnme := range spltelmname {
+							if spn > 0 && spn < spltl-1 {
+								if tstk := spnme; tstk != "" {
+									if crntnextelm != nil {
+										if coresttngs := crntnextelm.coresttngs; len(coresttngs) > 0 {
+											if crv, crok := coresttngs[tstk]; crok {
+												ts, _ := crv.(string)
+												spltelmname[spn] = ts
+												continue
+											}
+										}
+									}
+									if crv, crok := tmpmatchthis[tstk]; crok {
+										ts, _ := crv.(string)
+										spltelmname[spn] = ts
 										continue
 									}
-									return false
 								}
+								return false
 							}
-							spltnmes[spltn] = spltnme
-							continue
 						}
-						if tmpv, tmpok := tmpmatchthis[spltnme]; tmpok {
-							if ts, _ := tmpv.(string); ts != "" {
-								spltnmes[spltn] = ts
-								continue
-							}
-							return false
-						}
-						spltnmes[spltn] = spltnme
+						elmname = strings.Join(spltelmname, "")
 					}
-					elmname = strings.Join(spltnmes, "")
 					for _, cr := range elmname {
 						if ('a' <= cr && cr <= 'z') || ('A' <= cr && cr <= 'Z') {
 							return true
 						}
 					}
-					return elmname != ""
 				}
 				return false
 			}
@@ -683,17 +675,31 @@ func internalProcessParsing(
 			}); fnderr != nil {
 				if fnderr.Error() == ">" {
 					chkbfrns = append(chkbfrns, []rune(fnderr.Error())...)
+					prvelmnme := elmname
 					if elmlvl == ctntElemUnknown || !prpelmname() {
+						if prvelmnme != elmname {
+							chkbfrns = []rune(strings.Replace(string(chkbfrns), prvelmnme, elmname, -1))
+						}
 						flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
 						return nil
+					}
+					if prvelmnme != elmname {
+						chkbfrns = []rune(strings.Replace(string(chkbfrns), prvelmnme, elmname, -1))
 					}
 					fnderr = nil
 					goto fndeof
 				}
 				if fnderr.Error() == "prepeof" {
 					fnderr = nil
-					if elmname != "" {
+					prvelmnme := elmname
+					if prpelmname() {
+						if prvelmnme != elmname {
+							chkbfrns = []rune(strings.Replace(string(chkbfrns), prvelmnme, elmname, -1))
+						}
 						goto prepeof
+					}
+					if prvelmnme != elmname {
+						chkbfrns = []rune(strings.Replace(string(chkbfrns), prvelmnme, elmname, -1))
 					}
 					flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
 					return nil
@@ -706,9 +712,6 @@ func internalProcessParsing(
 			flushrdr.PreAppend(iorw.NewRunesReader(chkbfrns...))
 			return nil
 		prepeof:
-			if !prpelmname() {
-				fmt.Println()
-			}
 			invalfnd = invalidelempaths[nextfullname(elmname, elmlvl)]
 			if !chkbf.Empty() {
 				chkbf.Clear()
