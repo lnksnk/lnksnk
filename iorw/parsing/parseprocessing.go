@@ -130,9 +130,9 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		coresttngs := ctntelm.coresttngs
 		if coresttngs == nil {
 			coresttngs = map[string]interface{}{}
-			coresttngs["pathroot"] = pathroot
-			coresttngs["root"] = root
-			coresttngs["elemroot"] = func() (elmroot string) {
+			coresttngs["elm-pathroot"] = pathroot
+			coresttngs["elm-root"] = root
+			coresttngs["elm-elem-root"] = func() (elmroot string) {
 				if path == "" {
 					if strings.HasSuffix(pathroot, "/") {
 						if pthi := strings.LastIndex(pathroot[:len(pathroot)-1], "/"); pthi > -1 {
@@ -152,8 +152,8 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 				}
 				return
 			}()
-			coresttngs["elembase"] = func() (elembase string) {
-				elmbases := strings.Split(coresttngs["elemroot"].(string), ":")
+			coresttngs["elm-elem-base"] = func() (elembase string) {
+				elmbases := strings.Split(coresttngs["elm-elem-root"].(string), ":")
 				enajst := 0
 				for en, elmb := range elmbases {
 					if elmb == "" {
@@ -441,14 +441,14 @@ func internalProcessParsing(
 
 	var rnsrdrslcrdr = iorw.NewSliceRuneReader(rnrdrs...)
 	var phrsbf *iorw.Buffer = nil
-	var ctntinitrplcrdr = iorw.ReadRunesUntil(rnsrdrslcrdr, "<:_:", ":/>", iorw.RunesUntilFunc(func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
-		if phrasefnd == "<:_:" {
+	var ctntinitrplcrdr = iorw.ReadRunesUntil(rnsrdrslcrdr, "<:_:", ":/>", "[#", "#]", iorw.RunesUntilFunc(func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
+		if phrasefnd == "<:_:" || phrasefnd == "[#" {
 			if phrsbf == nil {
 				phrsbf = iorw.NewBuffer()
 			}
 			phrsbf.Clear()
 			if _, phrserr := phrsbf.ReadRunesFrom(untilrdr); phrserr != nil {
-				if phrserr.Error() == ":/>" {
+				if prhse := phrserr.Error(); prhse == ":/>" || prhse == "#]" {
 					for thisk, thisv := range tmpmatchthis {
 						if qkl, _ := phrsbf.Equals(thisk); qkl {
 							flushrdr.PreAppend(valToRuneReader(thisv, true))
@@ -466,6 +466,13 @@ func internalProcessParsing(
 		}
 		if phrasefnd == ":/>" {
 			if prevphrasefnd == "<:_:" {
+				return fmt.Errorf("%s", phrasefnd)
+			}
+			flushrdr.PreAppendArgs(phrasefnd)
+			return nil
+		}
+		if phrasefnd == "#]" {
+			if prevphrasefnd == "[#" {
 				return fmt.Errorf("%s", phrasefnd)
 			}
 			flushrdr.PreAppendArgs(phrasefnd)
