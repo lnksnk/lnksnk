@@ -416,8 +416,8 @@ func internalProcessParsing(
 		}
 		return
 	}()
-	tmpmatchthis["elemroot"] = elempath
-	tmpmatchthis["elembase"] = func() (elembase string) {
+	tmpmatchthis["pageroot"] = elempath
+	tmpmatchthis["pagebase"] = func() (elembase string) {
 		elmbases := strings.Split(elempath, ":")
 		enajst := 0
 		for en, elmb := range elmbases {
