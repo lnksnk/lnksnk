@@ -32,6 +32,7 @@ type contentelem struct {
 	level       int
 	prvctntelem *contentelem
 	coresttngs  map[string]interface{}
+	pgstngs     map[string]interface{}
 }
 
 func (ctntelm *contentelem) writeRune(r rune) {
@@ -182,6 +183,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			prpbf = iorw.NewBuffer()
 			return prpbf
 		}
+
 		preprdr := iorw.ReadRunesUntil(rdr, func(prevprasefnd, prasefnd string, untilrdr io.RuneReader, orgrdr iorw.SliceRuneReader, orgerr error, prpflushrdr iorw.SliceRuneReader) (prperr error) {
 			if prasefnd == "[#" {
 				if !prpbf.Empty() {
@@ -198,6 +200,12 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 								}
 							}
 							for attk, attv := range coresttngs {
+								if eql, _ := prpbf.Equals(attk); eql {
+									prpflushrdr.PreAppend(valToRuneReader(attv, false))
+									return
+								}
+							}
+							for attk, attv := range ctntelm.pgstngs {
 								if eql, _ := prpbf.Equals(attk); eql {
 									prpflushrdr.PreAppend(valToRuneReader(attv, false))
 									return
@@ -251,7 +259,6 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			prpflush.PreAppend(strings.NewReader(prpphrase))
 			return
 		}, "<:_:", ":/>")
-
 		if !cntntbuf.Empty() {
 			/*if err = cntntbuf.Print(iorw.ReadRunesUntil(cntntbuf.Clone(true).Reader(true), "[:", func(cntprevphrase, cntphrase string, cntuntilrdr io.RuneReader, cntorgrdr iorw.SliceRuneReader, cntorgerr error, cntflushrdr iorw.SliceRuneReader) (cnterr error) {
 				if cntphrase == "[:" {
@@ -288,6 +295,10 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			})
 		}
 
+		if ctntelm.elemname == ":etl:ui:calendars:layout" {
+			ctntelm.runerdr = preprdr
+			return
+		}
 		ctntelm.runerdr = preprdr
 	}
 	return
@@ -304,6 +315,7 @@ func (ctntelm *contentelem) Close() (err error) {
 		ctntelm.fi = nil
 		ctntelm.eofevent = nil
 		ctntelm.attrs = nil
+		ctntelm.pgstngs = nil
 
 		if postbuf != nil {
 			postbuf.Close()
@@ -392,9 +404,9 @@ func internalProcessParsing(
 	if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
 	}
-	tmpmatchthis := map[string]interface{}{}
-	tmpmatchthis["pg-path-root"] = pathroot
-	tmpmatchthis["pg-root"] = root
+	pgsttngs := map[string]interface{}{}
+	pgsttngs["pg-path-root"] = pathroot
+	pgsttngs["pg-root"] = root
 
 	var elempath = func() (elmroot string) {
 		if path == "" {
@@ -416,8 +428,8 @@ func internalProcessParsing(
 		}
 		return
 	}()
-	tmpmatchthis["pg-elem-root"] = elempath
-	tmpmatchthis["pg-elem-base"] = func() (elembase string) {
+	pgsttngs["pg-elem-root"] = elempath
+	pgsttngs["pg-elem-base"] = func() (elembase string) {
 		elmbases := strings.Split(elempath, ":")
 		enajst := 0
 		for en, elmb := range elmbases {
@@ -449,7 +461,7 @@ func internalProcessParsing(
 			phrsbf.Clear()
 			if _, phrserr := phrsbf.ReadRunesFrom(untilrdr); phrserr != nil {
 				if prhse := phrserr.Error(); prhse == ":/>" || prhse == "#]" {
-					for thisk, thisv := range tmpmatchthis {
+					for thisk, thisv := range pgsttngs {
 						if qkl, _ := phrsbf.Equals(thisk); qkl {
 							flushrdr.PreAppend(valToRuneReader(thisv, true))
 							return nil
@@ -490,6 +502,7 @@ func internalProcessParsing(
 			elemname: elemname,
 			elemroot: elemname[:strings.LastIndex(elemname, ":")+1],
 			elemext:  elemext,
+			pgstngs:  pgsttngs,
 		}
 		validelempaths[fi.Path()] = fi.ModTime()
 		elmnext.level = len(elemlevels)
@@ -626,7 +639,7 @@ func internalProcessParsing(
 											}
 										}
 									}
-									if crv, crok := tmpmatchthis[tstk]; crok {
+									if crv, crok := pgsttngs[tstk]; crok {
 										ts, _ := crv.(string)
 										spltelmname[spn] = ts
 										continue
@@ -916,6 +929,9 @@ func internalProcessParsing(
 		fndeof:
 			var fi fsutils.FileInfo = nil
 			fullelemname := nextfullname(elmname, elmlvl)
+			if fullelemname == ":lnk-ui:app:" {
+				fullelemname += ""
+			}
 			if invalidelempaths[fullelemname] {
 				if !chkbf.Empty() {
 					flushrdr.PreAppend(formatElmArgVal(chkbf.Clone(true)).Reader(true))
