@@ -273,6 +273,16 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 		if rdrd, _ := rdr.(io.Reader); rdrd != nil {
 			orgrdr = NewEOFCloseSeekReader(rdrd)
 		}
+		if orgrdr == nil {
+			if rdrfunc, _ := rdr.(ReadRuneFunc); rdrfunc != nil {
+				orgrdr = rdrfunc
+			}
+		}
+		if orgrdr == nil {
+			if rdrfunc, _ := rdr.(func() (rune, int, error)); rdrfunc != nil {
+				orgrdr = ReadRuneFunc(rdrfunc)
+			}
+		}
 	}
 	var startnxtsrch func()
 	var cancheckrune func(prvr, r rune) bool
@@ -312,8 +322,8 @@ func ReadRunesUntil(rdr interface{}, eof ...interface{}) io.RuneReader {
 			continue
 		}
 		if rplcmp, rplcmpok := eofd.(map[string]string); rplcmpok {
-			for rplk := range rplcmp {
-				eofrunes = append(eofrunes, []rune(rplk))
+			for rplk, rplv := range rplcmp {
+				eofrunes = append(eofrunes, []rune(rplk), []rune(rplv))
 			}
 			continue
 		}

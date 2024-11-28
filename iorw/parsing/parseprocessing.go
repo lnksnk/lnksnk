@@ -446,27 +446,54 @@ func internalProcessParsing(
 		}
 		return
 	}()
-
+	pgstngl := 0
+	for pgk := range pgsttngs {
+		if pgkl := len(pgk); pgkl > pgstngl {
+			pgstngl = pgkl
+		}
+	}
 	if invertActive {
 		rnrdrs = append([]io.RuneReader{strings.NewReader("<@")}, append(rnrdrs, strings.NewReader("@>"))...)
 	}
 
-	var rnsrdrslcrdr = iorw.NewSliceRuneReader(rnrdrs...)
 	var phrsbf *iorw.Buffer = nil
-	var ctntinitrplcrdr = iorw.ReadRunesUntil(rnsrdrslcrdr, "<:_:", ":/>", "[#", "#]", iorw.RunesUntilFunc(func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
+	var pgphrs = map[string]string{"<:_:": ":/>", "[#": "#]"}
+	var ctntinitrplcrdr = iorw.ReadRunesUntil(iorw.NewSliceRuneReader(rnrdrs...), pgphrs, iorw.RunesUntilFunc(func(prevphrasefnd, phrasefnd string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) error {
 		if phrasefnd == "<:_:" || phrasefnd == "[#" {
 			if phrsbf == nil {
 				phrsbf = iorw.NewBuffer()
 			}
+			if prevphrasefnd == phrasefnd {
+				flushrdr.PreAppendArgs(phrasefnd)
+				return nil
+			}
 			phrsbf.Clear()
 			if _, phrserr := phrsbf.ReadRunesFrom(untilrdr); phrserr != nil {
-				if prhse := phrserr.Error(); prhse == ":/>" || prhse == "#]" {
-					for thisk, thisv := range pgsttngs {
-						if qkl, _ := phrsbf.Equals(thisk); qkl {
-							flushrdr.PreAppend(valToRuneReader(thisv, true))
+				if phrserr == io.EOF {
+					if _, pgok := pgphrs[phrasefnd]; pgok {
+						if !phrsbf.Empty() {
+							flushrdr.PreAppendArgs(phrasefnd, phrsbf.Clone(true).Reader(true))
 							return nil
 						}
+						flushrdr.PreAppendArgs(phrasefnd)
+						return nil
 					}
+					if !phrsbf.Empty() {
+						flushrdr.PreAppendArgs(phrasefnd)
+						return nil
+					}
+					return phrserr
+				}
+				if prhse := phrserr.Error(); pgphrs[phrasefnd] == prhse {
+					if phrsl := phrsbf.Size(); phrsl <= int64(pgstngl) {
+						for thisk, thisv := range pgsttngs {
+							if qkl, _ := phrsbf.Equals(thisk); qkl {
+								flushrdr.PreAppend(valToRuneReader(thisv, true))
+								return nil
+							}
+						}
+					}
+					flushrdr.PreAppendArgs(phrasefnd, phrsbf.Clone(true).Reader(true), prhse)
 					return nil
 				}
 				if phrserr == orgerr {
@@ -476,19 +503,10 @@ func internalProcessParsing(
 			}
 			return nil
 		}
-		if phrasefnd == ":/>" {
-			if prevphrasefnd == "<:_:" {
-				return fmt.Errorf("%s", phrasefnd)
-			}
-			flushrdr.PreAppendArgs(phrasefnd)
-			return nil
+		if prevphrasefnd != phrasefnd && pgphrs[prevphrasefnd] == phrasefnd {
+			return fmt.Errorf("%s", phrasefnd)
 		}
-		if phrasefnd == "#]" {
-			if prevphrasefnd == "[#" {
-				return fmt.Errorf("%s", phrasefnd)
-			}
-			flushrdr.PreAppendArgs(phrasefnd)
-		}
+		flushrdr.PreAppendArgs(phrasefnd)
 		return nil
 	}))
 
