@@ -64,6 +64,17 @@ func (rqr *reader) IsMobile() (mobile bool) {
 	return
 }
 
+func (rqr *reader) Headers() (hdrs []string) {
+	if rqr != nil {
+		if httpr := rqr.httpr; httpr != nil {
+			for h := range httpr.Header {
+				hdrs = append(hdrs, h)
+			}
+		}
+	}
+	return
+}
+
 func (rqr *reader) Header() http.Header {
 	if rqr != nil {
 		if httpr := rqr.httpr; httpr != nil {
