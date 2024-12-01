@@ -109,9 +109,23 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		}
 		ctntstngs := map[string]interface{}{}
 
-		path := ctntelm.fi.Path()
-		pathroot := path
-		pthexti, pathpthi := strings.LastIndex(pathroot, "."), strings.LastIndex(pathroot, "/")
+		//path := ctntelm.fi.Path()
+		pathroot := ctntelm.fi.PathRoot()
+		root := ctntelm.fi.Root()
+		rsroot := ctntelm.fi.RSRoot()
+		if rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+			rsroot += "/"
+		}
+		if len(root) < len(rsroot) {
+			root = rsroot
+		}
+		/*fmt.Println("elem:", ctntelm.elemname)
+		fmt.Println("path:", path)
+		fmt.Println("pathroot:", pathroot)
+		fmt.Println("root:", root)
+		fmt.Println("rsroot:", rsroot)
+		fmt.Println()*/
+		/*pthexti, pathpthi := strings.LastIndex(pathroot, "."), strings.LastIndex(pathroot, "/")
 		if pathpthi > -1 {
 			if pthexti > pathpthi {
 				pathroot = pathroot[:pathpthi+1]
@@ -119,22 +133,22 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 			pathroot = pathroot[:pathpthi+1]
 		} else {
 			pathroot = "/"
-		}
-		path = path[len(pathroot):]
-		root := pathroot
-		if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
+		}*/
+		//path = path[len(pathroot):]
+		/*if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
 			root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
 		}
 		if strings.HasSuffix(ctntelm.elemname, ":") {
 			path = ""
-		}
+		}*/
 		coresttngs := ctntelm.coresttngs
 		if coresttngs == nil {
 			coresttngs = map[string]interface{}{}
 			coresttngs["path-root"] = pathroot
 			coresttngs["root"] = root
+			coresttngs["base-root"] = rsroot
 			coresttngs["elem-root"] = func() (elmroot string) {
-				if path == "" {
+				/*if path == "" {
 					if strings.HasSuffix(pathroot, "/") {
 						if pthi := strings.LastIndex(pathroot[:len(pathroot)-1], "/"); pthi > -1 {
 							elmroot = strings.Replace(pathroot[:pthi+1], "/", ":", -1)
@@ -150,11 +164,20 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 					elmroot = strings.Replace(pathroot[:pthi+1], "/", ":", -1)
 				} else {
 					elmroot = ""
-				}
+				}*/
+				elmroot = strings.Replace(pathroot, "/", ":", -1)
 				return
 			}()
+			/*coresttngs["elem-path"] = func() (elempath string) {
+				elempath = ctntelm.elemname
+				if elmpthi := strings.LastIndex(elempath, ":"); elmpthi > 0 {
+					elempath = elempath[:elmpthi+1]
+					return
+				}
+				return ":"
+			}()*/
 			coresttngs["elem-base"] = func() (elembase string) {
-				elmbases := strings.Split(coresttngs["elem-root"].(string), ":")
+				/*elmbases := strings.Split(coresttngs["elem-root"].(string), ":")
 				enajst := 0
 				for en, elmb := range elmbases {
 					if elmb == "" {
@@ -167,7 +190,8 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 					if (en + enajst) < len(elmbases)-1 {
 						elembase += elmb + ":"
 					}
-				}
+				}*/
+				elembase = strings.Replace(rsroot, "/", ":", -1)
 				return
 			}()
 			ctntelm.coresttngs = coresttngs
