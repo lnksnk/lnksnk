@@ -1380,7 +1380,7 @@ func internalProcessParsing(
 	ctntflush(true)
 	var chdpgrm interface{} = nil
 	if !chdctntbuf.Empty() && cdebuf.Empty() {
-		DefaultMinifyPsv(pathext, chdctntbuf, nil)
+		//DefaultMinifyPsv(pathext, chdctntbuf, nil)
 		if capturecache != nil {
 			prsngerr = capturecache(fullpath, pathModified, validelempaths, chdctntbuf, cdebuf, chdpgrm)
 		}
