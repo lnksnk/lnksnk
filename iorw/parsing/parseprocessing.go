@@ -971,9 +971,6 @@ func internalProcessParsing(
 		fndeof:
 			var fi fsutils.FileInfo = nil
 			fullelemname := nextfullname(elmname, elmlvl)
-			if fullelemname == ":lnk-ui:app:" {
-				fullelemname += ""
-			}
 			if invalidelempaths[fullelemname] {
 				if !chkbf.Empty() {
 					flushrdr.PreAppend(formatElmArgVal(chkbf.Clone(true)).Reader(true))
