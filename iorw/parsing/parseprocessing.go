@@ -619,6 +619,9 @@ func internalProcessParsing(
 											}
 										}
 									}
+									if strings.HasPrefix(tstk, "elem-") {
+										tstk = "pg-" + tstk
+									}
 									if crv, crok := pgsttngs[tstk]; crok {
 										ts, _ := crv.(string)
 										spltelmname[spn] = ts
