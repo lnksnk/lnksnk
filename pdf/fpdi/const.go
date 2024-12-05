@@ -1,4 +1,4 @@
-package gofpdi
+package fpdi
 
 const (
 	PDF_TYPE_NULL = iota

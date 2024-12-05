@@ -1,4 +1,4 @@
-package gofpdi
+package fpdi
 
 import (
 	"bufio"
