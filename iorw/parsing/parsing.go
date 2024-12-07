@@ -222,7 +222,7 @@ func ParseFileInfo(fi fsutils.FileInfo, fs *fsutils.FSUtils, defaultext string, 
 			rnrdrs = append(rnrdrs, iorw.NewEOFCloseSeekReader(rdr))
 		}
 	}
-	prserr = internalProcessParsing(cachecdefunc, pathModified, path, pathroot, defaultext, out, fs, invertActive, evalcode, rnrdrs...)
+	prserr = internalProcessParsing(cachecdefunc, pathModified, path, pathroot, defaultext, out, fs, fi, invertActive, evalcode, rnrdrs...)
 	return
 }
 
@@ -362,8 +362,12 @@ func Parse(pathModified time.Time, path string, defaultext string, out io.Writer
 		}
 	}
 
-	prserr = internalProcessParsing(cachecdefunc, pathModified, path, pathroot, defaultext, out, fs, invertActive, evalcode, rnrdrs...)
-	return
+	if fs != nil {
+		if fis := fs.LS(fullpath); len(fis) == 1 && !fis[0].IsDir() {
+			return internalProcessParsing(cachecdefunc, pathModified, path, pathroot, defaultext, out, fs, fis[0], invertActive, evalcode, rnrdrs...)
+		}
+	}
+	return internalProcessParsing(cachecdefunc, pathModified, path, pathroot, defaultext, out, fs, nil, invertActive, evalcode, rnrdrs...)
 }
 
 var DefaultParseFS *fsutils.FSUtils = nil

@@ -130,6 +130,10 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 				return
 			}()
 			coresttngs["elem-base"] = func() (elembase string) {
+				elembase = strings.Replace(root, "/", ":", -1)
+				return
+			}()
+			coresttngs["elem-rs-base"] = func() (elembase string) {
 				elembase = strings.Replace(rsroot, "/", ":", -1)
 				return
 			}()
@@ -328,24 +332,53 @@ func internalProcessParsing(
 	path, pathroot, pathext string,
 	out io.Writer,
 	fs *fsutils.FSUtils,
+	fi fsutils.FileInfo,
 	invertActive bool,
 	evalcode func(...interface{}) (interface{}, error),
 	rnrdrs ...io.RuneReader) (prsngerr error) {
 	fullpath := pathroot + path
 	validelempaths := map[string]time.Time{}
 	invalidelempaths := map[string]bool{}
-
-	if len(rnrdrs) == 0 {
-		return
+	if fs != nil && fi == nil {
+		if fis := fs.LS(fullpath); len(fis) == 1 && !fis[0].IsDir() {
+			fi = fis[0]
+		}
 	}
-
 	root := pathroot
 	if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
 	}
+	rsroot := root
+	if fi != nil && (len(rnrdrs) == 0 || len(rnrdrs) == 1) {
+		pathroot = fi.PathRoot()
+		path = fi.Path()
+		rsroot = fi.RSRoot()
+		pathext = fi.PathExt()
+		if len(rnrdrs) == 0 {
+			if fir, _ := fi.Open(); fir != nil {
+				firnrr, _ := fir.(io.RuneReader)
+				if firnrr == nil {
+					firnrr = iorw.NewEOFCloseSeekReader(fir)
+				}
+				rnrdrs = append(rnrdrs, firnrr)
+			}
+		}
+	}
+	if len(rnrdrs) == 0 {
+		return
+	}
+
+	if rsroot != "" && rsroot[len(rsroot)-1] != '/' {
+		rsroot += "/"
+	}
+	if len(root) < len(rsroot) {
+		root = rsroot
+	}
+
 	pgsttngs := map[string]interface{}{}
 	pgsttngs["pg-path-root"] = pathroot
 	pgsttngs["pg-root"] = root
+	pgsttngs["pg-rs-root"] = rsroot
 
 	var elempath = func() (elmroot string) {
 		if path == "" {
@@ -369,20 +402,11 @@ func internalProcessParsing(
 	}()
 	pgsttngs["pg-elem-root"] = elempath
 	pgsttngs["pg-elem-base"] = func() (elembase string) {
-		elmbases := strings.Split(elempath, ":")
-		enajst := 0
-		for en, elmb := range elmbases {
-			if elmb == "" {
-				if en == 0 {
-					elembase = ":" + elembase
-				}
-				enajst++
-				continue
-			}
-			if (en + enajst) < len(elmbases)-1 {
-				elembase += elmb + ":"
-			}
-		}
+		elembase = strings.Replace(root, "/", ":", -1)
+		return
+	}()
+	pgsttngs["pg-elem-rs-base"] = func() (elembase string) {
+		elembase = strings.Replace(rsroot, "/", ":", -1)
 		return
 	}()
 	pgstngl := 0
