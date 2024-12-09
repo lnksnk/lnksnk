@@ -624,18 +624,28 @@ func internalProcessParsing(
 			chkbfrns := append([]rune{}, []rune(phrase)...)
 			rdngval = false
 			elmname := ""
+			elmlvl := ctntElemUnknown
 			prpelmname := func() bool {
 				if elmname != "" {
 					if !strings.Contains(elmname, "::") {
 						return true
 					}
+					tstelem := crntnextelm
+					if tstelem != nil && elmlvl == ctntElemEnd {
+						if elmlvlL := len(elemlevels); elmlvlL > 1 {
+							tstelem = elemlevels[1]
+							goto prpelm
+						}
+						tstelem = nil
+					}
+				prpelm:
 					spltelmname := strings.Split(elmname, "::")
 					if spltl := len(spltelmname); spltl >= 2 {
 						for spn, spnme := range spltelmname {
 							if spn > 0 && spn < spltl-1 {
 								if tstk := spnme; tstk != "" {
-									if crntnextelm != nil {
-										if coresttngs := crntnextelm.coresttngs; len(coresttngs) > 0 {
+									if tstelem != nil {
+										if coresttngs := tstelem.coresttngs; len(coresttngs) > 0 {
 											if crv, crok := coresttngs[tstk]; crok {
 												ts, _ := crv.(string)
 												spltelmname[spn] = ts
@@ -665,7 +675,6 @@ func internalProcessParsing(
 				}
 				return false
 			}
-			elmlvl := ctntElemUnknown
 			prvr := rune(0)
 			var argnmerns []rune
 			var ctntargsrdr io.RuneReader
