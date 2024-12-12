@@ -19,7 +19,7 @@ package example_test
 import (
 	"errors"
 
-	"github.com/go-pdf/fpdf/internal/example"
+	"github.com/lnksnk/lnksnk/pdf/fpdf/internal/example"
 )
 
 // ExampleFilename tests the Filename() and Summary() functions.
