@@ -66,6 +66,11 @@ func NewVM(a ...interface{}) (vm *VM) {
 		},
 	})
 	vm.vm.RunProgram(adhocPrgm)
+	vm.Set("iter", func(itr func(func(interface{}) bool), yield func(interface{}) bool) {
+		itr(func(arg interface{}) bool {
+			return !yield(arg)
+		})
+	})
 	var fldmppr = &fieldmapper{fldmppr: es.UncapFieldNameMapper()}
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {
