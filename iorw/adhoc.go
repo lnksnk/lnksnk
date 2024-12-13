@@ -2,6 +2,7 @@ package iorw
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -127,6 +128,12 @@ func Fprint(w io.Writer, a ...interface{}) (err error) {
 			}
 			if bf, irok := a[dn].(*Buffer); irok {
 				_, err = bf.WriteTo(w)
+				continue
+			}
+			if amp, ampok := a[dn].(map[string]interface{}); ampok {
+				if len(amp) > 0 {
+					json.NewEncoder(w).Encode(amp)
+				}
 				continue
 			}
 			if aa, aaok := a[dn].([]interface{}); aaok {
