@@ -524,6 +524,9 @@ func internalProcessParsing(
 						return crntnextelm.elemroot + elemname
 					}
 
+					if elemname != "" && elemname[len(elemname)-1] == ':' && elmnme != "" && elmnme[len(elmnme)-1] != ':' {
+						elmnme = elmnme + ":"
+					}
 					return strings.Join(spltctntelmnme[:spltctnti+1], ":") + ":" + elmnme
 				}
 			}
