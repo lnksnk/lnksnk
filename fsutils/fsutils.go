@@ -377,8 +377,10 @@ func (finfo *fileInfo) PathRoot() string {
 
 func (finfo *fileInfo) Root() string {
 	if finfo != nil {
-		if pthsep, pthlstsep := strings.Index(finfo.path, "/"), strings.LastIndex(finfo.path, "/"); pthsep > -1 && pthlstsep > pthsep {
-			return finfo.path[:strings.Index(finfo.path[:pthlstsep], "/")+1]
+		if pthlstsep := strings.LastIndex(finfo.path, "/"); pthlstsep > -1 {
+			if nxtptllstsep := strings.LastIndex(finfo.path[:pthlstsep], "/"); nxtptllstsep > 0 {
+				return finfo.path[:nxtptllstsep+1]
+			}
 		}
 		return finfo.PathRoot()
 	}
