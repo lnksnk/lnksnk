@@ -110,6 +110,7 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		ctntstngs := map[string]interface{}{}
 
 		//path := ctntelm.fi.Path()
+		name := ctntelm.fi.Name()
 		pathroot := ctntelm.fi.PathRoot()
 		root := ctntelm.fi.Root()
 		rsroot := ctntelm.fi.RSRoot()
@@ -122,18 +123,19 @@ func prepairContentElem(ctntelm *contentelem) (err error) {
 		coresttngs := ctntelm.coresttngs
 		if coresttngs == nil {
 			coresttngs = map[string]interface{}{}
-			coresttngs["path-root"] = pathroot
+			coresttngs["name"] = name
+			coresttngs["path"] = pathroot
 			coresttngs["root"] = root
-			coresttngs["base-root"] = rsroot
-			coresttngs["elem-root"] = func() (elmroot string) {
+			coresttngs["base"] = rsroot
+			coresttngs["elem-path"] = func() (elmroot string) {
 				elmroot = strings.Replace(pathroot, "/", ":", -1)
 				return
 			}()
-			coresttngs["elem-base"] = func() (elembase string) {
+			coresttngs["elem-root"] = func() (elembase string) {
 				elembase = strings.Replace(root, "/", ":", -1)
 				return
 			}()
-			coresttngs["elem-rs-base"] = func() (elembase string) {
+			coresttngs["elem-base"] = func() (elembase string) {
 				elembase = strings.Replace(rsroot, "/", ":", -1)
 				return
 			}()
@@ -344,12 +346,19 @@ func internalProcessParsing(
 			fi = fis[0]
 		}
 	}
+	name := func() string {
+		if strings.Contains(path, "/") {
+			return path[strings.LastIndex(path, "/")+1:]
+		}
+		return ""
+	}()
 	root := pathroot
 	if root[0:1] == "/" && root[len(root)-1:] == "/" && root != "/" {
 		root = root[:strings.LastIndex(root[:len(root)-1], "/")+1]
 	}
 	rsroot := root
 	if fi != nil && (len(rnrdrs) == 0 || len(rnrdrs) == 1) {
+		name = fi.Name()
 		pathroot = fi.PathRoot()
 		path = fi.Path()
 		rsroot = fi.RSRoot()
@@ -376,9 +385,10 @@ func internalProcessParsing(
 	}
 
 	pgsttngs := map[string]interface{}{}
-	pgsttngs["pg-path-root"] = pathroot
+	pgsttngs["pg-name"] = name
+	pgsttngs["pg-path"] = pathroot
 	pgsttngs["pg-root"] = root
-	pgsttngs["pg-rs-root"] = rsroot
+	pgsttngs["pg-base"] = rsroot
 
 	var elempath = func() (elmroot string) {
 		if path == "" {
@@ -400,12 +410,12 @@ func internalProcessParsing(
 		}
 		return
 	}()
-	pgsttngs["pg-elem-root"] = elempath
-	pgsttngs["pg-elem-base"] = func() (elembase string) {
+	pgsttngs["pg-elem-path"] = elempath
+	pgsttngs["pg-elem-root"] = func() (elembase string) {
 		elembase = strings.Replace(root, "/", ":", -1)
 		return
 	}()
-	pgsttngs["pg-elem-rs-base"] = func() (elembase string) {
+	pgsttngs["pg-elem-base"] = func() (elembase string) {
 		elembase = strings.Replace(rsroot, "/", ":", -1)
 		return
 	}()
@@ -450,6 +460,15 @@ func internalProcessParsing(
 				if prhse := phrserr.Error(); pgphrs[phrasefnd] == prhse {
 					if phrsl := phrsbf.Size(); phrsl <= int64(pgstngl) {
 						for thisk, thisv := range pgsttngs {
+							if qkl, _ := phrsbf.Equals(thisk); qkl {
+								flushrdr.PreAppend(valToRuneReader(thisv, true))
+								return nil
+							}
+						}
+						for thisk, thisv := range pgsttngs {
+							if strings.HasPrefix(thisk, "pg-") {
+								thisk = thisk[len("pg-"):]
+							}
 							if qkl, _ := phrsbf.Equals(thisk); qkl {
 								flushrdr.PreAppend(valToRuneReader(thisv, true))
 								return nil
