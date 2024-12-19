@@ -492,6 +492,9 @@ function parseEval(){
 }
 
 function prepTargetContent(targetelem, cntnttoprep){
+    if (cntnttoprep===undefined||cntnttoprep===null||(cntnttoprep+"").length===0){
+        return;
+    }
     if (targetelem!==undefined && targetelem!==null && typeof targetelem ==="function"){
         targetelem(cntnttoprep);
     } else if (targetelem!==undefined && targetelem!==null && typeof targetelem ==="string" && targetelem!==""){
