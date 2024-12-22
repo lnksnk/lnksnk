@@ -523,7 +523,7 @@ func (rdr *Reader) CSVReader(a ...interface{}) (eofr *iorw.EOFCloseSeekReader) {
 	return
 }
 
-func (rdr *Reader) JSONReader(layout string, cols ...string) (eofr *iorw.EOFCloseSeekReader) {
+func (rdr *Reader) Reader(layout string, cols ...string) (eofr *iorw.EOFCloseSeekReader) {
 	if rdr != nil {
 		pi, pw := io.Pipe()
 		ctx, ctxcnl := context.WithCancel(context.Background())
@@ -537,7 +537,7 @@ func (rdr *Reader) JSONReader(layout string, cols ...string) (eofr *iorw.EOFClos
 				pw.Close()
 			}()
 			ctxcnl()
-			pwerr = rdr.ToJSON(pw, layout, cols...)
+			pwerr = rdr.Print(pw, layout, cols...)
 		}()
 		<-ctx.Done()
 		eofr = iorw.NewEOFCloseSeekReader(pi)
@@ -545,7 +545,7 @@ func (rdr *Reader) JSONReader(layout string, cols ...string) (eofr *iorw.EOFClos
 	return
 }
 
-func (rdr *Reader) ToJSON(w io.Writer, layout string, cols ...string) (err error) {
+func (rdr *Reader) Print(w io.Writer, layout string, cols ...string) (err error) {
 	if rdr != nil {
 		buffenc := iorw.NewBuffer()
 		enc := json.NewEncoder(buffenc)
@@ -559,11 +559,11 @@ func (rdr *Reader) ToJSON(w io.Writer, layout string, cols ...string) (err error
 			return
 		}
 		if cols := rdr.Columns(cols...); len(cols) > 0 {
-			if strings.EqualFold(layout, "datatables") {
+			if strings.EqualFold(layout, "table") {
 				if _, err = w.Write([]byte("{")); err != nil {
 					return
 				}
-				if err = iorw.Fprint(w, `"colummns":`); err != nil {
+				if err = iorw.Fprint(w, `"cols":`); err != nil {
 					return
 				}
 				if _, err = w.Write([]byte("[")); err != nil {
@@ -619,7 +619,7 @@ func (rdr *Reader) ToJSON(w io.Writer, layout string, cols ...string) (err error
 				if _, err = w.Write([]byte("{")); err != nil {
 					return
 				}
-				if err = iorw.Fprint(w, `"colummns":`); err != nil {
+				if err = iorw.Fprint(w, `"cols":`); err != nil {
 					return
 				}
 				if _, err = w.Write([]byte("[")); err != nil {
