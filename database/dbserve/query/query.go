@@ -103,7 +103,7 @@ var aliascmdquery dbserve.AliasCommandFunc = func(alias, path, ext string, dbhnl
 		})
 		var rec = dbhnl.Query(alias, qryarr...)
 		if rec != nil && errfound == nil {
-			err = rec.ToJSON(w, layout, cols...)
+			err = rec.Print(w, layout, cols...)
 			return
 		}
 		if errfound != nil {
