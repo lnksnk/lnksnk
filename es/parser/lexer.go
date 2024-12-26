@@ -855,11 +855,7 @@ func (self *_parser) parseTemplateCharacters() (literal string, parsed unistring
 		literal = normaliseCRLF(literal)
 	}
 	if parseErr == "" {
-		if isUnicode {
-			parsed, parseErr = parseStringLiteral(literal, length, isUnicode, true)
-		} else {
-			parsed = unistring.String(literal)
-		}
+		parsed, parseErr = parseStringLiteral(literal, length, isUnicode, true)
 	}
 	self.insertSemicolon = true
 	return
