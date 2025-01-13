@@ -214,6 +214,17 @@ func (dbmshndlr *DBMSHandler) Iterate(alias string, a ...interface{}) func(func(
 	return nil
 }
 
+func (dbmshndlr *DBMSHandler) IterN(alias string, a ...interface{}) func(func(int64, *Reader) bool) {
+	return dbmshndlr.IterateN(alias, a...)
+}
+
+func (dbmshndlr *DBMSHandler) IterateN(alias string, a ...interface{}) func(func(int64, *Reader) bool) {
+	if rdr := dbmshndlr.Query(alias, a...); rdr != nil {
+		return rdr.IterateN(rdr.EventError)
+	}
+	return nil
+}
+
 func (dbmshndlr *DBMSHandler) Qry(alias string, a ...interface{}) *Reader {
 	return dbmshndlr.Query(alias, a...)
 }

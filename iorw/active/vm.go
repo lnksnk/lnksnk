@@ -71,6 +71,11 @@ func NewVM(a ...interface{}) (vm *VM) {
 			return !yield(arg)
 		})
 	})
+	vm.Set("iterN", func(itr func(func(int64, interface{}) bool), yield func(int64, interface{}) bool) {
+		itr(func(ix int64, arg interface{}) bool {
+			return !yield(ix, arg)
+		})
+	})
 	var fldmppr = &fieldmapper{fldmppr: es.UncapFieldNameMapper()}
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {

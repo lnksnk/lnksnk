@@ -316,6 +316,32 @@ func (rdr *Reader) Iterate(evterr ...func(error)) func(func(*Reader) bool) {
 	}
 }
 
+func (rdr *Reader) IterN(evterr ...func(error)) func(func(int64, *Reader) bool) {
+	return rdr.IterateN(evterr...)
+}
+
+func (rdr *Reader) IterateN(evterr ...func(error)) func(func(int64, *Reader) bool) {
+	return func(yield func(int64, *Reader) bool) {
+		nxt := false
+		nxterr := error(nil)
+		for {
+			if nxt, nxterr = rdr.Next(); nxt {
+				if !yield(rdr.RowNr, rdr) {
+					return
+				}
+				continue
+			}
+			if nxterr != nil {
+				if len(evterr) > 0 && evterr[0] != nil {
+					evterr[0](nxterr)
+				}
+				return
+			}
+			return
+		}
+	}
+}
+
 func (rdr *Reader) callFinalise() {
 	if rdr != nil {
 		if EventFinalize := rdr.EventFinalize; EventFinalize != nil {
