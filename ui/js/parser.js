@@ -719,3 +719,7 @@ function processContent(template) {
         return "";
     }
 }
+
+function uniqueId(prefix){
+    return `${prefix}${new Date().getTime()}`;
+}
