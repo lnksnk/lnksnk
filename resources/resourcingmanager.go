@@ -116,11 +116,72 @@ func (rscngmngr *ResourcingManager) findrsendpnt(path string) (epnt *ResourcingE
 
 func (rscngmngr *ResourcingManager) findrsendpnts(path ...string) (epnts []*ResourcingEndpoint, epnttphs, epnttroots []string) {
 	if pl := len(path); pl > 0 {
-		epnts = make([]*ResourcingEndpoint, pl)
-		epnttphs = make([]string, pl)
-		epnttroots = make([]string, pl)
-		for pn, pth := range path {
-			epnts[pn], epnttphs[pn], epnttroots[pn] = rscngmngr.findrsendpnt(pth)
+		//epnts = make([]*ResourcingEndpoint, pl)
+		//epnttphs = make([]string, pl)
+		//epnttroots = make([]string, pl)
+		cpturd := map[string]bool{}
+		var capturefndrs = func(pth string) {
+			if pth != "" && cpturd[pth] {
+				return
+			}
+			cpturd[pth] = true
+			if epnt, epntpth, epntroot := rscngmngr.findrsendpnt(pth); epnt != nil {
+				epnts = append(epnts, epnt)
+				epnttphs = append(epnttphs, epntpth)
+				epnttroots = append(epnttroots, epntroot)
+			}
+		}
+		for _, pth := range path {
+
+			if elpsp := strings.Index(pth, "../"); elpsp > -1 {
+				elpths := strings.Split(pth, "../")
+				elpl := len(elpths)
+				tpth := ""
+				for elpl > 0 {
+					epth := elpths[0]
+					if epth == "" {
+						elpl--
+						elpths = elpths[1:]
+						continue
+					}
+					if esp := strings.Index(epth, "/"); esp > -1 {
+						tpth += epth[:esp+1]
+						elpths[0] = epth[esp+1:]
+						if elpths[0] == "" {
+							elpths = elpths[1:]
+							elpl--
+							capturefndrs(tpth + func() (npth string) {
+								for _, ep := range elpths {
+									if ep == "" {
+										npth += "../"
+										continue
+									}
+									npth += ep
+								}
+								return
+							}())
+						} else {
+							capturefndrs(tpth + func() (npth string) {
+								for _, ep := range elpths {
+									if ep == "" {
+										npth += "../"
+										continue
+									}
+									npth += ep
+								}
+								return
+							}())
+						}
+						continue
+					}
+					tpth += epth
+					capturefndrs(tpth)
+					goto nxtpth
+				}
+				goto nxtpth
+			}
+			capturefndrs(pth)
+		nxtpth:
 		}
 	}
 	return
