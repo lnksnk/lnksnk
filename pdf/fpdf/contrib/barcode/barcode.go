@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/go-pdf/fpdf"
 	"github.com/lnksnk/lnksnk/barcode"
 	"github.com/lnksnk/lnksnk/barcode/aztec"
 	"github.com/lnksnk/lnksnk/barcode/codabar"
@@ -35,6 +34,7 @@ import (
 	"github.com/lnksnk/lnksnk/barcode/ean"
 	"github.com/lnksnk/lnksnk/barcode/qr"
 	"github.com/lnksnk/lnksnk/barcode/twooffive"
+	"github.com/lnksnk/lnksnk/pdf/fpdf"
 	pdf417 "github.com/lnksnk/lnksnk/pdf/pdf417"
 )
 
