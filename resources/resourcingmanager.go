@@ -116,15 +116,15 @@ func (rscngmngr *ResourcingManager) findrsendpnt(path string) (epnt *ResourcingE
 
 func (rscngmngr *ResourcingManager) findrsendpnts(path ...string) (epnts []*ResourcingEndpoint, epnttphs, epnttroots []string) {
 	if pl := len(path); pl > 0 {
-		//epnts = make([]*ResourcingEndpoint, pl)
-		//epnttphs = make([]string, pl)
-		//epnttroots = make([]string, pl)
 		cpturd := map[string]bool{}
 		var capturefndrs = func(pth string) {
 			if pth != "" && cpturd[pth] {
 				return
 			}
 			cpturd[pth] = true
+			if strings.Contains(pth, "../") {
+				pth = strings.Replace(pth, "../../", "", -1)
+			}
 			if epnt, epntpth, epntroot := rscngmngr.findrsendpnt(pth); epnt != nil {
 				epnts = append(epnts, epnt)
 				epnttphs = append(epnttphs, epntpth)
@@ -132,7 +132,6 @@ func (rscngmngr *ResourcingManager) findrsendpnts(path ...string) (epnts []*Reso
 			}
 		}
 		for _, pth := range path {
-
 			if elpsp := strings.Index(pth, "../"); elpsp > -1 {
 				elpths := strings.Split(pth, "../")
 				elpl := len(elpths)
