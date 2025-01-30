@@ -2,14 +2,11 @@ package serve
 
 import (
 	"bufio"
-	"context"
 	"crypto/tls"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,7 +14,6 @@ import (
 
 	"github.com/lnksnk/lnksnk/concurrent"
 	"github.com/lnksnk/lnksnk/database"
-	"github.com/lnksnk/lnksnk/database/dbserve"
 	"github.com/lnksnk/lnksnk/ws"
 
 	//"github.com/lnksnk/lnksnk/email/emailing"
@@ -28,7 +24,6 @@ import (
 	"github.com/lnksnk/lnksnk/iorw/active"
 	"github.com/lnksnk/lnksnk/iorw/parsing"
 	_ "github.com/lnksnk/lnksnk/iorw/parsing/minify"
-	"github.com/lnksnk/lnksnk/mimes"
 	"github.com/lnksnk/lnksnk/parameters"
 	"github.com/lnksnk/lnksnk/resources"
 	"github.com/lnksnk/lnksnk/scheduling"
@@ -471,7 +466,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	return nvm
 }
 
-func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (err error) {
+/*func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsutils.FSUtils, activemap map[string]interface{}, a ...interface{}) (err error) {
 	var caching *concurrent.Map
 	var invokecaching = func() *concurrent.Map {
 		if caching == nil {
@@ -518,7 +513,7 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 
 	var dbhnlr *database.DBMSHandler = DBMS.DBMSHandler(ctx, active.RuntimeFunc(func(functocall interface{}, args ...interface{}) interface{} {
 		return invokevm().InvokeFunction(functocall, args...)
-	}), params /* CHACHING,*/, fs, func(ina ...interface{}) (a []interface{}) {
+	}), params, fs, func(ina ...interface{}) (a []interface{}) {
 		if len(ina) == 1 {
 			if fia, _ := ina[0].(fsutils.FileInfo); fia != nil {
 				dbvm := invokevm()
@@ -547,7 +542,7 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 				terminal = newTerminal()
 			}
 			return terminal
-		}, dbhnlr /* emailsvchndl,*/, params, Out, In, activemap, func() fsutils.FileInfo {
+		}, dbhnlr, params, Out, In, activemap, func() fsutils.FileInfo {
 			return fi
 		}, fs, invokecaching)
 		return vm
@@ -739,7 +734,7 @@ func internalServeRequest(path string, In serveio.Reader, Out serveio.Writer, fs
 		}
 	}
 	return
-}
+}*/
 
 type terminals struct {
 	cmdprscs    *sync.Map
