@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -21,16 +22,77 @@ type Reader interface {
 	HttpR() *http.Request
 	Path() string
 	IsMobile() bool
+	RemoteAddr() string
+	LocalAddr() string
+	Method() string
+	Protocol() string
+	IsSSL() bool
+	Proto() string
 }
 
 type reader struct {
 	ctx         context.Context
+	mthd        string
+	prtcl       string
+	rmtaddr     string
+	lkladdr     string
 	ctxcnl      func()
 	httpr       *http.Request
+	isssl       bool
 	path        string
 	bufr        *bufio.Reader
 	rangetype   string
 	rangeoffset int64
+}
+
+func (rqr *reader) IsSSL() bool {
+	if rqr == nil {
+		return false
+	}
+	return rqr.isssl
+}
+
+func (rqr *reader) RemoteAddr() string {
+	if rqr == nil {
+		return ""
+	}
+	return rqr.rmtaddr
+}
+
+func (rqr *reader) Method() string {
+	if rqr == nil {
+		return ""
+	}
+	return rqr.mthd
+}
+
+func (rqr *reader) Protocol() string {
+	if rqr == nil {
+		return ""
+	}
+	return rqr.prtcl
+}
+
+func (rqr *reader) Proto() string {
+	if rqr == nil {
+		return ""
+	}
+	proto := rqr.Protocol()
+	if pri := strings.Index(proto, "/"); pri > -1 {
+		proto = proto[:pri]
+	}
+	proto = strings.ToLower(proto)
+	if rqr.isssl {
+		proto += "s"
+	}
+	return proto
+}
+
+func (rqr *reader) LocalAddr() string {
+	if rqr == nil {
+		return ""
+	}
+	return rqr.lkladdr
 }
 
 func (rqr *reader) RangeOffset() int64 {
@@ -57,6 +119,19 @@ func (rqr *reader) IsMobile() (mobile bool) {
 			if au := hr.Get("User-Agent"); au != "" {
 				if mobile = (mobileRE.MatchString(au) && !notMobileRE.MatchString(au)) || tabletRE.MatchString(au); !mobile {
 					mobile = strings.Contains(strings.ToLower(au), "mobile")
+				}
+			}
+		}
+	}
+	return
+}
+
+func (rqr *reader) IsTablet() (tablet bool) {
+	if rqr != nil {
+		if hr := rqr.Header(); hr != nil {
+			if au := hr.Get("User-Agent"); au != "" {
+				if tablet = tabletRE.MatchString(au); !tablet {
+					tablet = strings.Contains(strings.ToLower(au), "mobile")
 				}
 			}
 		}
@@ -145,7 +220,6 @@ func (rqr *reader) Cancel() {
 			cncl()
 		}
 	}
-	return
 }
 
 func (rqr *reader) Close() (err error) {
@@ -163,9 +237,16 @@ func (rqr *reader) Close() (err error) {
 func NewReader(httpr *http.Request) (rdr *reader) {
 	rdr = &reader{httpr: httpr, rangeoffset: -1, ctx: httpr.Context()}
 	if rdr.ctx != nil {
+		if lcaddr, _ := rdr.ctx.Value(http.LocalAddrContextKey).(net.Addr); lcaddr != nil {
+			rdr.lkladdr = lcaddr.String()
+		}
 		rdr.ctx, rdr.ctxcnl = context.WithCancel(rdr.ctx)
 	}
 	if httpr != nil {
+		rdr.rmtaddr = httpr.RemoteAddr
+		rdr.mthd = httpr.Method
+		rdr.prtcl = httpr.Proto
+		rdr.isssl = httpr.TLS != nil
 		prtclrangetype := ""
 		prtclrangeoffset := int64(-1)
 		if prtclrange := httpr.Header.Get("Range"); prtclrange != "" && strings.Index(prtclrange, "=") > 0 {
