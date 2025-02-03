@@ -128,9 +128,7 @@ func (lsnt *listen) Shutdown(keys ...interface{}) {
 
 func NewListen(handerfunc http.HandlerFunc) *listen {
 	if handerfunc == nil && DefaultHandler != nil {
-		handerfunc = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			DefaultHandler.ServeHTTP(w, r)
-		})
+		handerfunc = http.HandlerFunc(DefaultHandler.ServeHTTP)
 	}
 	return &listen{handler: handerfunc, TLSConfig: &tls.Config{}}
 }
@@ -156,7 +154,6 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 					lstnr.Start()
 				}
 				ln = lstnr.Listen(ln)
-				//http2.ConfigureServer(&http.Server{})
 				go http.Serve(ln, h2c.NewHandler(handler, &http2.Server{}))
 				return
 			}
@@ -169,6 +166,7 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 
 		server := http3.Server{
 			Addr:       fmt.Sprintf("%s:%d", adrhost, int(htpport+1)),
+			Port:       int(htpport + 1),
 			TLSConfig:  http3.ConfigureTLSConfig(&tls.Config{}), // use your tls.Config here
 			QUICConfig: &quic.Config{Versions: []quic.Version{quic.Version1, quic.Version2}},
 		}
