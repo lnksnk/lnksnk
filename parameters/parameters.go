@@ -486,6 +486,9 @@ func (params *Parameters) FileParameter(pname string, index ...int) []interface{
 
 // CleanupParameters function that can be called to assist in cleaning up instance of Parameter container
 func (params *Parameters) CleanupParameters() {
+	if params == nil {
+		return
+	}
 	if standard, urlkeys := params.standard, params.urlkeys; standard != nil {
 		params.standard = nil
 		params.urlkeys = nil
