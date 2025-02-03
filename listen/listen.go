@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lnksnk/lnksnk/concurrent"
@@ -150,11 +151,32 @@ func Serve(network string, addr string, handler http.Handler, tlsconf ...*tls.Co
 					ln = tls.NewListener(ln, tlsconf[0].Clone())
 				}
 				if lstnr == nil {
-					lstnr = &listener{accepts: make(chan net.Conn), accepteds: make(chan net.Conn)}
-					lstnr.Start()
+					lstnr = &listener{lstnsrs: &sync.Map{}, hndlrs: &sync.Map{}}
+					//	lstnr.Start()
 				}
-				ln = lstnr.Listen(ln)
-				go http.Serve(ln, h2c.NewHandler(handler, &http2.Server{}))
+				hndlv, hndlvok := lstnr.hndlrs.Load(network + addr)
+				if !hndlvok {
+					handler = h2c.NewHandler(handler, &http2.Server{})
+					lstnr.hndlrs.LoadOrStore(network+addr, hndlv)
+				} else {
+					handler, _ = hndlv.(http.Handler)
+				}
+				lstnv, lstnvok := lstnr.lstnsrs.Load(network + addr)
+				if !lstnvok {
+					lstnr.lstnsrs.LoadOrStore(network+addr, ln)
+				} else {
+					ln, _ = lstnv.(net.Listener)
+				}
+				if ln != nil && handler != nil {
+					go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						ctx, ctxcncl := context.WithCancel(r.Context())
+						go func() {
+							defer ctxcncl()
+							handler.ServeHTTP(w, r)
+						}()
+						<-ctx.Done()
+					}))
+				}
 				return
 			}
 		}
