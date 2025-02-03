@@ -89,7 +89,7 @@ func (rscngmngr *ResourcingManager) findrsendpnt(path string) (epnt *ResourcingE
 	if path != "" && !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	if len(path) > 0 {
+	if rsngpaths := rscngmngr.rsngpaths; len(rsngpaths) > 0 && len(path) > 0 {
 		pths := strings.Split(path, "/")
 		rpath = ""
 		tpth := ""
@@ -100,7 +100,7 @@ func (rscngmngr *ResourcingManager) findrsendpnt(path string) (epnt *ResourcingE
 			} else {
 				tpth += pths[pn]
 			}
-			if epntfnd, epntfndok := rscngmngr.rsngpaths[tpth]; epntfndok && tpthl < len(tpth) {
+			if epntfnd, epntfndok := rsngpaths[tpth]; epntfndok && tpthl < len(tpth) {
 				rroot = tpth
 				rpath = strings.Join(pths[pn+1:], "/")
 				tpthl = len(tpth)
