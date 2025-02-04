@@ -14,6 +14,6 @@ type RowsAPI interface {
 	Err() error
 	Next() bool
 	Context() context.Context
-	//NextResultSet() bool
+	NextResultSet() bool
 	Scan(castTypeVal func(valToCast interface{}, colType interface{}) (val interface{}, scanned bool)) error
 }

@@ -403,6 +403,11 @@ type SqlRows struct {
 	clsimap     map[string]int
 }
 
+// NextResultSet implements RowsAPI.
+func (sqlrws *SqlRows) NextResultSet() bool {
+	panic("unimplemented")
+}
+
 type StreamReader struct {
 	cls           []string
 	clstpes       []*ColumnType
@@ -422,6 +427,11 @@ func newStreamReader(rdr *Reader, prepCols PrepColumnsFunc, prepData PrepDataFun
 	streamrdr.eventprepdata = func() {
 		prepData(rdr, streamrdr.PrepData)
 	}
+	return
+}
+
+func (strmrdr *StreamReader) NextResultSet() (next bool) {
+
 	return
 }
 

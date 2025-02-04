@@ -18,17 +18,18 @@ import (
 )
 
 type Statement struct {
-	ctx       context.Context
-	cn        *Connection
-	isRemote  bool
-	prepstmnt *sql.Stmt
-	prms      *parameters.Parameters
-	rdr       *Reader
-	args      *sync.Map
-	stmntlck  *sync.RWMutex
-	stmnt     string
-	argnames  []string
-	argtypes  []int
+	ctx      context.Context
+	sqlcn    *sql.Conn
+	cn       *Connection
+	isRemote bool
+	//prepstmnt []*sql.Stmt
+	prms     *parameters.Parameters
+	rdr      *Reader
+	args     *sync.Map
+	stmntlck *sync.RWMutex
+	stmnt    []string
+	argnames []string
+	argtypes []int
 	//parseSqlParam func(totalArgs int) (s string)
 }
 
@@ -216,7 +217,10 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		qrybdr := qrybuf.Clone(true).Reader(true)
 
 		bsy := false
-		qrybuf.Print(iorw.ReadRunesUntil(qrybdr, iorw.RunesUntilFunc(func(prevphrase, phrase string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) (fnerr error) {
+		cmntcnt := 0
+		stmnts := []string{}
+
+		iorw.ReadRunesEOFFunc(iorw.ReadRunesUntil(qrybdr, iorw.RunesUntilFunc(func(prevphrase, phrase string, untilrdr io.RuneReader, orgrd iorw.SliceRuneReader, orgerr error, flushrdr iorw.SliceRuneReader) (fnerr error) {
 			if phrase == "@" {
 				if foundTxt {
 					flushrdr.PreAppendArgs(phrase)
@@ -300,9 +304,28 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 				return
 			}
 			return
-		}), "@", "'"))
-
-		*stmntref = qrybuf.String()
+		}), "@", "'"), func(sqr rune) (sqerr error) {
+			if sqr == '\'' {
+				if cmntcnt == 0 {
+					cmntcnt++
+				} else {
+					cmntcnt--
+				}
+			}
+			qrybuf.WriteRune(sqr)
+			if sqr == ';' && cmntcnt == 0 {
+				if !qrybuf.Empty() {
+					stmnts = append(stmnts, qrybuf.String())
+					qrybuf.Clear()
+				}
+			}
+			return
+		})
+		if !qrybuf.Empty() {
+			stmnts = append(stmnts, qrybuf.String())
+			qrybuf.Clear()
+		}
+		*stmntref = stmnts
 		if refrdr := stmnt.rdr; rdr != nil && refrdr != rdr {
 			stmnt.rdr = rdr
 		}
@@ -322,21 +345,36 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		if refprms := stmnt.prms; prms != nil && prms != refprms {
 			stmnt.prms = prms
 		}
-		if stmnt.prepstmnt == nil && stmnt.cn.isRemote() {
+		if stmnt.sqlcn == nil && stmnt.cn.isRemote() {
 
 		} else {
 			if ctx != nil && stmnt.ctx != ctx {
 				stmnt.ctx = ctx
 			}
-			if stmnt.prepstmnt == nil {
+			if stmnt.sqlcn == nil {
 				if db, dberr := stmnt.cn.DbInvoke(); dberr == nil && db != nil {
-					if stmnt.ctx != nil {
-						if stmnt.prepstmnt, preperr = db.PrepareContext(stmnt.ctx, stmnt.stmnt); preperr != nil {
-							return
-						}
-					} else if stmnt.prepstmnt, preperr = db.Prepare(stmnt.stmnt); preperr != nil {
+					var sqlcn *sql.Conn
+					ctx := stmnt.ctx
+					if ctx == nil {
+						ctx = context.Background()
+					}
+					if sqlcn, preperr = db.Conn(ctx); preperr != nil {
 						return
 					}
+					stmnt.sqlcn = sqlcn
+					/*var prepstmnt *sql.Stmt
+
+					for sn := range stmnts {
+						if stmnt.ctx != nil {
+							if sqlcn==
+							if prepstmnt, preperr = db.PrepareContext(stmnt.ctx, stmnt.stmnt[sn]); preperr != nil {
+								return
+							}
+						} else if prepstmnt, preperr = db.Prepare(stmnt.stmnt[sn]); preperr != nil {
+							return
+						}
+						stmnt.prepstmnt = append(stmnt.prepstmnt, prepstmnt)
+					}*/
 				} else if dberr != nil {
 					preperr = dberr
 				}
@@ -402,17 +440,37 @@ func (stmnt *Statement) Arguments() (args []interface{}) {
 
 func (stmnt *Statement) Query() (rows RowsAPI, err error) {
 	if stmnt != nil {
-		if ctx, prep := stmnt.ctx, stmnt.prepstmnt; prep != nil {
+		sqlcn, ctx := stmnt.sqlcn, stmnt.ctx
+		if sqlcn == nil {
+			return
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		for _, sqls := range stmnt.stmnt {
 			var sqlrw *sql.Rows = nil
 			if ctx != nil {
-				if sqlrw, err = prep.QueryContext(ctx, stmnt.Arguments()...); err == nil && sqlrw != nil {
+				if sqlrw, err = sqlcn.QueryContext(ctx, sqls, stmnt.Arguments()...); err == nil && sqlrw != nil {
+					if rows != nil {
+						rows.Close()
+					}
 					rows = newSqlRows(sqlrw, nil, nil)
-				}
-			} else {
-				if sqlrw, err = prep.Query(stmnt.Arguments()...); err == nil && sqlrw != nil {
-					rows = newSqlRows(sqlrw, nil, nil)
+					continue
 				}
 			}
+			break
+			/*if ctx, prep := stmnt.ctx, stmnt.prepstmnt[sn]; prep != nil {
+				var sqlrw *sql.Rows = nil
+				if ctx != nil {
+					if sqlrw, err = prep.QueryContext(ctx, stmnt.Arguments()...); err == nil && sqlrw != nil {
+						rows = newSqlRows(sqlrw, nil, nil)
+					}
+				} else {
+					if sqlrw, err = prep.Query(stmnt.Arguments()...); err == nil && sqlrw != nil {
+						rows = newSqlRows(sqlrw, nil, nil)
+					}
+				}
+			}*/
 		}
 	}
 	return
@@ -431,13 +489,15 @@ func (stmnt *Statement) Close() (err error) {
 		if rdr := stmnt.rdr; rdr != nil {
 			stmnt.rdr = nil
 		}
-		if prepstmnt := stmnt.prepstmnt; prepstmnt != nil {
-			stmnt.prepstmnt = nil
-			err = prepstmnt.Close()
-		}
 		if cn := stmnt.cn; cn != nil {
 			stmnt.cn = nil
 		}
+
+		if sqlcn := stmnt.sqlcn; sqlcn != nil {
+			stmnt.sqlcn = nil
+			sqlcn.Close()
+		}
+
 	}
 	return
 }

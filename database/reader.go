@@ -1125,7 +1125,7 @@ func (rdr *Reader) Prep() (err error) {
 				if cn := rdr.stmnt.cn; cn != nil {
 					if cn.isRemote() {
 
-					} else if rdr.stmnt.prepstmnt != nil {
+					} else if rdr.stmnt.sqlcn != nil {
 						if rows, err = rdr.stmnt.Query(); err == nil {
 							if _, err = rows.Columns(); err == nil {
 								rdr.rows = rows

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/lnksnk/lnksnk/iorw/active"
@@ -153,32 +154,24 @@ func (exectr *Executor) Exec() (err error) {
 
 				return
 			}
-			if prepstmnt := exectr.stmnt.prepstmnt; prepstmnt != nil && !exectr.prpOnly {
-				if exectr.sqlresult, err = prepstmnt.Exec(exectr.stmnt.Arguments()...); err == nil {
-					insertid, affected := int64(-1), int64(-1)
-					if insertid, err = exectr.sqlresult.LastInsertId(); err != nil {
-						insertid = -1
-					}
-					if affected, err = exectr.sqlresult.RowsAffected(); err != nil {
-						affected = -1
-						err = nil
-					}
-					exectr.eventexec(exectr, affected, insertid)
-					return
+			if sqlcn := exectr.stmnt.sqlcn; sqlcn != nil {
+				ctx := exectr.stmnt.ctx
+				if ctx == nil {
+					ctx = context.Background()
 				}
-				ignr, ignrerr := exectr.eventexecerror(err, exectr)
-				if ignr {
-					if ignrerr != nil {
-						err = ignrerr
-						exectr.eventerror(err)
-						exectr.Close()
-						return
+				for _, sqls := range exectr.stmnt.stmnt {
+					if exectr.sqlresult, err = sqlcn.ExecContext(ctx, sqls, exectr.stmnt.Arguments()...); err == nil {
+						insertid, affected := int64(-1), int64(-1)
+						if insertid, err = exectr.sqlresult.LastInsertId(); err != nil {
+							insertid = -1
+						}
+						if affected, err = exectr.sqlresult.RowsAffected(); err != nil {
+							affected = -1
+							err = nil
+						}
+						exectr.eventexec(exectr, affected, insertid)
 					}
-					err = nil
-					return
 				}
-				exectr.eventerror(err)
-				exectr.Close()
 			}
 		}
 	}
