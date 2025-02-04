@@ -28,20 +28,6 @@ func main() {
 	args := os.Args
 	var appfunc func(...string) = nil
 
-	/*if al > 1 {
-		if strings.EqualFold(args[1], "app") {
-			args = append(args[:1], args[1:]...)
-			appfunc = app.App
-		} else if strings.EqualFold(args[1], "webapp") {
-			args = append(args[:1], args[1:]...)
-			appfunc = webapp.App
-		} else {
-			appfunc = srv.Serve
-		}
-	} else {
-		//appfunc = srv.Serve
-		appfunc = srv.Serve
-	}*/
 	appfunc = srv.Serve
 	appfunc(args...)
 }
