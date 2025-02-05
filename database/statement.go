@@ -119,48 +119,94 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		}
 		if vqry, vqryfnd := cchng.Find(a...); vqryfnd && vqry != nil {
 			qrybuf.Print(vqry)
-		} else {
-			qrybuf.Print(a...)
 		}
-
-		if fs != nil {
-			if fi := func() fsutils.FileInfo {
-				if tstsql := qrybuf.String() + func() string {
-					if !qrybuf.HasSuffix(".sql") {
-						return ".sql"
+		if qrybuf.Empty() {
+			if fs != nil {
+				for _, d := range a {
+					if tstsqls, tstsqlsok := d.([]string); tstsqlsok {
+						if len(tstsqls) > 0 {
+							for _, tstsql := range tstsqls {
+								if tstsql != "" {
+									if fi := func() fsutils.FileInfo {
+										if prfmsql := tstsql + func() string {
+											if !strings.HasSuffix(tstsql, ".sql") {
+												return ".sql"
+											}
+											return ""
+										}(); prfmsql != "" {
+											if fio := fs.LS(prfmsql); len(fio) == 1 {
+												return fio[0]
+											}
+											if fio := fs.LS(prfmsql[:len(prfmsql)-len(".sql")] + "." + stmnt.cn.driverName + ".sql"); len(fio) == 1 {
+												return fio[0]
+											}
+										}
+										return nil
+									}(); fi != nil && stmnthndlr != nil {
+										//qrybuf.Clear()
+										qrybuf.Print(stmnthndlr.Prepair(fi))
+									}
+								}
+							}
+						}
+						continue
 					}
-					return ""
-				}(); tstsql != "" {
-					if fio := fs.LS(tstsql); len(fio) == 1 {
-						return fio[0]
+					if tstsqlsd, tstsqlsok := d.([]interface{}); tstsqlsok {
+						if len(tstsqlsd) > 0 {
+							for _, tstsqld := range tstsqlsd {
+								if tstsql, _ := tstsqld.(string); tstsql != "" {
+									if fi := func() fsutils.FileInfo {
+										if prfmsql := tstsql + func() string {
+											if !strings.HasSuffix(tstsql, ".sql") {
+												return ".sql"
+											}
+											return ""
+										}(); prfmsql != "" {
+											if fio := fs.LS(prfmsql); len(fio) == 1 {
+												return fio[0]
+											}
+											if fio := fs.LS(prfmsql[:len(prfmsql)-len(".sql")] + "." + stmnt.cn.driverName + ".sql"); len(fio) == 1 {
+												return fio[0]
+											}
+										}
+										return nil
+									}(); fi != nil && stmnthndlr != nil {
+										//qrybuf.Clear()
+										qrybuf.Print(stmnthndlr.Prepair(fi))
+									}
+								}
+							}
+						}
+						continue
 					}
-					if fio := fs.LS(tstsql[:len(tstsql)-len(".sql")] + "." + stmnt.cn.driverName + ".sql"); len(fio) == 1 {
-						return fio[0]
+					if tstsql, _ := d.(string); tstsql != "" {
+						if fi := func() fsutils.FileInfo {
+							if prfmsql := tstsql + func() string {
+								if !strings.HasSuffix(tstsql, ".sql") {
+									return ".sql"
+								}
+								return ""
+							}(); prfmsql != "" {
+								if fio := fs.LS(prfmsql); len(fio) == 1 {
+									return fio[0]
+								}
+								if fio := fs.LS(prfmsql[:len(prfmsql)-len(".sql")] + "." + stmnt.cn.driverName + ".sql"); len(fio) == 1 {
+									return fio[0]
+								}
+							}
+							return nil
+						}(); fi != nil && stmnthndlr != nil {
+							//qrybuf.Clear()
+							qrybuf.Print(stmnthndlr.Prepair(fi))
+						}
 					}
 				}
-				return nil
-			}(); fi != nil && stmnthndlr != nil {
-				qrybuf.Clear()
-				qrybuf.Print(stmnthndlr.Prepair(fi))
+			}
+			if qrybuf.Empty() {
+				qrybuf.Print(a...)
 			}
 		}
 
-		if qrybuf.HasPrefix("#") && qrybuf.HasSuffix("#") {
-			if substrqry, _ := qrybuf.SubString(1, qrybuf.Size()-1); substrqry != "" {
-				subqryarr := strings.Split(substrqry, "=>")
-				subqry := make([]interface{}, len(subqryarr))
-				for subn, sub := range subqryarr {
-					subqry[subn] = strings.TrimSpace(sub)
-				}
-				if valfnd, valfndok := cchng.Find(subqry...); valfndok && valfnd != nil {
-					qrybuf.Clear()
-					qrybuf.Print(valfnd)
-				} else {
-					qrybuf.Clear()
-					qrybuf.Print(substrqry)
-				}
-			}
-		}
 		defer qrybuf.Close()
 
 		var foundTxt = false

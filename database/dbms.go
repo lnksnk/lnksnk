@@ -514,7 +514,7 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 			var prms *parameters.Parameters = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
-			var preprdsexctrs [][]interface{} = nil
+
 			var al = 0
 
 			if al = len(a); al > 0 {
@@ -613,21 +613,6 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if arrd, _ := a[ai].([]interface{}); arrd != nil {
-							if len(arrd) >= 2 {
-								if aliasd, _ := arrd[0].(string); aliasd != "" {
-									if !(strings.EqualFold(aliasd, "csv") || strings.EqualFold(aliasd, "json") || strings.EqualFold(aliasd, "xml")) {
-										func() {
-											if _, hascn := cnctns.Load(aliasd); hascn {
-												preprdsexctrs = append(preprdsexctrs, arrd)
-											}
-										}()
-									}
-								}
-							}
-							a = append(a[:ai], a[ai+1:]...)
-							al--
-							continue
 						}
 					}
 					ai++
@@ -644,31 +629,6 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 								reader.Close()
 								reader = nil
 							} else {
-								if len(preprdsexctrs) > 0 {
-									for _, exctrargs := range preprdsexctrs {
-										exctralias, _ := exctrargs[0].(string)
-										exctrargs = append(exctrargs[1:], reader)
-										if reader.stmnt != nil && reader.stmnt.prms != nil {
-											exctrargs = append(exctrargs, reader.stmnt.prms)
-										}
-										if prprdectr := dbms.Prepair(exctralias, exctrargs...); prprdectr != nil {
-											if reader.exctrs == nil {
-												reader.exctrs = map[*Executor]*Executor{}
-											}
-											reader.exctrs[prprdectr] = prprdectr
-											reader.orderedexctrs = append(reader.orderedexctrs, prprdectr)
-											prprdectr.EventClose = func(exec *Executor) {
-												delete(reader.exctrs, exec)
-												for execn, execref := range reader.orderedexctrs {
-													if exec == execref {
-														reader.orderedexctrs = append(reader.orderedexctrs[:execn], reader.orderedexctrs[execn+1:]...)
-														break
-													}
-												}
-											}
-										}
-									}
-								}
 								reader.EventInit(reader)
 							}
 						}
@@ -682,31 +642,6 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 							reader.Close()
 							reader = nil
 						} else {
-							if len(preprdsexctrs) > 0 {
-								for _, exctrargs := range preprdsexctrs {
-									exctralias, _ := exctrargs[0].(string)
-									exctrargs = append(exctrargs[1:], reader)
-									if reader.stmnt != nil && reader.stmnt.prms != nil {
-										exctrargs = append(exctrargs, reader.stmnt.prms)
-									}
-									if prprdectr := dbms.Prepair(exctralias, exctrargs...); prprdectr != nil {
-										if reader.exctrs == nil {
-											reader.exctrs = map[*Executor]*Executor{}
-										}
-										reader.exctrs[prprdectr] = prprdectr
-										reader.orderedexctrs = append(reader.orderedexctrs, prprdectr)
-										prprdectr.EventClose = func(exec *Executor) {
-											delete(reader.exctrs, exec)
-											for execn, execref := range reader.orderedexctrs {
-												if exec == execref {
-													reader.orderedexctrs = append(reader.orderedexctrs[:execn], reader.orderedexctrs[execn+1:]...)
-													break
-												}
-											}
-										}
-									}
-								}
-							}
 							reader.EventInit(reader)
 						}
 					}
@@ -729,31 +664,6 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 										reader.Close()
 										reader = nil
 									} else {
-										if len(preprdsexctrs) > 0 {
-											for _, exctrargs := range preprdsexctrs {
-												exctralias, _ := exctrargs[0].(string)
-												exctrargs = append(exctrargs[1:], reader)
-												if reader.stmnt != nil && reader.stmnt.prms != nil {
-													exctrargs = append(exctrargs, reader.stmnt.prms)
-												}
-												if prprdectr := dbms.Prepair(exctralias, exctrargs...); prprdectr != nil {
-													if reader.exctrs == nil {
-														reader.exctrs = map[*Executor]*Executor{}
-													}
-													reader.exctrs[prprdectr] = prprdectr
-													reader.orderedexctrs = append(reader.orderedexctrs, prprdectr)
-													prprdectr.EventClose = func(exec *Executor) {
-														delete(reader.exctrs, exec)
-														for execn, execref := range reader.orderedexctrs {
-															if exec == execref {
-																reader.orderedexctrs = append(reader.orderedexctrs[:execn], reader.orderedexctrs[execn+1:]...)
-																break
-															}
-														}
-													}
-												}
-											}
-										}
 										reader.EventInit(reader)
 									}
 								}
