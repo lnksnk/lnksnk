@@ -1274,7 +1274,7 @@ func castSQLTypeValue(valToCast interface{}, colType *ColumnType) (castedVal int
 			return
 		}
 		if dtime, dok := valToCast.(time.Time); dok {
-			castedVal = dtime.Format("2006-01-02T15:04:05")
+			castedVal = dtime //.Format("2006-01-02T15:04:05")
 			return
 		}
 		if djsn, djsnok := valToCast.([]byte); djsnok {

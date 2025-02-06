@@ -493,30 +493,31 @@ func (stmnt *Statement) Query() (rows RowsAPI, err error) {
 		if ctx == nil {
 			ctx = context.Background()
 		}
+		var slcrws []RowsAPI
 		for _, sqls := range stmnt.stmnt {
 			var sqlrw *sql.Rows = nil
 			if ctx != nil {
 				if sqlrw, err = sqlcn.QueryContext(ctx, sqls, stmnt.Arguments()...); err == nil && sqlrw != nil {
-					if rows != nil {
-						rows.Close()
+					cls, _ := sqlrw.Columns()
+					err = sqlrw.Err()
+					if err != nil {
+						sqlrw.Close()
+						return
 					}
-					rows = newSqlRows(sqlrw, nil, nil)
+					if len(cls) > 0 {
+						if rows != nil {
+							slcrws = append(slcrws, rows)
+						}
+						rows = newSqlRows(sqlrw, nil, nil)
+					}
 					continue
 				}
 			}
 			break
-			/*if ctx, prep := stmnt.ctx, stmnt.prepstmnt[sn]; prep != nil {
-				var sqlrw *sql.Rows = nil
-				if ctx != nil {
-					if sqlrw, err = prep.QueryContext(ctx, stmnt.Arguments()...); err == nil && sqlrw != nil {
-						rows = newSqlRows(sqlrw, nil, nil)
-					}
-				} else {
-					if sqlrw, err = prep.Query(stmnt.Arguments()...); err == nil && sqlrw != nil {
-						rows = newSqlRows(sqlrw, nil, nil)
-					}
-				}
-			}*/
+		}
+		if len(slcrws) > 0 {
+			slcrws = append(slcrws, rows)
+			rows = &currows{crntrw: slcrws[0], rows: slcrws[1:]}
 		}
 	}
 	return

@@ -690,6 +690,7 @@ func (sqlrws *SqlRows) Scan(castTypeVal func(valToCast interface{}, colType inte
 			if clsl = len(cls); clsl == 0 {
 				if cls, err = sqlrws.Columns(); err != nil {
 					sqlrws.cancelContext(err)
+					sqlrws.lsterr = err
 					return
 				}
 				clsl = len(cls)
@@ -700,14 +701,17 @@ func (sqlrws *SqlRows) Scan(castTypeVal func(valToCast interface{}, colType inte
 				if rows != nil {
 					if err = rows.Scan(sqlrws.dataref...); err != nil {
 						sqlrws.cancelContext(err)
+						sqlrws.lsterr = err
+						return
+					}
+					if castTypeVal == nil {
+						for cn, cltpe := range clstpes {
+							sqlrws.displaydata[cn] = castSQLTypeValue(sqlrws.data[cn], cltpe)
+						}
 						return
 					}
 					dspok := false
 					for cn, cltpe := range clstpes {
-						if castTypeVal == nil {
-							sqlrws.displaydata[cn] = castSQLTypeValue(sqlrws.data[cn], cltpe)
-							continue
-						}
 						if sqlrws.displaydata[cn], dspok = castTypeVal(sqlrws.data[cn], cltpe); !dspok {
 							sqlrws.displaydata[cn] = castSQLTypeValue(sqlrws.data[cn], cltpe)
 						}
