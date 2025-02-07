@@ -508,7 +508,7 @@ func (stmnt *Statement) Query() (rows RowsAPI, err error) {
 						if rows != nil {
 							slcrws = append(slcrws, rows)
 						}
-						rows = newSqlRows(sqlrw, nil, nil)
+						rows = newSqlRows(sqlrw, ctx)
 					}
 					continue
 				}

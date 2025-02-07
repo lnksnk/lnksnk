@@ -511,9 +511,24 @@ func (strmrdr *StreamReader) PrepData(data ...interface{}) {
 	}
 }
 
-func newSqlRows(rows *sql.Rows, datardr *DataReader, strmrdr *StreamReader) (sqlrws *SqlRows) {
-	ctx, ctxcnlcause := context.WithCancelCause(context.TODO())
-	sqlrws = &SqlRows{rows: rows, datardr: datardr, strmrdr: strmrdr, ctx: ctx, ctxcnl: ctxcnlcause}
+func newSqlRows(rdrsrc interface{}, ctx ...context.Context) (sqlrws *SqlRows) {
+	if rdrsrc == nil {
+		return
+	}
+	var rows, _ = rdrsrc.(*sql.Rows)
+	var datardr, _ = rdrsrc.(*DataReader)
+	var strmrdr, _ = rdrsrc.(*StreamReader)
+	if rows == nil && datardr == nil && strmrdr == nil {
+		return
+	}
+	//var rows *sql.Rows,_, datardr *DataReader, strmrdr *StreamReader
+	sqlctx, ctxcnlcause := context.WithCancelCause(func() context.Context {
+		if len(ctx) == 1 && ctx[0] != nil {
+			return ctx[0]
+		}
+		return context.Background()
+	}())
+	sqlrws = &SqlRows{rows: rows, datardr: datardr, strmrdr: strmrdr, ctx: sqlctx, ctxcnl: ctxcnlcause}
 	return
 }
 

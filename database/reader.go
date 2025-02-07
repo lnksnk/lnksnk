@@ -1142,7 +1142,7 @@ func (rdr *Reader) Prep() (err error) {
 				}
 			} else if rdr.strmrdr != nil {
 				if datardr := newDataReader("csv", rdr.strmsttngs, rdr.strmrdr); datardr != nil {
-					if rows := newSqlRows(nil, datardr, nil); rows != nil {
+					if rows := newSqlRows(datardr); rows != nil {
 						if _, err = rows.Columns(); err == nil {
 							rdr.rows = rows
 						} else {
@@ -1157,7 +1157,7 @@ func (rdr *Reader) Prep() (err error) {
 				}
 			} else if eventprepcols, eventprepdata := rdr.EventPrepColumns, rdr.EventPrepData; eventprepcols != nil && eventprepdata != nil {
 				if strmrdr := newStreamReader(rdr, eventprepcols, eventprepdata); strmrdr != nil {
-					if rows := newSqlRows(nil, nil, strmrdr); rows != nil {
+					if rows := newSqlRows(strmrdr); rows != nil {
 						if _, err = rows.Columns(); err == nil {
 							rdr.rows = rows
 						} else {
