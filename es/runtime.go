@@ -1900,7 +1900,11 @@ func (r *Runtime) toValue(i interface{}, origValue reflect.Value) Value {
 	case float64:
 		return floatToValue(i)
 	case *big.Int:
-		return (*valueBigInt)(new(big.Int).Set(i))
+		v := new(big.Int)
+		if i != nil {
+			v.Set(i)
+		}
+		return (*valueBigInt)(v)
 	case map[string]interface{}:
 		if i == nil {
 			return _null
@@ -2567,6 +2571,27 @@ func IsNaN(v Value) bool {
 // IsInfinity returns true if the supplied is (+/-)Infinity
 func IsInfinity(v Value) bool {
 	return v == _positiveInf || v == _negativeInf
+}
+
+// IsNumber returns true if the supplied is float(valueFloat) or int(valueInt)
+func IsNumber(v Value) bool {
+	switch v.(type) {
+	case valueInt, valueFloat:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsBigInt returns true if the supplied is bigint(*valueBigInt)
+func IsBigInt(v Value) bool {
+	_, ok := v.(*valueBigInt)
+	return ok
+}
+
+func IsString(v Value) bool {
+	_, ok := v.(String)
+	return ok
 }
 
 // Undefined returns JS undefined value. Note if global 'undefined' property is changed this still returns the original value.
