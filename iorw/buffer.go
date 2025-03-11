@@ -2,6 +2,7 @@ package iorw
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1276,9 +1277,14 @@ func (buff *Buffer) Marshal(args ...interface{}) (result interface{}, err error)
 func (buff *Buffer) Reader(args ...interface{}) (bufr *BuffReader) {
 	var offset []int64 = nil
 	var disposeBuffer bool = false
+	var ctx context.Context
 	for _, d := range args {
 		if d != nil {
-			if bd, _ := d.(bool); bd {
+			if ctxd, _ := d.(context.Context); ctxd != nil {
+				if ctx == nil {
+					ctx = ctxd
+				}
+			} else if bd, _ := d.(bool); bd {
 				if !disposeBuffer {
 					disposeBuffer = true
 				}
@@ -1295,7 +1301,7 @@ func (buff *Buffer) Reader(args ...interface{}) (bufr *BuffReader) {
 		} else if len(offset) == 1 && buff.Size() > 0 {
 			offset = append(offset, buff.Size())
 		}
-		bufr = &BuffReader{buffer: buff /* roffset: -1,*/, bufcur: newBufferCursor(buff, true, offset...), MaxRead: -1, Options: map[string]string{}}
+		bufr = &BuffReader{buffer: buff /* roffset: -1,*/, ctx: ctx, bufcur: newBufferCursor(buff, true, offset...), MaxRead: -1, Options: map[string]string{}}
 		bufr.DisposeBuffer = disposeBuffer
 	}
 	return
@@ -1408,6 +1414,7 @@ type BuffReader struct {
 	buffer  *Buffer
 	rnr     *bufio.Reader
 	MaxRead int64
+	ctx     context.Context
 	//roffset  int64
 	bufcur        *bufferCursor
 	rbytes        []byte
@@ -1791,6 +1798,19 @@ func (bufr *BuffReader) Read(p []byte) (n int, err error) {
 	if pl := len(p); pl > 0 {
 		rl := 0
 		if bufr != nil {
+			if ctx := bufr.ctx; ctx != nil {
+				select {
+				case <-ctx.Done():
+					if err = ctx.Err(); err != nil {
+						if err == context.Canceled {
+							err = io.EOF
+						}
+						bufr.Close()
+						return
+					}
+				default:
+				}
+			}
 			if bufr.MaxRead > 0 || bufr.MaxRead == -1 {
 				for n < pl && (bufr.MaxRead > 0 || bufr.MaxRead == -1) {
 					if len(bufr.rbytes) == 0 || (len(bufr.rbytes) > 0 && len(bufr.rbytes) == bufr.rbytesi) {
