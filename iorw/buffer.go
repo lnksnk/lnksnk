@@ -102,6 +102,44 @@ func (buff *Buffer) ContainsAny(teststring ...string) (contains bool, found []st
 	return
 }
 
+func (buff *Buffer) LastByte(noneempty ...bool) (btfnd byte) {
+	if buff == nil {
+		return
+	}
+	empty := len(noneempty) == 0 || !noneempty[0]
+	func() {
+		buff.lck.Lock()
+		defer buff.lck.Unlock()
+
+		fnbt := func(b ...byte) (bte byte, fnd bool) {
+			bl := len(b)
+			for bn := range bl {
+				if empty {
+					return b[bl-(bn+1)], true
+				}
+				if !IsSpace(rune(b[bl-(bn+1)])) {
+					return b[bl-(bn+1)], true
+				}
+			}
+			return
+		}
+		if buff.bytesi > 0 {
+			if bt, fnd := fnbt(buff.bytes[:buff.bytesi]...); fnd {
+				btfnd = bt
+				return
+			}
+		}
+		bfl := len(buff.buffer)
+		for bn := range bfl {
+			if bt, fnd := fnbt(buff.buffer[bfl-(bn+1)]...); fnd {
+				btfnd = bt
+				return
+			}
+		}
+	}()
+	return btfnd
+}
+
 // Contains return true if *Buffer contains teststring
 func (buff *Buffer) Contains(teststring string) (contains bool) {
 	if buff != nil && teststring != "" {
