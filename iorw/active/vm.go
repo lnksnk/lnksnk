@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -76,7 +75,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 			return !yield(ix, arg)
 		})
 	})
-	var fldmppr = &fieldmapper{fldmppr: es.UncapFieldNameMapper()}
+	var fldmppr = es.NewFieldMapper(es.UncapFieldNameMapper())
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {
 		if stngv != nil {
@@ -167,53 +166,6 @@ func NewVM(a ...interface{}) (vm *VM) {
 		return
 	})
 	return
-}
-
-type fieldmapper struct {
-	fldmppr es.FieldNameMapper
-}
-
-// FieldName returns a JavaScript name for the given struct field in the given type.
-// If this method returns "" the field becomes hidden.
-func (fldmppr *fieldmapper) FieldName(t reflect.Type, f reflect.StructField) (fldnme string) {
-	if f.Tag != "" {
-		fldnme = f.Tag.Get("json")
-	} else {
-		fldnme = uncapitalize(f.Name) // fldmppr.fldmppr.FieldName(t, f)
-	}
-	return
-}
-
-// MethodName returns a JavaScript name for the given method in the given type.
-// If this method returns "" the method becomes hidden.
-func (fldmppr *fieldmapper) MethodName(t reflect.Type, m reflect.Method) (mthdnme string) {
-	mthdnme = uncapitalize(m.Name)
-	return
-}
-
-func uncapitalize(s string) (nme string) {
-	if sl := len(s); sl > 0 {
-		var nrxtsr = rune(0)
-		for sn := range s {
-			sr := s[sn]
-			if 'A' <= sr && sr <= 'Z' {
-				sr += 'a' - 'A'
-				nme += string(sr)
-			} else {
-				nme += string(sr)
-			}
-			if sn <= (sl-1)-1 {
-				nrxtsr = rune(s[sn+1])
-			} else {
-				nrxtsr = rune(0)
-			}
-			if 'a' <= nrxtsr && nrxtsr <= 'z' {
-				nme += s[sn+1:]
-				break
-			}
-		}
-	}
-	return nme
 }
 
 func (vm *VM) ImportModuleDynamically(referencingScriptOrModule interface{}, specifier es.Value, promiseCapability interface{}) {
