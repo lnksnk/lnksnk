@@ -43,9 +43,10 @@ func ExtMimeType(ext string, defaultext string, defaulttype ...string) (mimetype
 }
 
 // FindMimeType - ext or defaulttype
-func FindMimeType(ext string, defaulttype string) (mimetype string, texttype bool, mediatype bool) {
-	if defaulttype == "" {
-		defaulttype = "text/plain"
+func FindMimeType(ext string, defaulttpe ...string) (mimetype string, texttype bool, mediatype bool) {
+	defaulttype := "text/plain"
+	if len(defaulttpe) > 0 && defaulttpe[0] != "" {
+		defaulttype = defaulttpe[0]
 	}
 	texttype = false
 	if ext = filepath.Ext(ext); ext != "" {
