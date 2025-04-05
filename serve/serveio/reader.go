@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/lnksnk/lnksnk/parameters"
 )
 
 type Reader interface {
@@ -28,6 +30,7 @@ type Reader interface {
 	Protocol() string
 	IsSSL() bool
 	Proto() string
+	Params() parameters.ParametersAPI
 }
 
 type reader struct {
@@ -43,6 +46,15 @@ type reader struct {
 	bufr        *bufio.Reader
 	rangetype   string
 	rangeoffset int64
+	params      parameters.ParametersAPI
+}
+
+// Params implements Reader.
+func (rqr *reader) Params() parameters.ParametersAPI {
+	if rqr == nil {
+		return nil
+	}
+	return rqr.params
 }
 
 func (rqr *reader) IsSSL() bool {
@@ -258,6 +270,9 @@ func NewReader(httpr *http.Request) (rdr *reader) {
 		}
 		rdr.rangeoffset = prtclrangeoffset
 		rdr.rangetype = prtclrangetype
+		prms := parameters.NewParameters()
+		parameters.LoadParametersFromHTTPRequest(prms, httpr)
+		rdr.params = prms
 	}
 	return
 }
