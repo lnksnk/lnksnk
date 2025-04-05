@@ -13,12 +13,11 @@ import (
 
 // Buffer -
 type Buffer struct {
-	insertedbuffs map[int64]*Buffer
 	buffer        [][]byte
 	bytes         []byte
 	bytesi        int
 	lck           *sync.RWMutex
-	bufrs         map[*BuffReader]*BuffReader
+	bufrs         *sync.Map
 	OnClose       func(*Buffer)
 	MaxLenToWrite int64
 	maxwrttnl     int64
@@ -26,7 +25,7 @@ type Buffer struct {
 }
 
 func NewBufferError(a ...interface{}) (buff *Buffer, err error) {
-	buff = &Buffer{lck: &sync.RWMutex{}, maxwrttnl: -1, MaxLenToWrite: -1, buffer: [][]byte{}, bytesi: 0, bytes: make([]byte, 8192), bufrs: map[*BuffReader]*BuffReader{}, insertedbuffs: map[int64]*Buffer{}}
+	buff = &Buffer{lck: &sync.RWMutex{}, maxwrttnl: -1, MaxLenToWrite: -1, buffer: [][]byte{}, bytesi: 0, bytes: make([]byte, 8192), bufrs: &sync.Map{}}
 	if len(a) > 0 {
 		err = buff.Print(a...)
 	}
@@ -35,7 +34,7 @@ func NewBufferError(a ...interface{}) (buff *Buffer, err error) {
 
 // NewBuffer -
 func NewBuffer(a ...interface{}) (buff *Buffer) {
-	buff = &Buffer{lck: &sync.RWMutex{}, maxwrttnl: -1, MaxLenToWrite: -1, buffer: [][]byte{}, bytesi: 0, bytes: make([]byte, 8192), bufrs: map[*BuffReader]*BuffReader{}, insertedbuffs: map[int64]*Buffer{}}
+	buff = &Buffer{lck: &sync.RWMutex{}, maxwrttnl: -1, MaxLenToWrite: -1, buffer: [][]byte{}, bytesi: 0, bytes: make([]byte, 8192), bufrs: &sync.Map{}}
 	if len(a) > 0 {
 		buff.Print(a...)
 	}
@@ -45,6 +44,10 @@ func NewBuffer(a ...interface{}) (buff *Buffer) {
 func (buff *Buffer) InsertAt(offset int64, whence int, a ...interface{}) (err error) {
 	if buff != nil {
 		if al := len(a); al > 0 && offset > -1 {
+			inbf := NewBuffer(a...)
+			if inbf.Empty() {
+				return
+			}
 			if whence == io.SeekStart || whence == io.SeekCurrent || whence == io.SeekEnd {
 				func() {
 					buff.lck.RLock()
@@ -58,12 +61,17 @@ func (buff *Buffer) InsertAt(offset int64, whence int, a ...interface{}) (err er
 					buff.lck.RUnlock()
 					buff.lck.Lock()
 					defer buff.lck.Unlock()
-					if crntbuf := buff.insertedbuffs[offset]; crntbuf != nil {
-						crntbuf.Print(a...)
-					} else {
-						insertbuf := NewBuffer()
-						insertbuf.Print(a...)
-						buff.insertedbuffs[offset] = insertbuf
+					buffer := buff.buffer
+					bytes := buff.bytes[:buff.bytesi]
+					bfsl := int64(0)
+					if bfl := len(buffer); bfl > 0 {
+						bfsl = int64(bfl) * int64(len(buffer[0]))
+					}
+					bfs := bfsl + int64(len(bytes))
+					if offset < bfsl {
+
+					} else if bfs < offset {
+
 					}
 				}()
 			}
@@ -436,20 +444,22 @@ type bufferCursor struct {
 
 func (bufcur *bufferCursor) reset(asc bool, offsets ...int64) {
 	if bufcur != nil {
-		buff, buffs := bufcur.buff, bufcur.buff.Size()
-		if bufcur.buffs != buffs {
-			bufcur.buffs = buffs
-			bufcur.buffer = nil
-			bufcur.bytes = nil
-			if buffs > 0 {
-				if buffer := buff.buffer; len(buffer) > 0 {
-					bufcur.buffer = buffer[:]
-				}
-				if buff.bytesi > 0 {
-					bufcur.bytes = buff.bytes[:buff.bytesi][:]
-				}
+		var buffer, bytes = func() ([][]byte, []byte) {
+			if buff := bufcur.buff; buff != nil {
+				return buff.buffer[:], buff.bytes[:buff.bytesi][:]
 			}
+			return nil, nil
+		}()
+
+		buffs := int64(0)
+		if len(buffer) > 0 {
+			buffs = int64(len(buffer)) * int64(len(buffer[0]))
 		}
+		buffs += int64(len(bytes))
+
+		bufcur.buffs = buffs
+		bufcur.buffer = buffer
+		bufcur.bytes = bytes
 		bufcur.asc = asc
 		bufcur.curOffset = -1
 		bufcur.lastOffset = -1
@@ -995,17 +1005,19 @@ func (buff *Buffer) Size() (s int64) {
 	if buff.bytesi > 0 {
 		s += int64(buff.bytesi)
 	}
-	if len(buff.insertedbuffs) > 0 {
-		for _, ibuf := range buff.insertedbuffs {
-			s += ibuf.Size()
-		}
-	}
 	return s
 }
 
 // ReadRunesFrom - refere to io.ReaderFrom
 func (buff *Buffer) ReadRunesFrom(r interface{}) (n int64, err error) {
 	if r != nil {
+		if rd, rdk := r.(io.Reader); rdk {
+			if _, bfrdk := rd.(*BuffReader); !bfrdk {
+				if _, bfiordk := rd.(*bufio.Reader); !bfiordk {
+					r = bufio.NewReader(rd)
+				}
+			}
+		}
 		var rnsr io.RuneReader = nil
 		if rnsr, _ = r.(io.RuneReader); rnsr == nil {
 			rnsr = bufio.NewReader(r.(io.Reader))
@@ -1019,21 +1031,15 @@ func (buff *Buffer) ReadRunesFrom(r interface{}) (n int64, err error) {
 				p[ppi] = pr
 				ppi++
 				if ppi == len(p) {
-					var pi = 0
-					for pi < ppi {
-						wn, wnerr := buff.WriteRunes(p[pi : pi+(ppi-pi)]...)
-						if wn > 0 {
-							pi += wn
-						}
+					ppi = 0
+					if bs := RunesToUTF8(p...); len(bs) > 0 {
+						wn, wnerr := writeBytes(buff, len(bs), bs)
+						n += int64(wn)
 						if wnerr != nil {
-							pnerr = wnerr
-							break
-						}
-						if wn == 0 {
-							break
+							err = wnerr
+							return
 						}
 					}
-					ppi = 0
 				}
 			}
 			if pnerr != nil {
@@ -1046,18 +1052,11 @@ func (buff *Buffer) ReadRunesFrom(r interface{}) (n int64, err error) {
 			}
 		}
 		if ppi > 0 {
-			var pi = 0
-			for pi < ppi {
-				wn, wnerr := buff.WriteRunes(p[pi : pi+(ppi-pi)]...)
-				if wn > 0 {
-					pi += wn
-				}
+			if bs := RunesToUTF8(p[:ppi]...); len(bs) > 0 {
+				wn, wnerr := writeBytes(buff, len(bs), bs)
+				n += int64(wn)
 				if wnerr != nil {
 					err = wnerr
-					break
-				}
-				if wn == 0 {
-					break
 				}
 			}
 		}
@@ -1068,24 +1067,21 @@ func (buff *Buffer) ReadRunesFrom(r interface{}) (n int64, err error) {
 // ReadFrom - fere io.ReaderFrom
 func (buff *Buffer) ReadFrom(r io.Reader) (n int64, err error) {
 	if r != nil {
+		bfr, bfk := r.(*bufio.Reader)
+		if bfk {
+			r = bfr
+		} else {
+			r = bufio.NewReader(r)
+		}
 		var p = make([]byte, 4096)
 		for {
 			pn, pnerr := r.Read(p)
 			if pn > 0 {
-				n += int64(pn)
-				var pi = 0
-				for pi < pn {
-					wn, wnerr := buff.Write(p[pi : pi+(pn-pi)])
-					if wn > 0 {
-						pi += wn
-					}
-					if wnerr != nil {
-						pnerr = wnerr
-						break
-					}
-					if wn == 0 {
-						break
-					}
+				wn, wnerr := writeBytes(buff, pn, p[:pn])
+				n += int64(wn)
+				if wnerr != nil {
+					err = wnerr
+					return
 				}
 			}
 			if pnerr != nil {
@@ -1242,65 +1238,108 @@ func (buff *Buffer) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
+func writeBytes(buff *Buffer, pl int, p []byte) (n int, err error) {
+	for n < pl {
+		if tl := (len(buff.bytes) - buff.bytesi); (pl - n) >= tl {
+			if cl := copy(buff.bytes[buff.bytesi:buff.bytesi+tl], p[n:n+tl]); cl > 0 {
+				n += cl
+				buff.bytesi += cl
+				if buff.MaxLenToWrite > 0 {
+					if buff.maxwrttnl < 0 {
+						buff.maxwrttnl = int64(cl)
+					} else {
+						buff.maxwrttnl += int64(cl)
+					}
+				}
+			}
+		} else if tl := (pl - n); tl < (len(buff.bytes) - buff.bytesi) {
+			if cl := copy(buff.bytes[buff.bytesi:buff.bytesi+tl], p[n:n+tl]); cl > 0 {
+				n += cl
+				buff.bytesi += cl
+				if buff.MaxLenToWrite > 0 {
+					if buff.maxwrttnl < 0 {
+						buff.maxwrttnl = int64(cl)
+					} else {
+						buff.maxwrttnl += int64(cl)
+					}
+				}
+			}
+		}
+		if buff.bytesi == len(buff.bytes) {
+			if buff.buffer == nil {
+				buff.buffer = [][]byte{}
+			}
+			var bts = make([]byte, buff.bytesi)
+			copy(bts, buff.bytes[:buff.bytesi])
+			buff.buffer = append(buff.buffer, bts)
+			buff.bytesi = 0
+		}
+	}
+	wrapupWrite(buff)
+	return
+}
+
 // Write - refer io.Writer
 func (buff *Buffer) Write(p []byte) (n int, err error) {
 	if pl := len(p); pl > 0 {
 		func() {
 			buff.lck.Lock()
 			defer buff.lck.Unlock()
-			for n < pl {
-				if tl := (len(buff.bytes) - buff.bytesi); (pl - n) >= tl {
-					if cl := copy(buff.bytes[buff.bytesi:buff.bytesi+tl], p[n:n+tl]); cl > 0 {
-						n += cl
-						buff.bytesi += cl
-						if buff.MaxLenToWrite > 0 {
-							if buff.maxwrttnl < 0 {
-								buff.maxwrttnl = int64(cl)
-							} else {
-								buff.maxwrttnl += int64(cl)
-							}
-						}
-					}
-				} else if tl := (pl - n); tl < (len(buff.bytes) - buff.bytesi) {
-					if cl := copy(buff.bytes[buff.bytesi:buff.bytesi+tl], p[n:n+tl]); cl > 0 {
-						n += cl
-						buff.bytesi += cl
-						if buff.MaxLenToWrite > 0 {
-							if buff.maxwrttnl < 0 {
-								buff.maxwrttnl = int64(cl)
-							} else {
-								buff.maxwrttnl += int64(cl)
-							}
-						}
-					}
-				}
-				if buff.bytesi == len(buff.bytes) {
-					if buff.buffer == nil {
-						buff.buffer = [][]byte{}
-					}
-					var bts = make([]byte, buff.bytesi)
-					copy(bts, buff.bytes[:buff.bytesi])
-					buff.buffer = append(buff.buffer, bts)
-					buff.bytesi = 0
-				}
-			}
+			n, err = writeBytes(buff, pl, p)
 		}()
-		if buff.MaxLenToWrite > 0 && buff.maxwrttnl >= buff.MaxLenToWrite {
-			if buff.OnMaxWritten != nil {
-				if buff.OnMaxWritten(buff.maxwrttnl) {
-					buff.maxwrttnl = -1
-				} else {
-					buff.MaxLenToWrite = -1
-					buff.maxwrttnl = -1
-				}
+		wrapupWrite(buff)
+	}
+	return
+}
+
+func wrapupWrite(buff *Buffer) {
+	if buff == nil {
+		return
+	}
+	if buff.MaxLenToWrite > 0 && buff.maxwrttnl >= buff.MaxLenToWrite {
+		if buff.OnMaxWritten != nil {
+			if buff.OnMaxWritten(buff.maxwrttnl) {
+				buff.maxwrttnl = -1
 			} else {
 				buff.MaxLenToWrite = -1
 				buff.maxwrttnl = -1
 			}
+		} else {
+			buff.MaxLenToWrite = -1
+			buff.maxwrttnl = -1
+		}
+	}
+}
+
+/*func writeBytesIterToBuffer(buff *Buffer, iter func(func([]byte) bool)) (n int64, err error) {
+	if buff == nil {
+		return
+	}
+	func() {
+		for bts := range iter {
+			wn, werr := writeBytes(nil, buff, len(bts), bts)
+			n += int64(wn)
+			if werr != nil {
+				err = werr
+				break
+			}
+		}
+	}()
+	if buff.MaxLenToWrite > 0 && buff.maxwrttnl >= buff.MaxLenToWrite {
+		if buff.OnMaxWritten != nil {
+			if buff.OnMaxWritten(buff.maxwrttnl) {
+				buff.maxwrttnl = -1
+			} else {
+				buff.MaxLenToWrite = -1
+				buff.maxwrttnl = -1
+			}
+		} else {
+			buff.MaxLenToWrite = -1
+			buff.maxwrttnl = -1
 		}
 	}
 	return
-}
+}*/
 
 func (buff *Buffer) Marshal(args ...interface{}) (result interface{}, err error) {
 	if buff == nil {
@@ -1313,6 +1352,9 @@ func (buff *Buffer) Marshal(args ...interface{}) (result interface{}, err error)
 
 // Reader -
 func (buff *Buffer) Reader(args ...interface{}) (bufr *BuffReader) {
+	if buff.Empty() {
+		return
+	}
 	var offset []int64 = nil
 	var disposeBuffer bool = false
 	var ctx context.Context
@@ -1356,6 +1398,7 @@ func (buff *Buffer) Close() (err error) {
 			buff.Clear()
 			buff.lck = nil
 		}
+		buff.bufrs = nil
 		buff = nil
 	}
 	return
@@ -1366,33 +1409,12 @@ type readerdisposed func()
 // Clear - Buffer
 func (buff *Buffer) Clear() (err error) {
 	if buff != nil {
-		var rdrdisposed = []readerdisposed{}
+		bufrs := buff.bufrs
 		if buff.lck != nil {
 			func() {
 				buff.lck.Lock()
 				defer buff.lck.Unlock()
-
-				if buff.bufrs != nil {
-					if len(buff.bufrs) > 0 {
-						var bufrs = make([]*BuffReader, len(buff.bufrs))
-						var bufrsi = 0
-						for bufrsk := range buff.bufrs {
-							buff.bufrs[bufrsk] = nil
-							bufrs[bufrsi] = bufrsk
-							if bufrsk.Disposed != nil {
-								rdrdisposed = append(rdrdisposed, bufrsk.Disposed)
-								bufrsk.Disposed = nil
-							}
-							bufrsk.Close()
-							bufrsi++
-						}
-						for bufrskn := range bufrs {
-							delete(buff.bufrs, bufrs[bufrskn])
-						}
-						bufrs = nil
-					}
-					buff.bufrs = nil
-				}
+				buff.bufrs = &sync.Map{}
 				if buff.buffer != nil {
 					for len(buff.buffer) > 0 {
 						buff.buffer[0] = nil
@@ -1409,20 +1431,31 @@ func (buff *Buffer) Clear() (err error) {
 						buff.maxwrttnl = -1
 					}
 				}
-				if len(buff.insertedbuffs) > 0 {
-					for off, offbuf := range buff.insertedbuffs {
-						offbuf.Close()
-						delete(buff.insertedbuffs, off)
-					}
-				}
 			}()
 		}
-		if len(rdrdisposed) > 0 {
-			for _, rdrdsp := range rdrdisposed {
-				rdrdsp()
+		go func() {
+			if bufrs != nil {
+				var rdrdisposed = []readerdisposed{}
+				bufrs.Range(func(key, value any) bool {
+					if bufrsk, rk := key.(*BuffReader); rk {
+						if bufrsk.Disposed != nil {
+							rdrdisposed = append(rdrdisposed, bufrsk.Disposed)
+							bufrsk.Disposed = nil
+						}
+						bufrsk.Close()
+					}
+					return true
+				})
+				bufrs.Clear()
+				bufrs = nil
+				if len(rdrdisposed) > 0 {
+					for _, rdrdsp := range rdrdisposed {
+						rdrdsp()
+					}
+					rdrdisposed = nil
+				}
 			}
-			rdrdisposed = nil
-		}
+		}()
 	}
 	return
 }
@@ -1599,13 +1632,10 @@ func (bufr *BuffReader) WriteTo(w io.Writer) (n int64, err error) {
 // Close - refer io.Closer
 func (bufr *BuffReader) Close() (err error) {
 	if bufr != nil {
-		if bufr.buffer != nil {
-			func() {
-				if _, ok := bufr.buffer.bufrs[bufr]; ok {
-					bufr.buffer.bufrs[bufr] = nil
-					delete(bufr.buffer.bufrs, bufr)
-				}
-			}()
+		if buffer := bufr.buffer; buffer != nil {
+			if bufrs := buffer.bufrs; bufrs != nil {
+				bufrs.CompareAndDelete(bufr, bufr)
+			}
 			if bufr.DisposeBuffer {
 				bufr.DisposeBuffer = false
 				bufr.buffer.Close()
