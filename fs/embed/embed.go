@@ -15,6 +15,8 @@ type EmbedFS interface {
 	ReadFile(name string) ([]byte, error)
 }
 
+// ImoprtResource
+// example embed.ImportResource(mltyfsys, fontsext.FSFonts, ".css", true, "/fontsext", "material", "roboto")
 func ImportResource(fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
 	var cptrdpths = map[string][]string{}
 	var chksrchdrexts = map[string]bool{}
