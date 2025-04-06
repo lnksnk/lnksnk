@@ -11,8 +11,8 @@ type Connection interface {
 	Close()
 	Query(string, ...interface{}) (Reader, error)
 	QueryContext(context.Context, string, ...interface{}) (Reader, error)
-	Execute(string, ...interface{}) error
-	ExecuteContext(context.Context, string, ...interface{}) error
+	Execute(string, ...interface{}) (Result, error)
+	ExecuteContext(context.Context, string, ...interface{}) (Result, error)
 	Reload(string, ...Driver) error
 	Driver() Driver
 }
@@ -53,15 +53,15 @@ type connection struct {
 }
 
 // Execute implements Connection.
-func (cn *connection) Execute(query string, a ...interface{}) error {
+func (cn *connection) Execute(query string, a ...interface{}) (Result, error) {
 	if cn == nil {
-		return nil
+		return nil, nil
 	}
 	return cn.ExecuteContext(context.Background(), query, a...)
 }
 
 // ExecuteContext implements Connection.
-func (cn *connection) ExecuteContext(ctx context.Context, query string, a ...interface{}) (err error) {
+func (cn *connection) ExecuteContext(ctx context.Context, query string, a ...interface{}) (result Result, err error) {
 	if cn == nil {
 		return
 	}
@@ -78,7 +78,16 @@ func (cn *connection) ExecuteContext(ctx context.Context, query string, a ...int
 		}
 	}
 	if db != nil {
-		err = nextstatement(db, dvr.Name(), query, cn.fsys).ExecuteContext(ctx, a...)
+		s := nextstatement(db, dvr, query, cn.fsys).(*statement)
+		if s.query, a, err = prepairSqlStatement(s, a...); err != nil {
+			return
+		}
+		if result, err = s.ExecuteContext(ctx, a...); err != nil {
+			if cn.db == db {
+				cn.db = nil
+			}
+			go db.Close()
+		}
 	}
 	return
 }
@@ -114,7 +123,11 @@ func (cn *connection) QueryContext(ctx context.Context, query string, a ...inter
 		}
 	}
 	if db != nil {
-		if rdr, err = nextstatement(db, dvr.Name(), query, cn.fsys).QueryContext(ctx, a...); err != nil {
+		s := nextstatement(db, dvr, query, cn.fsys).(*statement)
+		if s.query, a, err = prepairSqlStatement(s, a...); err != nil {
+			return
+		}
+		if rdr, err = s.QueryContext(ctx, a...); err != nil {
 			if cn.db == db {
 				cn.db = nil
 			}

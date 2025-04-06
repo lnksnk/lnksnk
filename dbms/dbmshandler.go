@@ -15,8 +15,8 @@ type DBMSHandler interface {
 	Close() error
 	Query(string, string, ...interface{}) (Reader, error)
 	QueryContext(context.Context, string, string, ...interface{}) (Reader, error)
-	Execute(string, string, ...interface{}) error
-	ExecuteContext(context.Context, string, string, ...interface{}) error
+	Execute(string, string, ...interface{}) (Result, error)
+	ExecuteContext(context.Context, string, string, ...interface{}) (Result, error)
 	Params() parameters.ParametersAPI
 	AttachReader(Reader)
 	DettachReader(Reader)
@@ -58,17 +58,24 @@ func (dh *dbmshandler) Params() parameters.ParametersAPI {
 }
 
 // Execute implements DBMSHandler.
-func (dh *dbmshandler) Execute(alias string, stmnt string, a ...interface{}) (err error) {
+func (dh *dbmshandler) Execute(alias string, query string, a ...interface{}) (result Result, err error) {
 	if dh == nil {
 		return
 	}
-
-	return
+	return dh.ExecuteContext(context.Background(), alias, query, a...)
 }
 
 // ExecuteContext implements DBMSHandler.
-func (dh *dbmshandler) ExecuteContext(ctx context.Context, alias string, stmnt string, a ...interface{}) (err error) {
-	panic("unimplemented")
+func (dh *dbmshandler) ExecuteContext(ctx context.Context, alias string, query string, a ...interface{}) (result Result, err error) {
+	if dh == nil {
+		return nil, fmt.Errorf("%s", "Invalid Execution")
+	}
+	if dbms := dh.dbms; dbms != nil {
+		if cn, ck := dbms.Connections().Get(alias); ck {
+			return cn.ExecuteContext(ctx, query, append(a, dh.params, dh.fiqryreader)...)
+		}
+	}
+	return
 }
 
 // Query implements DBMSHandler.
