@@ -201,7 +201,7 @@ func (fsys *filesys) Set(path string, a ...interface{}) bool {
 		return path
 	}()
 	emd := &embedfile{Buffer: iorw.NewBuffer(a...)}
-	emd.FileInfo = NewFileInfo(name, emd.Buffer.Size(), 0, time.Now(), false, nil, fsys.cachexts[ext], !fsys.cachexts[ext], media, path, fsys.mltypath, func(ctx ...context.Context) io.Reader {
+	emd.FileInfo = NewFileInfo(name, emd.Buffer.Size(), 0, time.Now(), false, nil, fsys.activexts[ext], !fsys.cachexts[ext], media, path, fsys.mltypath, func(ctx ...context.Context) io.Reader {
 		if len(ctx) == 1 && ctx[0] != nil {
 			return emd.Buffer.Reader(ctx)
 		}
