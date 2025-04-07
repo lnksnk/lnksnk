@@ -10,7 +10,7 @@ import (
 )
 
 type contentparsing struct {
-	*parsing
+	parsing   *Parsing
 	m         *markuptemplate
 	elmlvl    ElemLevel
 	elmname   string
@@ -23,7 +23,7 @@ type contentparsing struct {
 	lstattrbs map[string]interface{}
 	attrbs    map[string]interface{}
 	cbf       *iorw.Buffer
-	prscde    *parsing
+	prscde    *Parsing
 	cde       *codeparsing
 	fsys      fs.MultiFileSystem
 	fi        fs.FileInfo
@@ -147,7 +147,7 @@ func (c *contentparsing) resetTest(parse bool, rns ...rune) {
 	}()
 	if parse {
 		if tstlvl == ElemSingle {
-			prsrns = append(prsrns, []rune(c.prelbl)...)
+			prsrns = append(prsrns, []rune(c.parsing.prelbl)...)
 
 			prsrns = append(prsrns, tstname...)
 			if tstatrbs != nil {
@@ -157,7 +157,7 @@ func (c *contentparsing) resetTest(parse bool, rns ...rune) {
 			prsrns = append(prsrns, rns...)
 			return
 		}
-		prsrns = append(prsrns, []rune(c.prelbl)...)
+		prsrns = append(prsrns, []rune(c.parsing.prelbl)...)
 		if tstlvl == ElemEnd {
 			prsrns = append(prsrns, '/')
 		}
@@ -199,7 +199,7 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 			}
 			c.resetTest(true, r)
 			reset = true
-			c.bufdrns = rns[rn+1:]
+			c.parsing.bufdrns = rns[rn+1:]
 			return
 		}
 		if c.tstlvl == ElemStart {
@@ -212,7 +212,7 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 				if tstatrbs.invdl {
 					c.resetTest(true, r)
 					reset = true
-					c.bufdrns = rns[rn+1:]
+					c.parsing.bufdrns = rns[rn+1:]
 					return
 				}
 				continue
@@ -230,7 +230,7 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 			}
 			if fndspace {
 				if len(c.tstname) > 0 {
-					tstatrbs := nextattrbprsr("[$", "$]", c.readRune)
+					tstatrbs := nextattrbprsr("[$", "$]", c.parsing.readRune)
 					tstatrbs.eventDispose = c.clearAttibutes
 					tstatrbs.raw = append(tstatrbs.raw, r)
 					c.tstatrbs = tstatrbs
@@ -241,13 +241,13 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 			c.resetTest(true, r)
 
 			reset = true
-			c.bufdrns = rns[rn+1:]
+			c.parsing.bufdrns = rns[rn+1:]
 			return
 		}
 		if c.tstlvl == ElemSingle {
 			c.resetTest(true, '/', r)
 			reset = true
-			c.bufdrns = rns[rn+1:]
+			c.parsing.bufdrns = rns[rn+1:]
 			return
 		}
 		if c.tstlvl == ElemEnd {
@@ -259,14 +259,14 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 			c.resetTest(true, r)
 
 			reset = true
-			c.bufdrns = rns[rn+1:]
+			c.parsing.bufdrns = rns[rn+1:]
 			return
 		}
 		if c.tstlvl == ElemSingle {
 			c.resetTest(true, r)
 
 			reset = true
-			c.bufdrns = rns[rn+1:]
+			c.parsing.bufdrns = rns[rn+1:]
 			return
 		}
 	}
@@ -379,7 +379,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 			c.tstname = tstname
 			c.tstlvl = tstlvl
 			c.tstatrbs = tstatrbs
-			c.resetTest(true, c.postlbl...)
+			c.resetTest(true, c.parsing.postlbl...)
 			return
 		}
 		fullname = strings.Replace(fullname, "..:", "", -1)
@@ -388,7 +388,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 		} else {
 			c.m.validElem = map[string]fs.FileInfo{fullname: fi}
 		}
-		c.Reset()
+		c.parsing.Reset()
 		c.resetTest(false)
 		if !c.noncode() {
 			if cde := c.cde; cde != nil {
@@ -419,7 +419,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 		return
 	}
 	if tstlvl == ElemEnd {
-		c.Reset()
+		c.parsing.Reset()
 		c.resetTest(false)
 		fullname = strings.Replace(fullname, "..:", "", -1)
 		if c.m.prsix > 0 && c == c.m.cntntprsngs[c.m.prsix] && fullname == c.elmname && c.elmlvl == ElemStart {
@@ -459,7 +459,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 		c.tstname = tstname
 		c.tstlvl = tstlvl
 		c.tstatrbs = tstatrbs
-		c.resetTest(true, c.postlbl...)
+		c.resetTest(true, c.parsing.postlbl...)
 		return
 	}
 	defer tstatrbs.Close()

@@ -17,8 +17,8 @@ type ParseAPI interface {
 	PostLabel() []rune
 }
 
-type parsing struct {
-	lnkdprsr          *parsing
+type Parsing struct {
+	lnkdprsr          *Parsing
 	readRune          func() (rune, int, error)
 	bufdrns           []rune
 	prelbl            []rune
@@ -37,7 +37,7 @@ type parsing struct {
 	txtprs            *textparsing
 }
 
-func (prsng *parsing) PreLabel() []rune {
+func (prsng *Parsing) PreLabel() []rune {
 	if prsng == nil {
 		return nil
 	}
@@ -45,7 +45,7 @@ func (prsng *parsing) PreLabel() []rune {
 	return prsng.prelbl
 }
 
-func (prsng *parsing) PostLabel() []rune {
+func (prsng *Parsing) PostLabel() []rune {
 	if prsng == nil {
 		return nil
 	}
@@ -53,14 +53,14 @@ func (prsng *parsing) PostLabel() []rune {
 	return prsng.postlbl
 }
 
-func (prsng *parsing) CanPreParse() bool {
+func (prsng *Parsing) CanPreParse() bool {
 	if prsng == nil {
 		return false
 	}
 	return prsng.EventCanPreParse == nil || prsng.EventCanPreParse()
 }
 
-func (prsng *parsing) CanPostParse() bool {
+func (prsng *Parsing) CanPostParse() bool {
 	if prsng == nil {
 		return true
 	}
@@ -70,7 +70,7 @@ func (prsng *parsing) CanPostParse() bool {
 	return prsng.EventCanPostParse == nil || prsng.EventCanPostParse()
 }
 
-func (prsng *parsing) Close() (err error) {
+func (prsng *Parsing) Close() (err error) {
 	if prsng == nil {
 		return
 	}
@@ -82,7 +82,7 @@ func (prsng *parsing) Close() (err error) {
 	return
 }
 
-func New(in interface{}, prelbl, postlbl string, chktext bool, canPreParse func() bool, preRunes func(...rune), matchedPre func(), canPostParse func() bool, postRunes func(bool, ...rune) bool, matchedPost func() bool) (prsng *parsing) {
+func New(in interface{}, prelbl, postlbl string, chktext bool, canPreParse func() bool, preRunes func(...rune), matchedPre func(), canPostParse func() bool, postRunes func(bool, ...rune) bool, matchedPost func() bool) (prsng *Parsing) {
 	var readRune, _ = in.(func() (rune, int, error))
 	if readRune == nil {
 		if r, _ := in.(io.Reader); r != nil {
@@ -136,8 +136,8 @@ prpparse:
 	return
 }
 
-func nextparsing(prelbl, postlbl string, txtprs *textparsing, readRune func() (rune, int, error)) (prsng *parsing) {
-	prsng = &parsing{prelbl: []rune(prelbl), postlbl: []rune(postlbl), prvr: rune(0), txtprs: txtprs, readRune: readRune}
+func nextparsing(prelbl, postlbl string, txtprs *textparsing, readRune func() (rune, int, error)) (prsng *Parsing) {
+	prsng = &Parsing{prelbl: []rune(prelbl), postlbl: []rune(postlbl), prvr: rune(0), txtprs: txtprs, readRune: readRune}
 	prsng.postL = len(prsng.postlbl)
 	prsng.preL = len(prsng.prelbl)
 	return
@@ -166,14 +166,14 @@ func parseReadRune(readRune func() (r rune, size int, rerr error), prs ParseAPI)
 	}
 }
 
-func (prsng *parsing) Busy() bool {
+func (prsng *Parsing) Busy() bool {
 	if prsng == nil {
 		return false
 	}
 	return prsng.preL > 0 && prsng.postL > 0 && prsng.prei == prsng.preL && prsng.posti < prsng.postL
 }
 
-func (prsng *parsing) Reset() {
+func (prsng *Parsing) Reset() {
 	if prsng == nil {
 		return
 	}
@@ -182,7 +182,7 @@ func (prsng *parsing) Reset() {
 	prsng.prvr = 0
 }
 
-func (prsng *parsing) parse(rs ...rune) {
+func (prsng *Parsing) parse(rs ...rune) {
 	r := rs[0]
 	if prsng.posti == 0 && prsng.prei < prsng.preL {
 		if prsng.CanPreParse() {
@@ -279,7 +279,7 @@ func (prsng *parsing) parse(rs ...rune) {
 	}
 }
 
-func (prsng *parsing) Parse(rns ...rune) {
+func (prsng *Parsing) Parse(rns ...rune) {
 	if prsng == nil {
 		return
 	}

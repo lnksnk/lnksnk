@@ -3,16 +3,24 @@ package template
 import "github.com/lnksnk/lnksnk/iorw"
 
 type codeparsing struct {
-	*parsing
-	m      *markuptemplate
-	fndcde bool
-	hsecde bool
-	psvbf  *iorw.Buffer
-	cdebf  *iorw.Buffer
-	c      *contentparsing
+	parsing *Parsing
+	m       *markuptemplate
+	fndcde  bool
+	hsecde  bool
+	psvbf   *iorw.Buffer
+	cdebf   *iorw.Buffer
+	c       *contentparsing
 }
 
-func nextCodeParsing(m *markuptemplate, prsg *parsing) (cde *codeparsing) {
+func (cde *codeparsing) Parse(r ...rune) {
+	cde.parsing.Parse(r...)
+}
+
+func (cde *codeparsing) Busy() bool {
+	return cde != nil && cde.parsing.Busy()
+}
+
+func nextCodeParsing(m *markuptemplate, prsg *Parsing) (cde *codeparsing) {
 	cde = &codeparsing{m: m, parsing: prsg, c: m.cntntprsngs[m.prsix]}
 	prsg.EventMatchedPre = nil
 	prsg.EventPreRunes = cde.passiveRunes

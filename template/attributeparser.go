@@ -14,7 +14,7 @@ const (
 )
 
 type attributeparser struct {
-	*parsing
+	*Parsing
 	txttst          *textparsing
 	raw             []rune
 	rawl            int
@@ -122,9 +122,9 @@ func (attrbprsr *attributeparser) Close() (err error) {
 	evtdspse := attrbprsr.eventDispose
 	attrbprsr.eventDispose = nil
 	attrbprsr.txttst = nil
-	parsing := attrbprsr.parsing
+	parsing := attrbprsr.Parsing
 	attrbprsr.raw = nil
-	attrbprsr.parsing = nil
+	attrbprsr.Parsing = nil
 	if parsing != nil {
 		parsing.Close()
 	}
@@ -138,7 +138,7 @@ func (attrbprsr *attributeparser) Parse(rns ...rune) {
 	if attrbprsr == nil {
 		return
 	}
-	if rnsl, parsing := len(rns), attrbprsr.parsing; rnsl > 0 && parsing != nil {
+	if rnsl, parsing := len(rns), attrbprsr.Parsing; rnsl > 0 && parsing != nil {
 		attrbprsr.raw = append(attrbprsr.raw, rns...)
 		attrbprsr.rawl += rnsl
 		parsing.Parse(rns...)
@@ -160,9 +160,9 @@ func (attrbprsr *attributeparser) activeDone() (reset bool) {
 }
 
 func nextattrbprsr(prelbl, postlbl string, readRune func() (rune, int, error), eofrns ...rune) (attrbprsr *attributeparser) {
-	attrbprsr = &attributeparser{parsing: nextparsing(prelbl, postlbl, &textparsing{}, readRune)}
+	attrbprsr = &attributeparser{Parsing: nextparsing(prelbl, postlbl, &textparsing{}, readRune)}
 	attrbprsr.txttst = &textparsing{}
-	parsing := attrbprsr.parsing
+	parsing := attrbprsr.Parsing
 	parsing.EventPostRunes = attrbprsr.activeRunes
 	parsing.EventMatchedPost = attrbprsr.activeDone
 	//parsing.eventCanPostParse = cntntprsr.canPostParse
