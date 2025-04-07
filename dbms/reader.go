@@ -52,7 +52,7 @@ func (rdr *reader) Records() func(func(Record) bool) {
 			for rdr.Next() {
 				rc = &record{rdr: rdr, cnt: len(cols), cols: cols, coltpes: coltpes, dta: rdr.Data(), first: rdr.First(), last: rdr.Last()}
 				if !nxtrc(rc) {
-					return
+					break
 				}
 			}
 		}
@@ -69,14 +69,16 @@ func (rdr *reader) ColumnTypes() []ColumnType {
 		if stmt := rdr.stmnt; stmt != nil {
 			if rws = stmt.Rows(); rws != nil {
 				rdr.rws = rws
-				if coltpes := rws.ColumnTypes(); rws.Err() == nil {
+				coltpes, coltpserr := rws.ColumnTypes()
+				if coltpserr == nil {
 					return coltpes
 				}
 			}
 		}
 		return nil
 	}
-	if coltpes := rws.ColumnTypes(); rws.Err() == nil {
+	coltpes, coltpserr := rws.ColumnTypes()
+	if coltpserr == nil {
 		return coltpes
 	}
 	return nil
@@ -146,14 +148,16 @@ func (rdr *reader) Columns() []string {
 		if stmt := rdr.stmnt; stmt != nil {
 			if rws = stmt.Rows(); rws != nil {
 				rdr.rws = rws
-				if cols := rws.Columns(); rws.Err() == nil {
+				cols, colserr := rws.Columns()
+				if colserr == nil {
 					return cols
 				}
 			}
 		}
 		return nil
 	}
-	if cols := rws.Columns(); rws.Err() == nil {
+	cols, colserr := rws.Columns()
+	if colserr == nil {
 		return cols
 	}
 	return nil

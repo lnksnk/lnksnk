@@ -3,15 +3,23 @@ package dbms
 import "database/sql"
 
 type Rows interface {
-	Columns() []string
-	ColumnTypes() []ColumnType
+	IRows
 	First() bool
 	Next() bool
 	Data() []interface{}
 	Err() error
 	Last() bool
-	Close()
 	Events() interface{}
+}
+
+type IRows interface {
+	Close() error
+	ColumnTypes() ([]ColumnType, error)
+	Columns() ([]string, error)
+	Err() error
+	Next() bool
+	NextResultSet() bool
+	Scan(dest ...any) error
 }
 
 type RowsEvents struct {
@@ -21,12 +29,108 @@ type rows struct {
 	cols    []string
 	coltpes []ColumnType
 	dta     []interface{}
-	dtaref  []interface{}
-	dbrws   *sql.Rows
-	lsterr  error
-	first   bool
-	last    bool
-	evnts   *ReaderEvents
+	IRows
+	lsterr error
+	first  bool
+	last   bool
+	evnts  *ReaderEvents
+}
+
+type dbirows struct {
+	dbrows  *sql.Rows
+	dtarefs []interface{}
+}
+
+func (dbirws *dbirows) Close() (err error) {
+	if dbirws == nil {
+		return
+	}
+	dbrows := dbirws.dbrows
+	dbirws.dtarefs = nil
+	dbirws.dbrows = nil
+	if dbrows != nil {
+		err = dbrows.Close()
+	}
+	return
+}
+
+func (dbirws *dbirows) ColumnTypes() (cltps []ColumnType, err error) {
+	if dbirws == nil {
+		return
+	}
+	if dbrows := dbirws.dbrows; dbrows != nil {
+		dbcltps, dberr := dbrows.ColumnTypes()
+		if err = dberr; err != nil {
+			return
+		}
+		if cltpsl := len(dbcltps); cltpsl > 0 {
+			cltps = make([]ColumnType, cltpsl)
+			for cn := range cltpsl {
+				cltps[cn] = dbcltps[cn]
+			}
+		}
+	}
+	return
+}
+
+func (dbirws *dbirows) Columns() (cls []string, err error) {
+	if dbirws == nil {
+		return
+	}
+	if dbrows := dbirws.dbrows; dbrows != nil {
+		cls, err = dbirws.Columns()
+	}
+	return
+}
+
+func (dbirws *dbirows) Err() (err error) {
+	if dbirws == nil {
+		return
+	}
+	if dbrows := dbirws.dbrows; dbrows != nil {
+		err = dbrows.Err()
+	}
+	return
+}
+
+func (dbirws *dbirows) Next() (nxt bool) {
+	if dbirws == nil {
+		return
+	}
+	if dbrows := dbirws.dbrows; dbrows != nil {
+		nxt = dbrows.Next()
+	}
+	return
+}
+
+func (dbirws *dbirows) NextResultSet() (nxtrstst bool) {
+	if dbirws == nil {
+		return
+	}
+	if dbrows := dbirws.dbrows; dbrows != nil {
+		nxtrstst = dbrows.NextResultSet()
+	}
+	return
+}
+
+func (dbirws *dbirows) Scan(dest ...any) (err error) {
+	if dbirws == nil {
+		return
+	}
+	if dbrows := dbirws.dbrows; dbrows != nil {
+		if destl := len(dest); destl > 0 {
+			destref := dbirws.dtarefs
+			if len(destref) != destl {
+				destref = make([]interface{}, destl)
+				dbirws.dtarefs = destref
+			}
+			for n := range destl {
+				destref[n] = &dest[n]
+			}
+			err = dbrows.Scan(destref...)
+		}
+	}
+	return
 }
 
 // Events implements Rows.
@@ -42,14 +146,14 @@ func (r *rows) Events() interface{} {
 }
 
 // ColumnTypes implements Rows.
-func (r *rows) ColumnTypes() []ColumnType {
+func (r *rows) ColumnTypes() (cltps []ColumnType, err error) {
 	if r == nil {
-
+		return
 	}
-	if len(r.cols) == 0 && r.dbrws != nil {
+	if len(r.cols) == 0 && r.IRows != nil {
 		r.Columns()
 	}
-	return r.coltpes
+	return r.coltpes, r.lsterr
 }
 
 // Data implements Rows.
@@ -61,16 +165,20 @@ func (r *rows) Data() []interface{} {
 }
 
 // Close implements Rows.
-func (r *rows) Close() {
+func (r *rows) Close() (err error) {
 	if r == nil {
 		return
 	}
 	dta := r.dta
 	r.dta = nil
-	r.dtaref = nil
 	r.cols = nil
-	r.dbrws = nil
+	irows := r.IRows
+	r.IRows = nil
 	r.lsterr = nil
+
+	if irows != nil {
+		irows.Close()
+	}
 	for _, d := range dta {
 		if rd, rdk := d.(Reader); rdk {
 			if rd != nil {
@@ -78,6 +186,7 @@ func (r *rows) Close() {
 			}
 		}
 	}
+	return
 }
 
 func (r *rows) First() (first bool) {
@@ -87,34 +196,36 @@ func (r *rows) First() (first bool) {
 	return r.first
 }
 
-func (r *rows) Columns() []string {
+func (r *rows) Columns() ([]string, error) {
 	if r == nil {
-		return nil
+		return nil, nil
 	}
 	cols := r.cols
 	if len(cols) > 0 {
-		return cols
+		return cols, nil
 	}
-	if dbrws := r.dbrws; dbrws != nil {
-		cltpes, cltpeserr := dbrws.ColumnTypes()
-		if cltpeserr == nil && len(cltpes) > 0 {
-			cols = make([]string, len(cltpes))
-			coltpes := make([]ColumnType, len(cltpes))
+	if irows := r.IRows; irows != nil {
+		cltpes, cltpeserr := irows.ColumnTypes()
+		if cltpeserr != nil {
+			r.lsterr = cltpeserr
+			return nil, r.lsterr
+		}
+		if cltpsl := len(cltpes); cltpsl > 0 && cltpeserr == nil {
+			cols = make([]string, cltpsl)
 			for cn, cltp := range cltpes {
-				coltpes[cn] = &columntype{dbcoltype: cltp}
-				cols[cn] = coltpes[cn].Name()
+				cols[cn] = cltp.Name()
 			}
 			r.cols = cols
-			r.coltpes = coltpes
-			return cols
+			r.coltpes = cltpes
+			return cols, nil
 		}
-		if cols, r.lsterr = dbrws.Columns(); r.lsterr != nil {
-			return nil
+		if cols, r.lsterr = irows.Columns(); r.lsterr != nil {
+			return nil, r.lsterr
 		}
 		r.cols = cols
-		return cols
+		return cols, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (r *rows) Last() (last bool) {
@@ -137,45 +248,40 @@ func (r *rows) Next() (nxt bool) {
 	if r == nil {
 		return false
 	}
-	if dbrws := r.dbrws; dbrws != nil {
+	if irows := r.IRows; irows != nil {
 		if !r.first {
 			if len(r.cols) == 0 {
 				if r.Columns(); r.lsterr != nil {
 					return
 				}
 			}
-			if nxt, r.lsterr = dbrws.Next(), dbrws.Err(); r.lsterr == nil && nxt {
+			if nxt, r.lsterr = irows.Next(), irows.Err(); r.lsterr == nil && nxt {
 				r.first = true
-				dta, dtaref := r.dta, r.dtaref
+				dta := r.dta
 				if len(dta) < len(r.cols) {
 					dta = make([]interface{}, len(r.cols))
 					r.dta = dta
-					dtaref = make([]interface{}, len(dta))
-					for dn := range len(dtaref) {
-						dtaref[dn] = &dta[dn]
-					}
-					r.dtaref = dtaref
 				}
 
-				r.lsterr = dbrws.Scan(dtaref...)
-				for n, d := range dta {
+				r.lsterr = irows.Scan(dta...)
+				/*for n, d := range dta {
 					if rw, rwk := d.(*sql.Rows); rwk {
-						dta[n] = &reader{rws: &rows{dbrws: rw}}
+						dta[n] = &reader{rws: &rows{irows: &dbirows{dbrows: rw}}}
 					}
-				}
+				}*/
 				if nxt = r.lsterr == nil; nxt {
-					r.last, r.lsterr = dbrws.Next(), dbrws.Err()
+					r.last, r.lsterr = irows.Next(), irows.Err()
 					nxt = r.lsterr == nil
 				}
 			}
 			return
 		}
 		if nxt = r.last; nxt {
-			dta, dtaref := r.dta, r.dtaref
-			if cl, dtal, dtarefl := len(r.cols), len(dta), len(dtaref); cl > 0 && cl == dtal && dtarefl == dtal {
-				r.lsterr = dbrws.Scan(dtaref...)
+			dta := r.dta
+			if cl, dtal := len(r.cols), len(dta); cl > 0 && cl == dtal {
+				r.lsterr = irows.Scan(dta...)
 				if nxt = r.lsterr == nil; nxt {
-					r.last, r.lsterr = dbrws.Next(), dbrws.Err()
+					r.last, r.lsterr = irows.Next(), irows.Err()
 					nxt = r.lsterr == nil
 				}
 			}

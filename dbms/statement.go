@@ -31,17 +31,15 @@ type Statement interface {
 	Execute(...interface{}) (Result, error)
 	ExecuteContext(context.Context, ...interface{}) (Result, error)
 	Rows() Rows
-	Close()
+	Close() error
 }
 
 type statement struct {
 	dbcn *sql.DB
 	//dbstmt   *sql.Stmt
-	dbrows    *sql.Rows
 	rows      Rows
 	driver    string
 	query     string
-	err       error
 	fsys      fs.MultiFileSystem
 	fireader  func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
 	params    parameters.ParametersAPI
@@ -52,13 +50,12 @@ type statement struct {
 }
 
 // Close implements Statement.
-func (s *statement) Close() {
+func (s *statement) Close() (err error) {
 	if s == nil {
 		return
 	}
-	dbrows, rows := s.dbrows, s.rows
+	rows := s.rows
 	s.dbcn = nil
-	s.dbrows = nil
 	s.rows = nil
 	s.prssqlarg = nil
 	args := s.args
@@ -68,16 +65,15 @@ func (s *statement) Close() {
 	s.params = nil
 	s.rdr = nil
 	s.rcrd = nil
-	if dbrows != nil {
-		dbrows.Close()
-	}
-	if rows != nil {
-		rows.Close()
-	}
 	if args != nil {
 		clear(args)
 		args = nil
 	}
+
+	if rows != nil {
+		go rows.Close()
+	}
+	return
 }
 
 // Rows implements Statement.
@@ -133,12 +129,12 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 			ctx = nil
 		}()
 	}
-	dbcn, dbrows := s.dbcn, s.dbrows
+	dbcn, rws := s.dbcn, s.rows
 	if dbcn != nil {
-		if dbrows == nil {
-			if dbrows, err = dbcn.QueryContext(ctx, s.query, a...); err == nil {
-				s.dbrows = dbrows
-				s.rows = &rows{dbrws: dbrows}
+		if rws == nil {
+			dbrows, dbrowserr := dbcn.QueryContext(ctx, s.query, a...)
+			if err = dbrowserr; err == nil {
+				s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
 				rdr = &reader{stmnt: s, rws: s.rows}
 				return
 			}
