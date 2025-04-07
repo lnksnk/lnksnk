@@ -3,12 +3,14 @@ package dbms
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"strings"
 
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/iorw"
 	"github.com/lnksnk/lnksnk/parameters"
+	"github.com/lnksnk/lnksnk/template"
 )
 
 type Result interface {
@@ -154,6 +156,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdar
 	args := s.args
 	fireader := s.fireader
 	rcrd := s.rcrd
+	dfltargs := map[string]interface{}{}
 	if al := len(a); al > 0 {
 		ai := 0
 		for ai < al {
@@ -198,6 +201,20 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdar
 					args = map[string]interface{}{}
 					for ak, av := range argsd {
 						args[ak] = av
+						dfltargs[strings.ToUpper(ak)] = av
+					}
+					s.args = args
+				}
+				a = append(a[:ai], a[ai+1:]...)
+				al--
+				continue
+			}
+			if argd, argk := a[ai].(map[string]interface{}); argk {
+				if args == nil && len(argd) > 0 {
+					args = map[string]interface{}{}
+					for ak, av := range argd {
+						args[ak] = av
+						dfltargs[strings.ToUpper(ak)] = av
 					}
 					s.args = args
 				}
@@ -236,6 +253,148 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdar
 			}
 		} else {
 			qrybf.Print(s.query)
+		}
+	}
+
+	if qrybf.Contains("@") {
+		var prsng *template.Parsing = nil
+		orgrqry := func(yld func(rune) bool) {
+			rdr := qrybf.Clone(true).Reader(true)
+			defer rdr.Close()
+			rdrrune := rdr.ReadRune
+			for {
+				rn, rs, rerr := rdrrune()
+				if rs > 0 {
+					if !yld(rn) {
+						return
+					}
+				}
+				if rerr != nil {
+					return
+				}
+			}
+		}
+
+		var prmnme []rune
+		var prmargvalsfnd = map[int]func() interface{}{}
+		var prmargsfnd = []int{}
+		prsng = template.New(nil, "@", "@", false, nil, func(prerns ...rune) {
+			qrybf.WriteRunes(prerns...)
+		}, nil, nil, func(canreset bool, rns ...rune) (reset bool) {
+			prmnme = append(prmnme, rns...)
+			return
+		}, func() (reset bool) {
+			//check param
+			if len(prmnme) > 0 {
+				tstnme := strings.TrimFunc(string(prmnme), iorw.IsSpace)
+				if tstnme == "" {
+					return
+				}
+				for ak, av := range s.args {
+					if strings.EqualFold(ak, tstnme) {
+						prmfndl := len(prmargsfnd)
+						prmargsfnd = append(prmargsfnd, prmfndl)
+						prmargvalsfnd[prmfndl] = func() interface{} {
+							return av
+						}
+						qrybf.Print(s.prssqlarg(prmfndl))
+						prmnme = nil
+						return
+					}
+				}
+				if params := s.params; params != nil {
+					for _, pnme := range params.StandardKeys() {
+						if strings.EqualFold(pnme, tstnme) {
+							prmfndl := len(prmargsfnd)
+							prmargsfnd = append(prmargsfnd, prmfndl)
+							dflsv, dflsk := dfltargs[strings.ToUpper(pnme)]
+							prmargvalsfnd[prmfndl] = func() interface{} {
+								prmsv := params.Parameter(string(prmnme))
+								if len(prmsv) == 0 {
+									if dflsk {
+										s, _ := dflsv.(string)
+										return s
+									}
+									return ""
+								}
+								prmsvs := strings.Join(params.Parameter(pnme), "")
+								if prmsvs == "" {
+									if dflsk {
+										s, _ := dflsv.(string)
+										return s
+									}
+								}
+								return prmsv
+							}
+							qrybf.Print(s.prssqlarg(prmfndl))
+							prmnme = nil
+							return
+						}
+					}
+				}
+
+				if rows := s.rows; rows != nil {
+					cols, colserr := rows.Columns()
+					if err = colserr; err != nil {
+						return
+					}
+					if len(cols) > 0 {
+						if data := rows.Data(); len(data) == len(cols) {
+							for cn, col := range cols {
+								if strings.EqualFold(tstnme, col) {
+									prmfndl := len(prmargsfnd)
+									prmargsfnd = append(prmargsfnd, prmfndl)
+									prmnme = nil
+									dflsv, dflsk := dfltargs[strings.ToUpper(col)]
+									prmargvalsfnd[prmfndl] = func() interface{} {
+										dv := data[cn]
+										if dvs, dvsk := dv.(string); dvsk {
+											if dvs == "" {
+												dvs, _ = dflsv.(string)
+											}
+											return dvs
+										}
+										if dv == nil {
+											if dflsk {
+												dv = dflsv
+											}
+										}
+										return dv
+									}
+									qrybf.Print(s.prssqlarg(prmfndl))
+									return
+								}
+							}
+						}
+					}
+				}
+
+				if dflsv, dflsk := dfltargs[strings.ToUpper(tstnme)]; dflsk {
+					prmfndl := len(prmargsfnd)
+					prmargsfnd = append(prmargsfnd, prmfndl)
+					prmargvalsfnd[prmfndl] = func() interface{} {
+						return dflsv
+					}
+					prmnme = nil
+				}
+				qrybf.Print(`null`)
+				prmnme = nil
+			}
+			return
+		})
+
+		for or := range orgrqry {
+			prsng.Parse(or)
+		}
+		if prsng != nil && prsng.Busy() {
+			err = fmt.Errorf("%s", "failed parsing query arguments")
+			return
+		}
+		if fndl := len(prmargsfnd); fndl > 0 {
+			prpdargs = make([]interface{}, fndl)
+			for fn, ids := range prmargsfnd {
+				prpdargs[fn] = prmargvalsfnd[ids]()
+			}
 		}
 	}
 
