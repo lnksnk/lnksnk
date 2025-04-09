@@ -24,6 +24,7 @@ func (c *connections) Register(alias string, driver string, datasource string, a
 	if c == nil {
 		return
 	}
+
 	if itr := c.IterateMap; itr != nil {
 		if cn, cnk := itr.Get(alias); cnk {
 			cndvr := cn.Driver()
@@ -50,7 +51,20 @@ func (c *connections) Register(alias string, driver string, datasource string, a
 		if cndvr == nil {
 			return false, fmt.Errorf("Unregistered driver %s", driver)
 		}
-		itr.Set(alias, NewConnection(cndvr, datasource, c.fsys))
+		var cnfs fs.MultiFileSystem = nil
+		for _, d := range a {
+			if cnfsd, fsk := d.(fs.MultiFileSystem); fsk {
+				if cnfs == nil && cnfsd != nil {
+					cnfs = cnfsd
+				}
+			}
+		}
+		itr.Set(alias, NewConnection(cndvr, datasource, func() fs.MultiFileSystem {
+			if cnfs == nil {
+				return c.fsys
+			}
+			return cnfs
+		}()))
 		return true, nil
 	}
 	return false, fmt.Errorf("Unbale to register connection %s", alias)

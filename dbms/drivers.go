@@ -9,7 +9,7 @@ import (
 type Drivers interface {
 	ioext.IterateMap[string, Driver]
 	ioext.IterateMapEvents[string, Driver]
-	Register(string) Driver
+	Register(string, ...interface{}) Driver
 	DefaultInvokable(func(string) (InvokeDB func(datasource string, a ...interface{}) (db *sql.DB, err error), ParseSqlParam func(totalArgs int) (s string)))
 }
 
@@ -29,7 +29,7 @@ func (dvrs *drivers) DefaultInvokable(dfltinvkbl func(string) (InvokeDB func(dat
 }
 
 // Register implements Drivers.
-func (dvrs *drivers) Register(alias string) (dvr Driver) {
+func (dvrs *drivers) Register(alias string, a ...interface{}) (dvr Driver) {
 	if dvrs == nil {
 		return nil
 	}
@@ -37,7 +37,7 @@ func (dvrs *drivers) Register(alias string) (dvr Driver) {
 		dbinvk, prssqlarg := dfltinvkbl(alias)
 		if dbinvk != nil {
 			if itr := dvrs.IterateMap; itr != nil {
-				dvr = NewDriver(alias, dbinvk, prssqlarg)
+				dvr = NewDriver(alias, dbinvk, prssqlarg, a...)
 				itr.Set(alias, dvr)
 			}
 		}

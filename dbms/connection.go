@@ -114,18 +114,25 @@ func (cn *connection) QueryContext(ctx context.Context, query string, a ...inter
 	db := cn.db
 	if db == nil {
 		if dvr != nil {
-			if dtasrc := cn.datasource; dtasrc != "" {
-				if db, err = dvr.Invoke(dtasrc); err != nil {
-					return
-				}
+			if db, err = dvr.Invoke(cn.datasource, cn.fsys); err != nil {
+				return
 			}
 			cn.db = db
 		}
 	}
 	if db != nil {
-		s := nextstatement(db, dvr, query, cn.fsys).(*statement)
-		if s.query, a, err = prepairSqlStatement(s, a...); err != nil {
-			return
+		fsys := cn.fsys
+		if fsys == nil {
+			dvr.FSys()
+		}
+		s := nextstatement(db, dvr, query, fsys).(*statement)
+		if dvr.Name() != "csv" && dvr.Name() != "dlv" {
+			if s.query, a, err = prepairSqlStatement(s, a...); err != nil {
+				return
+			}
+		}
+		if dvrfsys := dvr.FSys(); dvrfsys != nil {
+			a = append(a, dvrfsys)
 		}
 		if rdr, err = s.QueryContext(ctx, a...); err != nil {
 			if cn.db == db {
