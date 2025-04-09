@@ -30,10 +30,11 @@ type rows struct {
 	coltpes []ColumnType
 	dta     []interface{}
 	IRows
-	lsterr error
-	first  bool
-	last   bool
-	evnts  *ReaderEvents
+	lsterr  error
+	started bool
+	first   bool
+	last    bool
+	evnts   *ReaderEvents
 }
 
 type dbirows struct {
@@ -123,10 +124,11 @@ func (dbirws *dbirows) Scan(dest ...any) (err error) {
 			if len(destref) != destl {
 				destref = make([]interface{}, destl)
 				dbirws.dtarefs = destref
+				for n := range destl {
+					destref[n] = &dest[n]
+				}
 			}
-			for n := range destl {
-				destref[n] = &dest[n]
-			}
+
 			err = dbrows.Scan(destref...)
 		}
 	}
@@ -249,7 +251,9 @@ func (r *rows) Next() (nxt bool) {
 		return false
 	}
 	if irows := r.IRows; irows != nil {
-		if !r.first {
+		if !r.started {
+			r.started = true
+			r.first = true
 			if len(r.cols) == 0 {
 				if r.Columns(); r.lsterr != nil {
 					return
@@ -270,18 +274,20 @@ func (r *rows) Next() (nxt bool) {
 					}
 				}*/
 				if nxt = r.lsterr == nil; nxt {
-					r.last, r.lsterr = irows.Next(), irows.Err()
+					r.last, r.lsterr = !irows.Next(), irows.Err()
 					nxt = r.lsterr == nil
 				}
 			}
 			return
 		}
-		if nxt = r.last; nxt {
+		if nxt = !r.last; nxt {
+			r.first = false
+			r.first = false
 			dta := r.dta
 			if cl, dtal := len(r.cols), len(dta); cl > 0 && cl == dtal {
 				r.lsterr = irows.Scan(dta...)
 				if nxt = r.lsterr == nil; nxt {
-					r.last, r.lsterr = irows.Next(), irows.Err()
+					r.last, r.lsterr = !irows.Next(), irows.Err()
 					nxt = r.lsterr == nil
 				}
 			}
