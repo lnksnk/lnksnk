@@ -21,10 +21,12 @@ type Writer interface {
 }
 
 type writer struct {
-	httpw   http.ResponseWriter
-	buff    *bufio.Writer
-	Status  int
-	MaxSize int64
+	httpw     http.ResponseWriter
+	buff      *bufio.Writer
+	Status    int
+	MaxSize   int64
+	FlushSize int64
+	wrtsize   int64
 }
 
 func NewWriter(httpw http.ResponseWriter) (rqw *writer) {
@@ -135,6 +137,13 @@ func (rqw *writer) Write(p []byte) (n int, err error) {
 			}
 			if maxsize == -1 {
 				n, err = rqw.buffer().Write(p)
+				if rqw.FlushSize > 0 {
+					rqw.wrtsize += int64(n)
+					if rqw.wrtsize >= rqw.FlushSize {
+						rqw.Flush()
+						rqw.wrtsize = 0
+					}
+				}
 				return
 			}
 		}
