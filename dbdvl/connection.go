@@ -30,9 +30,7 @@ func (d *dvlConn) Close() error {
 	if d == nil {
 		return nil
 	}
-	if drv := d.dvr; drv != nil {
-		drv.Delete(d.lkupPath)
-	}
+	d.dvr = nil
 	return nil
 }
 
