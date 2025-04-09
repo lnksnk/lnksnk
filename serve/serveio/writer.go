@@ -25,12 +25,11 @@ type writer struct {
 	buff      *bufio.Writer
 	Status    int
 	MaxSize   int64
-	FlushSize int64
-	wrtsize   int64
+	FlushSize int
 }
 
 func NewWriter(httpw http.ResponseWriter) (rqw *writer) {
-	rqw = &writer{httpw: httpw, Status: 200, MaxSize: -1}
+	rqw = &writer{httpw: httpw, Status: 200, MaxSize: -1, FlushSize: 32768 * 2}
 	return
 }
 
@@ -96,8 +95,12 @@ func (rqw *writer) buffer() *bufio.Writer {
 	if rqw != nil {
 		if buff := rqw.buff; buff == nil {
 			if rqw.httpw != nil {
-				bfsize := 32768 * 2
-				buff = bufio.NewWriterSize(rqw.httpw, bfsize)
+				/*bfsize := rqw.FlushSize
+				if bfsize < 32768*2 {
+					bfsize = 32768 * 2
+				}
+				buff = bufio.NewWriterSize(rqw.httpw, bfsize)*/
+				buff = bufio.NewWriter(rqw.httpw)
 				rqw.buff = buff
 			}
 			return buff
@@ -137,13 +140,6 @@ func (rqw *writer) Write(p []byte) (n int, err error) {
 			}
 			if maxsize == -1 {
 				n, err = rqw.buffer().Write(p)
-				if rqw.FlushSize > 0 {
-					rqw.wrtsize += int64(n)
-					if rqw.wrtsize >= rqw.FlushSize {
-						rqw.Flush()
-						rqw.wrtsize = 0
-					}
-				}
 				return
 			}
 		}
