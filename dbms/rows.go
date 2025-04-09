@@ -212,7 +212,7 @@ func (r *rows) Columns() ([]string, error) {
 			r.lsterr = cltpeserr
 			return nil, r.lsterr
 		}
-		if cltpsl := len(cltpes); cltpsl > 0 && cltpeserr == nil {
+		if cltpsl := len(cltpes); cltpsl > 0 {
 			cols = make([]string, cltpsl)
 			for cn, cltp := range cltpes {
 				cols[cn] = cltp.Name()
