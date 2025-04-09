@@ -70,13 +70,14 @@ func main() {
 	glbldbms.Drivers().Register("csv", mltyfsys)
 	glbldbms.Connections().Register("datafiles", "csv", "/datafiles", mltyfsys)
 	fmt.Println(time.Now())
-	if rdr, rdrerr := glbldbms.Query("datafiles", "OMNI Data- RMasterfile_DAT CREDIT 07-08-2022.txt", map[string]interface{}{"ColDelim": "\t"}); rdrerr == nil {
+	if rdr, rdrerr := glbldbms.Query("datafiles", "OMNI Data- RMasterfile_DAT CREDIT 07-08-2022.txt", map[string]interface{}{"ColDelim": "\t", "Trim": true}); rdrerr == nil {
 		defer rdr.Close()
 		for rc := range rdr.Records() {
 			if rc.First() {
 				fmt.Println(rc.Columns())
 			}
 			if rc.Last() {
+				fmt.Println(rc.Data())
 				fmt.Println(rc.RowNR())
 			}
 		}
