@@ -469,8 +469,10 @@ func (fsysfi *fsysfinfo) Close() (err error) {
 	reader := fsysfi.reader
 	fsysfi.reader = nil
 	fsysfi.ctx = nil
-	if cls := reader.(io.Closer); cls != nil {
-		cls.Close()
+	if reader != nil {
+		if cls := reader.(io.Closer); cls != nil {
+			cls.Close()
+		}
 	}
 	return
 }
