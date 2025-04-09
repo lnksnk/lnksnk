@@ -7,7 +7,7 @@ type Record interface {
 	Last() bool
 	Data() []interface{}
 	Columns() []string
-	Count() int
+	RowNR() int
 	ColumnTypes() []ColumnType
 	Field(interface{}) interface{}
 	Reader(interface{}) Reader
@@ -37,7 +37,7 @@ func (rc *record) Last() bool {
 	return rc.last
 }
 
-func (rc *record) Count() int {
+func (rc *record) RowNR() int {
 	if rc == nil {
 		return 0
 	}
