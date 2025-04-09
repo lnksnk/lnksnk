@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lnksnk/lnksnk/dbms"
+	"github.com/lnksnk/lnksnk/dbms/dlv"
 	"github.com/lnksnk/lnksnk/dbms/mssql"
 	"github.com/lnksnk/lnksnk/dbms/ora"
 	"github.com/lnksnk/lnksnk/dbms/postgres"
@@ -33,6 +34,7 @@ func main() {
 	mltyfsys.Map("/etl", "C:/GitHub/lnketl", true)
 	mltyfsys.Map("/media", "C:/movies", true)
 	mltyfsys.Set("/embedding/embed.html", `<h2><@print("embed");@></h2>`)
+	mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
 	glbldbms := dbms.NewDBMS(mltyfsys)
 	glbldbms.Drivers().DefaultInvokable(func(driver string) (InvokeDB func(datasource string, a ...interface{}) (db *sql.DB, err error), ParseSqlParam func(totalArgs int) (s string)) {
 		if driver == "postgres" {
@@ -51,6 +53,12 @@ func main() {
 		if driver == "sqlite" {
 			return sqlite.InvokeDB, sqlite.ParseSqlParam
 		}
+		if driver == "csv" {
+			return dlv.InvokeCSVDB, dlv.ParseSqlParam
+		}
+		if driver == "dlv" {
+			return dlv.InvokeDLVDB, dlv.ParseSqlParam
+		}
 		return
 	})
 	glbldbms.Drivers().Register("postgres")
@@ -59,6 +67,21 @@ func main() {
 	glbldbms.Drivers().Register("azuresql")
 	glbldbms.Drivers().Register("oracle")
 	glbldbms.Drivers().Register("sqlite")
+	glbldbms.Drivers().Register("csv", mltyfsys)
+	glbldbms.Connections().Register("datafiles", "csv", "/datafiles", mltyfsys)
+	fmt.Println(time.Now())
+	if rdr, rdrerr := glbldbms.Query("datafiles", "OMNI Data- RMasterfile_DAT CREDIT 07-08-2022.txt", map[string]interface{}{"ColDelim": "\t"}); rdrerr == nil {
+		defer rdr.Close()
+		for rc := range rdr.Records() {
+			if rc.First() {
+				fmt.Println(rc.Columns())
+			}
+			if rc.Last() {
+				fmt.Println(rc.RowNR())
+			}
+		}
+	}
+	fmt.Println(time.Now())
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in, out = serveio.NewReader(r), serveio.NewWriter(w)
