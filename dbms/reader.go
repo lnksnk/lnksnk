@@ -11,6 +11,7 @@ type Reader interface {
 	AttachHandler(DBMSHandler)
 	Records() func(func(Record) bool)
 	Events() interface{}
+	Record() Record
 }
 
 type ReaderEvents struct {
@@ -18,10 +19,20 @@ type ReaderEvents struct {
 }
 
 type reader struct {
-	stmnt   Statement
-	rws     Rows
-	dbhndlr DBMSHandler
-	evnts   *ReaderEvents
+	stmnt    Statement
+	rws      Rows
+	dbhndlr  DBMSHandler
+	evnts    *ReaderEvents
+	dsphndlr bool
+	rc       *record
+}
+
+// Record implements Reader.
+func (rdr *reader) Record() Record {
+	if rdr == nil {
+		return nil
+	}
+	return rdr.rc
 }
 
 // Events implements Reader.
@@ -47,12 +58,14 @@ func (rdr *reader) Records() func(func(Record) bool) {
 		if rdr == nil {
 			return
 		}
-		if coltpes, cols := rdr.ColumnTypes(), rdr.Columns(); rdr.rws != nil && rdr.rws.Err() == nil {
-			var rc *record
+		if rdr.rws != nil && rdr.rws.Err() == nil {
 			for rdr.Next() {
-				rc = &record{rdr: rdr, cnt: len(cols), cols: cols, coltpes: coltpes, dta: rdr.Data(), first: rdr.First(), last: rdr.Last()}
-				if !nxtrc(rc) {
-					break
+				/*rc.dta = rdr.Data()
+				rc.first = rdr.First()
+				rc.last = rdr.Last()
+				rc.cnt++*/
+				if !nxtrc(rdr.Record()) {
+					return
 				}
 			}
 		}
@@ -99,8 +112,8 @@ func (rdr *reader) First() bool {
 	if rdr == nil {
 		return false
 	}
-	if rws := rdr.rws; rws != nil {
-		return rws.First()
+	if rc := rdr.rc; rc != nil {
+		return rc.first
 	}
 	return false
 }
@@ -110,14 +123,14 @@ func (rdr *reader) Last() bool {
 	if rdr == nil {
 		return false
 	}
-	if rws := rdr.rws; rws != nil {
-		return rws.Last()
+	if rc := rdr.rc; rc != nil {
+		return rc.last
 	}
 	return false
 }
 
 // Next implements Reader.
-func (rdr *reader) Next() bool {
+func (rdr *reader) Next() (nxt bool) {
 	if rdr == nil {
 		return false
 	}
@@ -126,15 +139,42 @@ func (rdr *reader) Next() bool {
 		if stmt := rdr.stmnt; stmt != nil {
 			if rws = stmt.Rows(); rws != nil {
 				rdr.rws = rws
-				if rws.Next() {
-					return true
-				}
+			} else {
+				rdr.Close()
+				return false
 			}
+		} else {
+			rdr.Close()
 			return false
 		}
-		return false
 	}
-	return rws.Next()
+	if nxt = rws.Next(); nxt {
+		rc := rdr.rc
+	reinitrc:
+		if rc == nil {
+			cols, coltpes := rdr.Columns(), rdr.ColumnTypes()
+			if nxt = rdr.rws.Err() == nil; !nxt {
+				rdr.Close()
+				return
+			}
+			rc = &record{rdr: rdr, cnt: 1, cols: cols, coltpes: coltpes, first: rws.First(), last: rws.Last(), dta: rws.Data()}
+			rdr.rc = rc
+			return
+		}
+		if rc.first = rws.First(); rc.first {
+			rc.cols = nil
+			rc.coltpes = nil
+			rc.dta = nil
+			rc = nil
+			goto reinitrc
+		}
+		rc.last = rws.Last()
+		rc.dta = rdr.Data()
+		rc.cnt++
+		return
+	}
+	rdr.Close()
+	return
 }
 
 // Columns implements Reader.
@@ -168,8 +208,8 @@ func (rdr *reader) Data() []interface{} {
 	if rdr == nil {
 		return nil
 	}
-	if rws := rdr.rws; rws != nil {
-		return rws.Data()
+	if rc := rdr.rc; rc != nil {
+		return rc.dta
 	}
 	return nil
 }
@@ -179,7 +219,9 @@ func (rdr *reader) Close() {
 		return
 	}
 	stmnt := rdr.stmnt
-	dbhndlr := rdr.dbhndlr
+	rc := rdr.rc
+	rdr.rc = nil
+	dbhndlr, dsphndlr := rdr.dbhndlr, rdr.dsphndlr
 	rdr.dbhndlr = nil
 	rdr.stmnt = nil
 	rdr.rws = nil
@@ -187,6 +229,15 @@ func (rdr *reader) Close() {
 		stmnt.Close()
 	}
 	if dbhndlr != nil {
+		if dsphndlr {
+			dbhndlr.Close()
+			return
+		}
 		dbhndlr.DettachReader(rdr)
+	}
+	if rc != nil {
+		rc.cols = nil
+		rc.coltpes = nil
+		rc.dta = nil
 	}
 }
