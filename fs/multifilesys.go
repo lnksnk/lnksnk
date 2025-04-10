@@ -270,8 +270,63 @@ func (mltyfsys *multifilesys) DefaultExtensions(exts ...string) {
 }
 
 // Exist implements MultiFileSystem.
-func (mltyfsys *multifilesys) Exist(string) bool {
-	panic("unimplemented")
+func (mltyfsys *multifilesys) Exist(path string) bool {
+	if mltyfsys == nil || path == "" {
+		return false
+	}
+
+	fsystms := mltyfsys.fsystms
+	pthl := len(path)
+	pn := 0
+	for pn < pthl {
+		if path[pn] == '/' {
+		retry:
+			if fsfnd := fsystms[path[:func() int {
+				if pn == 0 {
+					return 1
+				}
+				return pn
+			}()]]; fsfnd != nil {
+				if fsfnd.Exist(path[pn:]) {
+					return true
+				}
+			}
+
+			if pn < pthl-4 && path[pn:pn+4] == "/../" {
+			strip:
+				path = path[:pn+1] + path[pn+4:]
+				pthl -= 4
+				if pn < pthl-4 && path[pn:pn+4] == "/../" {
+					goto strip
+				}
+				goto retry
+			}
+		}
+		if tpn := pthl - (pn + 1); tpn > pn && path[tpn] == '/' {
+		retrytpn:
+			if tpn > 3 && path[tpn-3:tpn+1] == "/../" {
+				tpn -= 3
+				goto retrytpn
+			}
+			if fsfnd := fsystms[path[:tpn]]; fsfnd != nil {
+				if fsfnd.Exist(path[tpn:]) {
+					return true
+				}
+			}
+			for tpn > pn {
+				tpn--
+				if tpn == pn {
+					pn = pthl - 1
+					break
+				}
+				if path[tpn] == '/' {
+					goto retrytpn
+				}
+			}
+		}
+		pn++
+	}
+	return false
 }
 
 // List implements MultiFileSystem.

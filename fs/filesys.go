@@ -248,9 +248,6 @@ func (fsys *filesys) Cached(path string) bool {
 		return false
 	}
 	if cachedfiles := fsys.cachedfiles; cachedfiles != nil {
-		/*if _, ok := cachedfiles.Load(path); ok {
-			return true
-		}*/
 		return cachedfiles[path] != nil
 
 	}
@@ -262,8 +259,16 @@ func (fsys *filesys) Exist(path string) bool {
 	if fsys.Cached(path) {
 		return true
 	}
-	if fi, _ := os.Stat(fsys.root + path); fi != nil {
-		return true
+	if fsys != nil {
+		if emded := fsys.embed; emded != nil {
+			_, ek := emded[path]
+			if ek {
+				return ek
+			}
+		}
+		if fi, _ := os.Stat(fsys.root + path); fi != nil {
+			return true
+		}
 	}
 	return false
 }
