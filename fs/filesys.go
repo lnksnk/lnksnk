@@ -274,8 +274,201 @@ func (fsys *filesys) Exist(path string) bool {
 }
 
 // List implements FileSystem.
-func (fsys *filesys) List(string) []FileInfo {
-	panic("unimplemented")
+func (fsys *filesys) List(path string) (fis []FileInfo) {
+	if fsys == nil {
+		return
+	}
+	pthl := len(path)
+
+	pn := 0
+	for pn < pthl {
+		if path[pn] == '/' {
+		retry:
+			if pn < pthl-4 && path[pn:pn+4] == "/../" {
+				path = path[:pn+1] + path[pn+4:]
+				pthl -= 4
+				goto retry
+			}
+		}
+		pn++
+	}
+	name := ""
+	lstspi := strings.LastIndex(path, "/")
+
+	if lstspi == -1 {
+		name = path
+		path = "/"
+	} else if lstspi > -1 && path != "" {
+		name = path[lstspi+1:]
+		path = path[:lstspi+1]
+	}
+	if path != "" {
+		if path[0] != '/' {
+			path = "/" + path
+		}
+		if path[len(path)-1] != '/' {
+			path = path + "/"
+		}
+	}
+	fldfis := map[string]bool{}
+	var isvalid = func(chkpth string, chkmask string, firoot, fipath, finame string) (valid bool) {
+		if !fldfis[fipath] {
+			if firtl := len(firoot); firtl >= len(chkpth) && firoot[len(chkpth)-1] == '/' {
+				if firoot == chkpth {
+					if valid = chkmask == ""; valid {
+						fldfis[fipath] = true
+						return
+					}
+
+					if valid = strings.ContainsAny(chkmask, "*.?"); valid {
+						if valid = strings.ContainsAny(chkmask, "*?"); valid {
+							if valid = checkPathMask(finame, chkmask); valid {
+								fldfis[fipath] = true
+								return
+							}
+							if valid = checkPathMask(finame, chkmask); valid {
+								fldfis[fipath] = true
+								return
+							}
+						}
+						if valid = strings.Contains(chkmask, "."); valid {
+							if valid = checkPathMask(finame, chkmask); valid {
+								fldfis[fipath] = true
+								return
+							}
+						}
+						return
+					}
+					return
+				}
+			}
+		}
+		return
+	}
+	if name == "" {
+		if path == "/" {
+			for _, emd := range fsys.embed {
+				vldfi := emd.FileInfo
+				if vld := isvalid(fsys.mltypath, name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+					fis = append(fis, vldfi)
+				}
+			}
+			for _, chdf := range fsys.cachedfiles {
+				vldfi := chdf.FileInfo
+				if vld := isvalid(fsys.mltypath, name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+					fis = append(fis, vldfi)
+				}
+			}
+			osdirs, _ := os.ReadDir(fsys.root)
+			for _, osdir := range osdirs {
+				if !osdir.IsDir() {
+					osfi, _ := osdir.Info()
+					if osfi != nil {
+						fipath := fsys.mltypath + osfi.Name()
+						fipthroot := fipath[:strings.LastIndex(fipath, "/")+1]
+						if fipthroot != "/" && fipthroot[0] != '/' {
+							fipthroot = "/" + fipthroot
+						}
+						if vld := isvalid(fsys.mltypath, name, fipthroot, osfi.Name(), fipath); vld {
+							_, _, media := mimes.FindMimeType(osfi.Name())
+							fis = append(fis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), false, osfi.Sys(), fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath, fsys.mltypath, func(ctx ...context.Context) io.Reader {
+								if f, _ := os.Open(fsys.root + fipath); f != nil {
+									return ContextReader(f, func() context.Context {
+										if len(ctx) > 0 {
+											return ctx[0]
+										}
+										return nil
+									}())
+								}
+								return nil
+							})})
+						}
+					}
+				}
+			}
+			return
+		}
+		for _, emd := range fsys.embed {
+			vldfi := emd.FileInfo
+			if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+				fis = append(fis, vldfi)
+			}
+		}
+		for _, chdf := range fsys.cachedfiles {
+			vldfi := chdf.FileInfo
+			if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+				fis = append(fis, vldfi)
+			}
+		}
+		osdirs, _ := os.ReadDir(fsys.root + path)
+		for _, osdir := range osdirs {
+			if !osdir.IsDir() {
+				osfi, _ := osdir.Info()
+				if osfi != nil {
+					fipath := fsys.mltypath + path + osfi.Name()
+					fipthroot := fipath[:strings.LastIndex(fipath, "/")+1]
+					if fipthroot != "/" && fipthroot[0] != '/' {
+						fipthroot = "/" + fipthroot
+					}
+					if vld := isvalid(fsys.mltypath, name, fipthroot, osfi.Name(), fipath); vld {
+						_, _, media := mimes.FindMimeType(osfi.Name())
+						fis = append(fis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), false, osfi.Sys(), fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath, fsys.mltypath, func(ctx ...context.Context) io.Reader {
+							if f, _ := os.Open(fsys.root + fipath); f != nil {
+								return ContextReader(f, func() context.Context {
+									if len(ctx) > 0 {
+										return ctx[0]
+									}
+									return nil
+								}())
+							}
+							return nil
+						})})
+					}
+				}
+			}
+		}
+		return
+	}
+	for _, nme := range strings.Split(name, ",") {
+		if nme = strings.TrimFunc(nme, iorw.IsSpace); nme == "" {
+			continue
+		}
+
+		if path == "/" {
+			for _, emd := range fsys.embed {
+				vldfi := emd.FileInfo
+				if vld := isvalid(fsys.mltypath, name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+					fis = append(fis, vldfi)
+				}
+			}
+			for _, chdf := range fsys.cachedfiles {
+				vldfi := chdf.FileInfo
+				if vld := isvalid(fsys.mltypath, name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+					fis = append(fis, vldfi)
+				}
+			}
+			return
+		}
+		for _, emd := range fsys.embed {
+			vldfi := emd.FileInfo
+			if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+				fis = append(fis, vldfi)
+			}
+		}
+		for _, chdf := range fsys.cachedfiles {
+			vldfi := chdf.FileInfo
+			if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
+				fis = append(fis, vldfi)
+			}
+		}
+		return
+	}
+	return
+}
+
+func checkPathMask(path string, mask string) (vld bool) {
+	vld, _ = filepath.Match(mask, path)
+	return
 }
 
 func syncPath(fsys *filesys, path, base string, nftyfunc func(FileInfo, Notify)) {

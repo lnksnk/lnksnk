@@ -68,21 +68,23 @@ func main() {
 	glbldbms.Drivers().Register("oracle")
 	glbldbms.Drivers().Register("sqlite")
 	glbldbms.Drivers().Register("csv", mltyfsys)
-	glbldbms.Connections().Register("datafiles", "csv", "/datafiles", mltyfsys)
-	fmt.Println(time.Now())
-	if rdr, rdrerr := glbldbms.Query("datafiles", "OMNI Data- RMasterfile_DAT CREDIT 07-08-2022.txt", map[string]interface{}{"ColDelim": "\t", "Trim": true}); rdrerr == nil {
-		defer rdr.Close()
-		for rc := range rdr.Records() {
-			if rc.First() {
-				fmt.Println(rc.Columns())
-			}
-			if rc.Last() {
-				fmt.Println(rc.Data())
-				fmt.Println(rc.RowNR())
+	if mltyfsys.Exist("/embedding/embed.html") {
+		glbldbms.Connections().Register("datafiles", "csv", "/datafiles", mltyfsys)
+		fmt.Println(time.Now())
+		if rdr, rdrerr := glbldbms.Query("datafiles", "OMNI Data- RMasterfile_DAT CREDIT 07-08-2022.txt", map[string]interface{}{"ColDelim": "\t", "Trim": true}); rdrerr == nil {
+			defer rdr.Close()
+			for rc := range rdr.Records() {
+				if rc.First() {
+					fmt.Println(rc.Columns())
+				}
+				if rc.Last() {
+					fmt.Println(rc.Data())
+					fmt.Println(rc.RowNR())
+				}
 			}
 		}
+		fmt.Println(time.Now())
 	}
-	fmt.Println(time.Now())
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var inout = serveio.NewReaderWriter(serveio.NewReader(r), serveio.NewWriter(w))
@@ -139,7 +141,7 @@ func main() {
 					vm.Set("print", out.Println)
 				})
 				defer dbhndl.Close()
-				var session = map[string]interface{}{"db": dbhndl}
+				var session = map[string]interface{}{"db": dbhndl, "fs": mltyfsys}
 				vm.SetFieldNameMapper(es.NewFieldMapper(es.UncapFieldNameMapper()))
 				vm.Set("$", session)
 				defer func() {

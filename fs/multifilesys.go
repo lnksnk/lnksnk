@@ -14,7 +14,7 @@ import (
 type MultiFileSystem interface {
 	Open(string) File
 	OpenContext(context.Context, string) File
-	List(string) []FileInfo
+	List(...string) []FileInfo
 	StatContext(context.Context, string) FileInfo
 	Stat(string) FileInfo
 	Exist(string) bool
@@ -330,8 +330,93 @@ func (mltyfsys *multifilesys) Exist(path string) bool {
 }
 
 // List implements MultiFileSystem.
-func (mltyfsys *multifilesys) List(string) []FileInfo {
-	panic("unimplemented")
+func (mltyfsys *multifilesys) List(paths ...string) (fios []FileInfo) {
+	if mltyfsys == nil || len(paths) == 0 {
+		return
+	}
+
+	pthsl := len(paths)
+	pthsi := 0
+
+	dppth := map[string]bool{}
+	for pthsi < pthsl {
+		if paths[pthsi] = strings.TrimFunc(paths[pthsi], iorw.IsSpace); paths[pthsi] == "" {
+			paths = append(paths[:pthsi], paths[pthsi+1:]...)
+			pthsl--
+			continue
+		}
+		if dppth[paths[pthsi]] {
+			paths = append(paths[:pthsi], paths[pthsi+1:]...)
+			pthsl--
+			continue
+		}
+		dppth[paths[pthsi]] = true
+		pthsi++
+	}
+
+	alrdyfdn := map[string]bool{}
+	fsystms := mltyfsys.fsystms
+	for _, path := range paths {
+		pthl := len(path)
+		pn := 0
+		for pn < pthl {
+			if path[pn] == '/' {
+			retry:
+				if fsfnd := fsystms[path[:func() int {
+					if pn == 0 {
+						return 1
+					}
+					return pn
+				}()]]; fsfnd != nil {
+					if !alrdyfdn[fsfnd.Path()] {
+						alrdyfdn[fsfnd.Path()] = true
+						if fis := fsfnd.List(path[pn:]); len(fis) > 0 {
+							fios = append(fios, fis...)
+							break
+						}
+					}
+				}
+
+				if pn < pthl-4 && path[pn:pn+4] == "/../" {
+				strip:
+					path = path[:pn+1] + path[pn+4:]
+					pthl -= 4
+					if pn < pthl-4 && path[pn:pn+4] == "/../" {
+						goto strip
+					}
+					goto retry
+				}
+			}
+			if tpn := pthl - (pn + 1); tpn > pn && path[tpn] == '/' {
+			retrytpn:
+				if tpn > 3 && path[tpn-3:tpn+1] == "/../" {
+					tpn -= 3
+					goto retrytpn
+				}
+				if fsfnd := fsystms[path[:tpn]]; fsfnd != nil {
+					if !alrdyfdn[fsfnd.Path()] {
+						alrdyfdn[fsfnd.Path()] = true
+						if fis := fsfnd.List(path[tpn:]); len(fis) > 0 {
+							fios = append(fios, fis...)
+							break
+						}
+					}
+				}
+				for tpn > pn {
+					tpn--
+					if tpn == pn {
+						pn = pthl - 1
+						break
+					}
+					if path[tpn] == '/' {
+						goto retrytpn
+					}
+				}
+			}
+			pn++
+		}
+	}
+	return fios
 }
 
 func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
