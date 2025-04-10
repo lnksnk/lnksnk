@@ -8,6 +8,35 @@ import (
 	"github.com/lnksnk/lnksnk/iorw"
 )
 
+type flusher interface {
+	Flush()
+}
+
+type flushererror interface {
+	Flush() error
+}
+
+type statusCodewriter interface {
+	Write([]byte) (int, error)
+	WriteHeader(int)
+}
+
+type header interface {
+	map[string][]string
+	Add(key string, value string)
+	Clone() http.Header
+	Del(key string)
+	Get(key string) string
+	Set(key string, value string)
+	Values(key string) []string
+	Write(w io.Writer) error
+	WriteSubset(w io.Writer, exclude map[string]bool) error
+}
+
+type headerwriter interface {
+	Header() http.Header
+}
+
 type Writer interface {
 	io.WriteCloser
 	WriteHeader(int)
@@ -21,15 +50,29 @@ type Writer interface {
 }
 
 type writer struct {
-	httpw     http.ResponseWriter
+	stscdewtr statusCodewriter
+	flshr     flusher
+	flshrerr  flushererror
+	orgwrtr   io.Writer
+	hdrwtr    headerwriter
+	header    http.Header
 	buff      *bufio.Writer
 	Status    int
 	MaxSize   int64
 	FlushSize int
 }
 
-func NewWriter(httpw http.ResponseWriter) (rqw *writer) {
-	rqw = &writer{httpw: httpw, Status: 200, MaxSize: -1, FlushSize: 32768 * 2}
+func NewWriter(orgwrtr io.Writer) (rqw *writer) {
+	stscdewtr, _ := orgwrtr.(statusCodewriter)
+	hdrwtr, _ := orgwrtr.(headerwriter)
+	flshr, _ := orgwrtr.(flusher)
+	flshrerr, _ := orgwrtr.(flushererror)
+	rqw = &writer{orgwrtr: orgwrtr, stscdewtr: stscdewtr, hdrwtr: hdrwtr, flshr: flshr, flshrerr: flshrerr, Status: 200, MaxSize: -1, FlushSize: 32768 * 2}
+	if hdrwtr != nil {
+		rqw.header = hdrwtr.Header()
+	} else {
+		rqw.header = http.Header{}
+	}
 	return
 }
 
@@ -46,13 +89,13 @@ func (rqw *writer) MaxWriteSize(maxsize int64) bool {
 
 func (rqw *writer) ReadFrom(r io.Reader) (n int64, err error) {
 	if rqw != nil {
-		if rqw.httpw != nil {
+		if orgwrtr := rqw.orgwrtr; orgwrtr != nil {
 			if rqw.buff != nil {
 				if err = rqw.Flush(); err != nil {
 					return
 				}
 			}
-			n, err = iorw.ReadToFunc(rqw.httpw, r.Read)
+			n, err = iorw.ReadToFunc(orgwrtr, r.Read)
 		}
 	}
 	return
@@ -60,8 +103,8 @@ func (rqw *writer) ReadFrom(r io.Reader) (n int64, err error) {
 
 func (rqw *writer) Header() http.Header {
 	if rqw != nil {
-		if httpw := rqw.httpw; httpw != nil {
-			return httpw.Header()
+		if header := rqw.header; header != nil {
+			return header
 		}
 	}
 	return nil
@@ -69,21 +112,25 @@ func (rqw *writer) Header() http.Header {
 
 func (rqw *writer) WriteHeader(status int) {
 	if rqw != nil {
-		if rqw.httpw != nil {
+		if stscdewtr := rqw.stscdewtr; stscdewtr != nil {
 			if status == 0 {
 				status = rqw.Status
 			}
-			rqw.httpw.WriteHeader(status)
+			stscdewtr.WriteHeader(status)
 		}
 	}
 }
 
 func (rqw *writer) Flush() (err error) {
 	if rqw != nil {
-		if buff, httpw := rqw.buff, rqw.httpw; buff != nil && httpw != nil {
+		if buff, flshr, flshrerr := rqw.buff, rqw.flshr, rqw.flshrerr; buff != nil {
 			if err = buff.Flush(); err == nil {
-				if fuslhr, _ := httpw.(http.Flusher); fuslhr != nil {
-					fuslhr.Flush()
+				if flshr != nil {
+					flshr.Flush()
+					return
+				}
+				if flshrerr != nil {
+					err = flshrerr.Flush()
 				}
 			}
 		}
@@ -93,34 +140,48 @@ func (rqw *writer) Flush() (err error) {
 
 func (rqw *writer) buffer() *bufio.Writer {
 	if rqw != nil {
-		if buff := rqw.buff; buff == nil {
-			if rqw.httpw != nil {
-				/*bfsize := rqw.FlushSize
-				if bfsize < 32768*2 {
-					bfsize = 32768 * 2
+		buff := rqw.buff
+		if buff == nil {
+			if orgwtr := rqw.orgwrtr; orgwtr != nil {
+				if rqw.FlushSize < 32768*2 {
+					rqw.FlushSize = 32768 * 2
 				}
-				buff = bufio.NewWriterSize(rqw.httpw, bfsize)*/
-				buff = bufio.NewWriter(rqw.httpw)
-				rqw.buff = buff
+				rqw.buff = bufio.NewWriterSize(orgwtr, rqw.FlushSize)
+				buff = rqw.buff
 			}
 			return buff
-		} else {
+		}
+		if rqw.FlushSize < 32768*2 {
+			rqw.FlushSize = 32768 * 2
+		}
+		if buff.Size() != rqw.FlushSize {
+			buff.Flush()
+			if orgwtr := rqw.orgwrtr; orgwtr != nil {
+				rqw.buff = bufio.NewWriterSize(orgwtr, rqw.FlushSize)
+			} else {
+				rqw.buff = nil
+			}
+			buff = rqw.buff
 			return buff
 		}
+		return buff
+
 	}
 	return nil
 }
 
 func (rqw *writer) Close() (err error) {
 	if rqw != nil {
-		if buff, httpw := rqw.buff, rqw.httpw; buff != nil || httpw != nil {
+		if buff := rqw.buff; buff != nil {
 			rqw.Flush()
 			rqw.buff = nil
-			rqw.httpw = nil
-			if fuslhr, _ := httpw.(http.Flusher); fuslhr != nil {
-				fuslhr.Flush()
-			}
 		}
+		rqw.orgwrtr = nil
+		rqw.stscdewtr = nil
+		rqw.hdrwtr = nil
+		rqw.header = nil
+		rqw.flshr = nil
+		rqw.flshrerr = nil
 	}
 	return
 }
