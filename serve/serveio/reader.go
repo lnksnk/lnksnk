@@ -41,9 +41,11 @@ type reader struct {
 	lkladdr     string
 	ctxcnl      func()
 	httpr       *http.Request
+	header      http.Header
 	isssl       bool
 	path        string
 	bufr        *bufio.Reader
+	orgrdr      io.ReadCloser
 	rangetype   string
 	rangeoffset int64
 	params      parameters.ParametersAPI
@@ -173,9 +175,6 @@ func (rqr *reader) Header() http.Header {
 
 func (rqr *reader) Path() string {
 	if rqr != nil {
-		if rqr.path == "" && rqr.httpr != nil {
-			rqr.path = rqr.httpr.URL.Path
-		}
 		return rqr.path
 	}
 	return ""
@@ -191,10 +190,9 @@ func (rqr *reader) RangeType() string {
 func (rqr *reader) buffer() (bufr *bufio.Reader) {
 	if rqr != nil {
 		if bufr = rqr.bufr; bufr == nil {
-			if httpr := rqr.httpr; httpr != nil {
-				if r := httpr.Body; r != nil {
-					bufr = bufio.NewReaderSize(r, 65536)
-				}
+			if orgrdr := rqr.orgrdr; orgrdr != nil {
+				rqr.bufr = bufio.NewReaderSize(orgrdr, 32768*2)
+				bufr = rqr.bufr
 			}
 		}
 	}
@@ -207,6 +205,9 @@ func (rqr *reader) Read(p []byte) (n int, err error) {
 			n, err = bufr.Read(p)
 		}
 	}
+	if n == 0 && err == nil {
+		err = io.EOF
+	}
 	return
 }
 
@@ -215,6 +216,9 @@ func (rqr *reader) ReadRune() (r rune, size int, err error) {
 		if bufr := rqr.buffer(); bufr != nil {
 			r, size, err = bufr.ReadRune()
 		}
+	}
+	if size == 0 && err == nil {
+		err = io.EOF
 	}
 	return
 }
@@ -242,12 +246,21 @@ func (rqr *reader) Close() (err error) {
 		if rqr.bufr != nil {
 			rqr.bufr = nil
 		}
+
 	}
 	return
 }
 
-func NewReader(httpr *http.Request) (rdr *reader) {
-	rdr = &reader{httpr: httpr, rangeoffset: -1, ctx: httpr.Context()}
+func NewContextPathReader(ctx context.Context, in interface{}, path string) (rdr *reader) {
+	httpr, _ := in.(*http.Request)
+	orgqrdr, _ := in.(io.ReadCloser)
+	if orgqrdr == nil && httpr != nil {
+		orgqrdr = httpr.Body
+	}
+	if ctx == nil && httpr != nil {
+		ctx = httpr.Context()
+	}
+	rdr = &reader{httpr: httpr, orgrdr: orgqrdr, rangeoffset: -1, ctx: ctx}
 	if rdr.ctx != nil {
 		if lcaddr, _ := rdr.ctx.Value(http.LocalAddrContextKey).(net.Addr); lcaddr != nil {
 			rdr.lkladdr = lcaddr.String()
@@ -255,6 +268,7 @@ func NewReader(httpr *http.Request) (rdr *reader) {
 		rdr.ctx, rdr.ctxcnl = context.WithCancel(rdr.ctx)
 	}
 	if httpr != nil {
+		rdr.path = httpr.URL.Path
 		rdr.rmtaddr = httpr.RemoteAddr
 		rdr.mthd = httpr.Method
 		rdr.prtcl = httpr.Proto
@@ -273,6 +287,22 @@ func NewReader(httpr *http.Request) (rdr *reader) {
 		prms := parameters.NewParameters()
 		parameters.LoadParametersFromHTTPRequest(prms, httpr)
 		rdr.params = prms
+		rdr.header = httpr.Header
+	}
+	if rdr.path == "" {
+		rdr.path = path
 	}
 	return
+}
+
+func NewContextReader(ctx context.Context, in interface{}) (rdr *reader) {
+	return NewContextPathReader(ctx, in, "")
+}
+
+func NewReader(in interface{}) (rdr *reader) {
+	return NewContextPathReader(context.Background(), in, "")
+}
+
+func NewPathReader(in interface{}, path string) (rdr *reader) {
+	return NewContextPathReader(context.Background(), in, path)
 }
