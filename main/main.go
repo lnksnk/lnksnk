@@ -85,9 +85,9 @@ func main() {
 	fmt.Println(time.Now())
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var in, out = serveio.NewReader(r), serveio.NewWriter(w)
-		defer in.Close()
-		defer out.Close()
+		var inout = serveio.NewReaderWriter(serveio.NewReader(r), serveio.NewWriter(w))
+		defer inout.Close()
+		in, out := inout.Reader(), inout.Writer()
 		path := in.Path()
 
 		rqfi := mltyfsys.StatContext(in.Context(), path)
