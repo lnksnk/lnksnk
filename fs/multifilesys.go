@@ -416,6 +416,20 @@ func (mltyfsys *multifilesys) List(paths ...string) (fios []FileInfo) {
 			pn++
 		}
 	}
+	if fiosl := len(fios); fiosl > 0 {
+		fioi := 0
+		chkgiosdup := map[string]bool{}
+		for fioi < fiosl {
+			if chkgiosdup[fios[fioi].Path()] {
+				fios[fioi] = nil
+				fios = append(fios[:fioi], fios[:fioi+1]...)
+				fiosl--
+				continue
+			}
+			chkgiosdup[fios[fioi].Path()] = true
+			fioi++
+		}
+	}
 	return fios
 }
 
