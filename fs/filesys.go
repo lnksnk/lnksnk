@@ -105,26 +105,26 @@ func (fsys *filesys) Remove(path string, rmvfunc ...func(FileInfo)) (diddel bool
 			pthl++
 			path += "/"
 		}
-		if embed != nil {
-			for epth, ebd := range embed {
-				if epthl := len(epth); epthl > pthl && epth[:pthl] == path {
-					if !diddel {
-						diddel = true
-					}
-					if cachedfiles != nil {
-						if chdsts := cachedfiles[epth]; chdsts != nil {
-							delete(cachedfiles, epth)
-							chdsts.Close()
-						}
-					}
-					delete(embed, epth)
-					if len(rmvfunc) > 0 && rmvfunc[0] != nil {
-						rmvfunc[0](ebd.FileInfo)
-					}
-					ebd.Close()
+
+		for epth, ebd := range embed {
+			if epthl := len(epth); epthl > pthl && epth[:pthl] == path {
+				if !diddel {
+					diddel = true
 				}
+				if cachedfiles != nil {
+					if chdsts := cachedfiles[epth]; chdsts != nil {
+						delete(cachedfiles, epth)
+						chdsts.Close()
+					}
+				}
+				delete(embed, epth)
+				if len(rmvfunc) > 0 && rmvfunc[0] != nil {
+					rmvfunc[0](ebd.FileInfo)
+				}
+				ebd.Close()
 			}
 		}
+
 		for chdpth, chdsts := range embed {
 			if chdpthl := len(chdpth); chdpthl > pthl && chdpth[:pthl] == path {
 				if !diddel {
@@ -434,7 +434,7 @@ func checkPathMask(path string, mask string) (vld bool) {
 	return
 }
 
-func syncPath(fsys *filesys, path, base string, nftyfunc func(FileInfo, Notify)) {
+func syncPath(fsys *filesys, path string, nftyfunc func(FileInfo, Notify)) {
 	if fsys == nil {
 		return
 	}
@@ -447,7 +447,7 @@ func syncPath(fsys *filesys, path, base string, nftyfunc func(FileInfo, Notify))
 		if sncpath[0] != '/' {
 			sncpath = "/" + sncpath
 		}
-		//sncroot := sncpath[:strings.LastIndex(sncpath, ":")]
+
 		var sncfi, _ = os.Stat(fsys.root + sncpath)
 
 		if sncfi != nil {
@@ -514,7 +514,7 @@ func (fsys *filesys) AutoSync(path string, ntfyfunc ...func(FileInfo, Notify)) {
 	if fsys == nil {
 		return
 	}
-	syncPath(fsys, path, fsys.mltypath, func() func(FileInfo, Notify) {
+	syncPath(fsys, path, func() func(FileInfo, Notify) {
 		if len(ntfyfunc) > 0 {
 			return ntfyfunc[0]
 		}
@@ -550,12 +550,9 @@ func (fsys *filesys) Close() (err error) {
 		clear(cachexts)
 		cachexts = nil
 	}
-	if cachedfiles != nil {
-		for key, value := range cachedfiles {
-			value.Close()
-			delete(cachedfiles, key)
-		}
-
+	for key, value := range cachedfiles {
+		value.Close()
+		delete(cachedfiles, key)
 	}
 	return
 }
@@ -696,7 +693,7 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 	}
 	if path == "" && pthroot[len(pthroot)-1] == '/' {
 		for dlftext := range fsys.defaultexts {
-			if emdfi, _ := fsys.embed[pthroot+"index"+dlftext]; emdfi != nil {
+			if emdfi := fsys.embed[pthroot+"index"+dlftext]; emdfi != nil {
 				if fsys.cachexts[emdfi.FileInfo.Ext()] {
 					var chdstt *cachedstat = fsys.cachedfiles[pthroot+path]
 					if chdstt != nil {
@@ -710,7 +707,7 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 			}
 		}
 	}
-	if emdfi, _ := fsys.embed[pthroot+path]; emdfi != nil {
+	if emdfi := fsys.embed[pthroot+path]; emdfi != nil {
 		if fsys.cachexts[emdfi.FileInfo.Ext()] {
 			var chdstt *cachedstat = fsys.cachedfiles[pthroot+path]
 			if chdstt != nil {

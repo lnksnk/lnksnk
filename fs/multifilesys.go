@@ -198,7 +198,7 @@ func (mltyfsys *multifilesys) Iterate(syspaths ...string) func(func(string, File
 				spths := []string{}
 				spthsmp := map[string]FileSystem{}
 				for _, spth := range syspaths {
-					if fs, _ := mltyfsys.fsystms[spth]; fs != nil {
+					if fs := mltyfsys.fsystms[spth]; fs != nil {
 						if spthsmp[spth] == nil {
 							spths = append(spths, spth)
 							spthsmp[spth] = fs
@@ -633,41 +633,6 @@ func (mltyfsys *multifilesys) EventWrite(path string, fsys FileSystem) {
 
 func (mltyfsys *multifilesys) Open(path string) (fl File) {
 	return mltyfsys.OpenContext(context.Background(), path)
-}
-
-func findFsys(ctx context.Context, mltyfsys *multifilesys, path string) (systmsfnd []FileSystem, rmngpaths []string) {
-	if fsystms := mltyfsys.fsystms; fsystms != nil {
-		var fsys FileSystem
-		pthl := len(path)
-		prfx := func() string {
-			if path[0] == '/' {
-				return ""
-			}
-			return "/"
-		}()
-		for pri := range pthl {
-			if path[pri] == '/' {
-				if fsys = fsystms[prfx+path[:pri+1]]; fsys != nil {
-					if ctx != nil {
-						if ctx.Err() != nil {
-							return
-						}
-					}
-					systmsfnd = append(systmsfnd, fsys)
-					rmngpaths = append(rmngpaths, path[pri:])
-					continue
-				}
-			}
-			if path[pthl-(pri+1)] == '/' {
-				if fsys = fsystms[prfx+path[:pthl-(pri+1)]]; fsys != nil {
-					systmsfnd = append(systmsfnd, fsys)
-					rmngpaths = append(rmngpaths, path[pthl-(pri):])
-					continue
-				}
-			}
-		}
-	}
-	return
 }
 
 func (mltyfsys *multifilesys) OpenContext(ctx context.Context, path string) (fl File) {
