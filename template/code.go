@@ -93,8 +93,12 @@ func (cde *codeparsing) flushPsv() {
 							tmpcde.Print("print(`", psvbf.Reader(), "`+")
 						}
 					} else {
-						tmpcde.Print("`", psvbf.Reader(), "`+")
+						tmpcde.Print("+`", psvbf.Reader(), "`+")
 					}
+					return
+				}
+				if !tmpcde.Empty() {
+					tmpcde.Print("+")
 				}
 			}, nil, func(canreset bool, rns ...rune) (reset bool) {
 				tmpcde.WriteRunes(rns...)
@@ -120,8 +124,10 @@ func (cde *codeparsing) flushPsv() {
 				}
 			}
 			if !tmpcde.Empty() {
-				tmpcde.WriteTo(cdebf)
-				tmpcde.Clear()
+				if s := tmpcde.String(); s != "" {
+					tmpcde.WriteTo(cdebf)
+					tmpcde.Clear()
+				}
 			}
 		}
 		if lstr, isspace := rune(cdebf.LastByte(true)), iorw.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
