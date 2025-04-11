@@ -37,11 +37,14 @@ type Statement interface {
 }
 
 type statement struct {
-	dbcn *sql.DB
+	db   *sql.DB
+	dbcn *sql.Conn
 	//dbstmt   *sql.Stmt
 	rows      Rows
 	driver    string
-	query     string
+	initquery string
+	query     []string
+	queryargs [][]interface{}
 	fsys      fs.MultiFileSystem
 	fireader  func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
 	params    parameters.ParametersAPI
@@ -57,6 +60,9 @@ func (s *statement) Close() (err error) {
 		return
 	}
 	rows := s.rows
+	dbcn := s.dbcn
+	s.query = nil
+	s.db = nil
 	s.dbcn = nil
 	s.rows = nil
 	s.prssqlarg = nil
@@ -67,13 +73,20 @@ func (s *statement) Close() (err error) {
 	s.params = nil
 	s.rdr = nil
 	s.rcrd = nil
+	queryargs := s.queryargs
 	if args != nil {
 		clear(args)
 		args = nil
 	}
+	if queryargs != nil {
+		clear(queryargs)
+	}
 
 	if rows != nil {
 		go rows.Close()
+	}
+	if dbcn != nil {
+		go dbcn.Close()
 	}
 	return
 }
@@ -107,7 +120,11 @@ func (s *statement) ExecuteContext(ctx context.Context, a ...interface{}) (resul
 	}
 	dbcn := s.dbcn
 	if dbcn != nil {
-		return dbcn.ExecContext(ctx, s.query, a...)
+		qryl, query := len(s.query), s.query
+		if qryl == 1 {
+			return dbcn.ExecContext(ctx, query[0], a...)
+		}
+
 	}
 	return
 }
@@ -131,14 +148,53 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 			ctx = nil
 		}()
 	}
-	dbcn, rws := s.dbcn, s.rows
-	if dbcn != nil {
+	db, dbcn, rws := s.db, s.dbcn, s.rows
+	if db != nil || dbcn != nil {
 		if rws == nil {
-			dbrows, dbrowserr := dbcn.QueryContext(ctx, s.query, a...)
-			if err = dbrowserr; err == nil {
-				s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
-				rdr = &reader{stmnt: s, rws: s.rows}
+			qryl, query, queryargs := len(s.query), s.query, s.queryargs
+			if qryl == 0 && s.initquery != "" {
+				query = append(query, s.initquery)
+				queryargs = append(queryargs, []interface{}{})
+				s.query = query
+				s.queryargs = queryargs
+				qryl++
+			}
+			if qryl == 1 {
+				if db != nil {
+					dbrows, dbrowserr := db.QueryContext(ctx, query[0], queryargs[0]...)
+					if err = dbrowserr; err == nil {
+						s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
+						rdr = &reader{stmnt: s, rws: s.rows}
+					}
+					return
+				}
+				if dbcn != nil {
+					dbrows, dbrowserr := dbcn.QueryContext(ctx, query[0], queryargs[0]...)
+					if err = dbrowserr; err == nil {
+						s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
+						rdr = &reader{stmnt: s, rws: s.rows}
+					}
+				}
 				return
+			}
+			if dbcn != nil {
+				for qryn, qry := range query {
+					if qryn == qryl-1 {
+						dbrows, dbrowserr := dbcn.QueryContext(ctx, qry, queryargs[qryn]...)
+						if err = dbrowserr; err != nil {
+							break
+						}
+						if dbrows != nil {
+							s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
+							rdr = &reader{stmnt: s, rws: s.rows}
+						}
+						return
+					}
+					_, exeerr := dbcn.ExecContext(ctx, qry, queryargs[qryn]...)
+					if err = exeerr; err != nil {
+						break
+					}
+				}
 			}
 		}
 		return
@@ -146,7 +202,7 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 	return
 }
 
-func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdargs []interface{}, err error) {
+func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpdargs [][]interface{}, err error) {
 	if s == nil || s.prssqlarg == nil {
 		return
 	}
@@ -229,7 +285,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdar
 	defer qrybf.Close()
 	if fsys := s.fsys; fsys != nil {
 		s.fsys = nil
-		tstquery := s.query
+		tstquery := s.initquery
 		tstext := func() string {
 			if si := strings.LastIndex(tstquery, "."); si > 0 {
 				if tstquery[si:] == ".sql" {
@@ -252,11 +308,11 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdar
 				qrybf.Print(fi.Reader())
 			}
 		} else {
-			qrybf.Print(s.query)
+			qrybf.Print(s.initquery)
 		}
 	}
 
-	if qrybf.Contains("@") {
+	if qrybf.Contains("@") || qrybf.Contains(";") {
 		var prsng *template.Parsing = nil
 		orgrqry := func(yld func(rune) bool) {
 			rdr := qrybf.Clone(true).Reader(true)
@@ -384,23 +440,77 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry string, prpdar
 		})
 
 		for or := range orgrqry {
+			if or == ';' {
+				if prds := strings.TrimFunc(qrybf.Clone(true).Reader(true).SubString(0), iorw.IsSpace); prds != "" {
+					prds += ";"
+					prpdqry = append(prpdqry, prds)
+				}
+				if fndl := len(prmargsfnd); fndl > 0 {
+					prpargsi := len(prpdargs)
+					prpdargs = append(prpdargs, make([]interface{}, fndl))
+					for fn, ids := range prmargsfnd {
+						prpdargs[prpargsi][fn] = prmargvalsfnd[ids]()
+					}
+					prmargsfnd = nil
+				} else {
+					prpdargs = append(prpdargs, []interface{}{})
+				}
+				continue
+			}
 			prsng.Parse(or)
 		}
 		if prsng != nil && prsng.Busy() {
 			err = fmt.Errorf("%s", "failed parsing query arguments")
 			return
 		}
-		if fndl := len(prmargsfnd); fndl > 0 {
-			prpdargs = make([]interface{}, fndl)
+		fndl := len(prmargsfnd)
+		if fndl > 0 {
+			prpargsi := len(prpdargs)
+			prpdargs = append(prpdargs, make([]interface{}, fndl))
 			for fn, ids := range prmargsfnd {
-				prpdargs[fn] = prmargvalsfnd[ids]()
+				prpdargs[prpargsi][fn] = prmargvalsfnd[ids]()
 			}
+			prmargsfnd = nil
+		} else {
+			prpdargs = append(prpdargs, []interface{}{})
+		}
+	}
+	if !qrybf.Empty() {
+		if prds := strings.TrimFunc(qrybf.Reader(true).SubString(0), iorw.IsSpace); prds != "" && prds != ";" {
+			prpdqry = append(prpdqry, prds)
 		}
 	}
 
-	return qrybf.String(), prpdargs, err
+	return prpdqry, prpdargs, err
 }
 
-func nextstatement(dbcn *sql.DB, driver Driver, query string, fsys fs.MultiFileSystem) (stmnt Statement) {
-	return &statement{dbcn: dbcn, driver: driver.Name(), prssqlarg: driver.ParseSqlArg, query: query, fsys: fsys}
+func nextstatement(db *sql.DB, driver Driver, query string, fsys fs.MultiFileSystem, a ...interface{}) (s *statement, err error) {
+	if fsys == nil {
+		if driver != nil {
+			fsys = driver.FSys()
+		}
+	}
+
+	if driver != nil {
+		if driver.Name() != "csv" && driver.Name() != "dlv" {
+			dbcn, dbconerr := db.Conn(context.Background())
+			if err = dbconerr; dbconerr != nil {
+				return
+			}
+			s = &statement{dbcn: dbcn, driver: driver.Name(), prssqlarg: driver.ParseSqlArg, initquery: query, fsys: fsys}
+			s.query, s.queryargs, err = prepairSqlStatement(s, a...)
+			if err != nil {
+				s.Close()
+				s = nil
+				return
+			}
+			return
+		}
+		if dvrfsys := driver.FSys(); dvrfsys != nil {
+			s = &statement{db: db, driver: driver.Name(), prssqlarg: driver.ParseSqlArg, initquery: query, fsys: fsys}
+			s.query = append(s.query, s.initquery)
+			s.queryargs = append(s.queryargs, append(a, dvrfsys))
+		}
+	}
+	return
 }

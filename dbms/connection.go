@@ -62,25 +62,14 @@ func (cn *connection) Execute(query string, a ...interface{}) (Result, error) {
 
 // ExecuteContext implements Connection.
 func (cn *connection) ExecuteContext(ctx context.Context, query string, a ...interface{}) (result Result, err error) {
-	if cn == nil {
+	db, dvr, dberr := nextdb(cn)
+	if dberr != nil {
 		return
 	}
-	dvr := cn.dvr
-	db := cn.db
-	if db == nil {
-		if dvr != nil {
-			if dtasrc := cn.datasource; dtasrc != "" {
-				if db, err = dvr.Invoke(dtasrc); err != nil {
-					return
-				}
-			}
-			cn.db = db
-		}
-	}
 	if db != nil {
-		s := nextstatement(db, dvr, query, cn.fsys).(*statement)
-		if s.query, a, err = prepairSqlStatement(s, a...); err != nil {
-			return
+		s, serr := nextstatement(db, dvr, query, cn.fsys, a...)
+		if err = serr; err != nil {
+			return nil, err
 		}
 		if result, err = s.ExecuteContext(ctx, a...); err != nil {
 			if cn.db == db {
@@ -105,41 +94,40 @@ func (cn *connection) Query(query string, a ...interface{}) (rdr Reader, err err
 	return cn.QueryContext(context.Background(), query, a...)
 }
 
-// QueryContext implements Connection.
-func (cn *connection) QueryContext(ctx context.Context, query string, a ...interface{}) (rdr Reader, err error) {
+func nextdb(cn *connection) (db *sql.DB, dvr Driver, err error) {
 	if cn == nil {
 		return
 	}
-	dvr := cn.dvr
-	db := cn.db
-	if db == nil {
-		if dvr != nil {
-			if db, err = dvr.Invoke(cn.datasource, cn.fsys); err != nil {
-				return
+	if dvr = cn.dvr; dvr != nil {
+		db = cn.db
+		if db == nil {
+			if dvr != nil {
+				if db, err = dvr.Invoke(cn.datasource, cn.fsys); err != nil {
+					return
+				}
+				cn.db = db
 			}
-			cn.db = db
 		}
 	}
+	return
+}
+
+// QueryContext implements Connection.
+func (cn *connection) QueryContext(ctx context.Context, query string, a ...interface{}) (rdr Reader, err error) {
+	db, dvr, dberr := nextdb(cn)
+	if dberr != nil {
+		return
+	}
 	if db != nil {
-		fsys := cn.fsys
-		if fsys == nil {
-			dvr.FSys()
-		}
-		s := nextstatement(db, dvr, query, fsys).(*statement)
-		if dvr.Name() != "csv" && dvr.Name() != "dlv" {
-			if s.query, a, err = prepairSqlStatement(s, a...); err != nil {
-				return
-			}
-		}
-		if dvrfsys := dvr.FSys(); dvrfsys != nil {
-			a = append(a, dvrfsys)
-		}
-		if rdr, err = s.QueryContext(ctx, a...); err != nil {
+		s, serr := nextstatement(db, dvr, query, cn.fsys, a...)
+		if err = serr; err != nil {
 			if cn.db == db {
 				cn.db = nil
 			}
 			go db.Close()
+			return nil, err
 		}
+		rdr, err = s.QueryContext(ctx, a...)
 	}
 	return
 }
