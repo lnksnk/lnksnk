@@ -52,8 +52,8 @@ const (
 
 type multifilesys struct {
 	ntyfiers  map[Notify]func(FileSystem, FileInfo, Notify)
-	fsystms   map[string]FileSystem
-	wtchdfsys map[string]FileSystem
+	fsystms   FileSystems
+	wtchdfsys FileSystems // map[string]FileSystem
 	wtchr     *watcher
 	chdexts   map[string]bool
 	actvexts  map[string]bool
@@ -86,7 +86,7 @@ func (mltyfsys *multifilesys) Set(path string, a ...interface{}) bool {
 				root = root[:len(root)-1]
 			}
 		}
-		var fsys FileSystem = fsystms[root]
+		var fsys, _ = fsystms.Get(root)
 		if fsys != nil {
 			path = path[len(root):]
 			return fsys.Set(path, a...)
@@ -94,7 +94,7 @@ func (mltyfsys *multifilesys) Set(path string, a ...interface{}) bool {
 		rtl := len(root)
 		for n := range rtl {
 			if root[rtl-(n+1)] == '/' {
-				if fsys = fsystms[root[:rtl-(n+1)]]; fsys != nil {
+				if fsys, _ = fsystms.Get(root[:rtl-(n+1)]); fsys != nil {
 					root = root[:rtl-(n+1)]
 					path = path[len(root):]
 					return fsys.Set(path, a...)
@@ -133,12 +133,12 @@ func (mltyfsys *multifilesys) StatContext(ctx context.Context, path string) (fi 
 	for pn < pthl {
 		if path[pn] == '/' {
 		retry:
-			if fsfnd := fsystms[path[:func() int {
+			if fsfnd, _ := fsystms.Get(path[:func() int {
 				if pn == 0 {
 					return 1
 				}
 				return pn
-			}()]]; fsfnd != nil {
+			}()]); fsfnd != nil {
 				if fi = fsfnd.StatContext(ctx, path[pn:]); fi != nil {
 					return
 				}
@@ -160,7 +160,7 @@ func (mltyfsys *multifilesys) StatContext(ctx context.Context, path string) (fi 
 				tpn -= 3
 				goto retrytpn
 			}
-			if fsfnd := fsystms[path[:tpn]]; fsfnd != nil {
+			if fsfnd, _ := fsystms.Get(path[:tpn]); fsfnd != nil {
 				if fi = fsfnd.StatContext(ctx, path[tpn:]); fi != nil {
 					return
 				}
@@ -193,26 +193,39 @@ func (mltyfsys *multifilesys) Iterate(syspaths ...string) func(func(string, File
 		if mltyfsys == nil {
 			return
 		}
+
 		if fsystms := mltyfsys.fsystms; fsystms != nil {
-			if len(syspaths) > 0 {
-				spths := []string{}
-				spthsmp := map[string]FileSystem{}
-				for _, spth := range syspaths {
-					if fs := mltyfsys.fsystms[spth]; fs != nil {
-						if spthsmp[spth] == nil {
-							spths = append(spths, spth)
-							spthsmp[spth] = fs
+			syslpthsl := len(syspaths)
+			mtchdsyspths := map[string]bool{}
+			if syslpthsl > 0 {
+				spthsi := 0
+				for spthsi < syslpthsl {
+					if syspaths[spthsi] = strings.TrimFunc(syspaths[spthsi], iorw.IsSpace); syspaths[spthsi] == "" {
+						syspaths = append(syspaths[:spthsi], syspaths[spthsi+1:]...)
+						syslpthsl--
+						continue
+					}
+					if mtchdsyspths[syspaths[spthsi]] {
+						syspaths = append(syspaths[:spthsi], syspaths[spthsi+1:]...)
+						syslpthsl--
+						continue
+					}
+					mtchdsyspths[syspaths[spthsi]] = true
+					spthsi++
+				}
+			}
+			if syslpthsl > 0 {
+				for key, value := range fsystms.Iterate() {
+					if mtchdsyspths[key] {
+						if !yield(key, value) {
+							return
 						}
 					}
 				}
-				for _, spth := range spths {
-					if !yield(spth, spthsmp[spth]) {
-						return
-					}
-				}
+				mtchdsyspths = nil
 				return
 			}
-			for key, value := range fsystms {
+			for key, value := range fsystms.Iterate() {
 				if !yield(key, value) {
 					return
 				}
@@ -281,12 +294,12 @@ func (mltyfsys *multifilesys) Exist(path string) bool {
 	for pn < pthl {
 		if path[pn] == '/' {
 		retry:
-			if fsfnd := fsystms[path[:func() int {
+			if fsfnd, _ := fsystms.Get(path[:func() int {
 				if pn == 0 {
 					return 1
 				}
 				return pn
-			}()]]; fsfnd != nil {
+			}()]); fsfnd != nil {
 				if fsfnd.Exist(path[pn:]) {
 					return true
 				}
@@ -308,7 +321,7 @@ func (mltyfsys *multifilesys) Exist(path string) bool {
 				tpn -= 3
 				goto retrytpn
 			}
-			if fsfnd := fsystms[path[:tpn]]; fsfnd != nil {
+			if fsfnd, _ := fsystms.Get(path[:tpn]); fsfnd != nil {
 				if fsfnd.Exist(path[tpn:]) {
 					return true
 				}
@@ -362,12 +375,12 @@ func (mltyfsys *multifilesys) List(paths ...string) (fios []FileInfo) {
 		for pn < pthl {
 			if path[pn] == '/' {
 			retry:
-				if fsfnd := fsystms[path[:func() int {
+				if fsfnd, _ := fsystms.Get(path[:func() int {
 					if pn == 0 {
 						return 1
 					}
 					return pn
-				}()]]; fsfnd != nil {
+				}()]); fsfnd != nil {
 					if !alrdyfdn[fsfnd.Path()] {
 						alrdyfdn[fsfnd.Path()] = true
 						if fis := fsfnd.List(path[pn:]); len(fis) > 0 {
@@ -393,7 +406,7 @@ func (mltyfsys *multifilesys) List(paths ...string) (fios []FileInfo) {
 					tpn -= 3
 					goto retrytpn
 				}
-				if fsfnd := fsystms[path[:tpn]]; fsfnd != nil {
+				if fsfnd, _ := fsystms.Get(path[:tpn]); fsfnd != nil {
 					if !alrdyfdn[fsfnd.Path()] {
 						alrdyfdn[fsfnd.Path()] = true
 						if fis := fsfnd.List(path[tpn:]); len(fis) > 0 {
@@ -485,7 +498,7 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 		return
 	}
 	if fsystms := mltyfsys.fsystms; fsystms != nil {
-		if fsys = fsystms[path[0].(string)]; fsys != nil {
+		if fsys, _ = fsystms.Get(path[0].(string)); fsys != nil {
 			return
 		}
 		if fsys = NewFileSystem(func() string {
@@ -500,7 +513,7 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 				}
 			}
 			if fss, _ := fsys.(*filesys); fss != nil {
-				fsystms[path[0].(string)] = fss
+				fsystms.Set(path[0].(string), fsys)
 				fss.mltyfsys = mltyfsys
 				fss.mltypath = path[0].(string)
 				if fss.mltypath != "" && fss.mltypath[len(fss.mltypath)-1] != '/' {
@@ -524,7 +537,7 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 					}
 				}
 			} else {
-				fsystms[path[0].(string)] = fsys
+				fsystms.Set(path[0].(string), fsys)
 			}
 		}
 	}
@@ -532,7 +545,7 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 }
 
 func NewMultiFileSystem() MultiFileSystem {
-	return &multifilesys{ntyfiers: map[Notify]func(FileSystem, FileInfo, Notify){}, fsystms: map[string]FileSystem{}, chdexts: map[string]bool{}, actvexts: map[string]bool{}, dfltexts: map[string]bool{}}
+	return &multifilesys{ntyfiers: map[Notify]func(FileSystem, FileInfo, Notify){}, fsystms: NewFileSystems(), chdexts: map[string]bool{}, actvexts: map[string]bool{}, dfltexts: map[string]bool{}, wtchdfsys: NewFileSystems()}
 }
 
 func (mltyfsys *multifilesys) AutoSync(path string, fsys FileSystem) {
@@ -542,11 +555,12 @@ func (mltyfsys *multifilesys) AutoSync(path string, fsys FileSystem) {
 
 	wtchr := mltyfsys.wtchr
 	trvfsys := func(pth string) (fsys FileSystem) {
-		if wtchdfsys := mltyfsys.wtchdfsys; len(wtchdfsys) > 0 {
-			for wtchpth, wtchfs := range wtchdfsys {
-				if pthl, wthl := len(pth), len(wtchpth); pthl >= wthl && wtchpth[:wthl] == pth[:wthl] {
-					fsys = wtchfs
-					return
+		pthl := len(pth)
+		if wtchdfsys := mltyfsys.wtchdfsys; wtchdfsys != nil {
+			for wtchpth, wtchfsys := range wtchdfsys.Iterate() {
+				if wthl := len(wtchpth); pthl >= wthl && wtchpth[:wthl] == pth[:wthl] {
+					fsys = wtchfsys
+					break
 				}
 			}
 		}
@@ -567,12 +581,8 @@ func (mltyfsys *multifilesys) AutoSync(path string, fsys FileSystem) {
 		wtchr = mltyfsys.wtchr
 	}
 	wtchdfsys := mltyfsys.wtchdfsys
-	if wtchdfsys == nil {
-		mltyfsys.wtchdfsys = map[string]FileSystem{}
-		wtchdfsys = mltyfsys.wtchdfsys
-	}
 	if wtchr.Add(path) {
-		wtchdfsys[path] = fsys
+		wtchdfsys.Set(path, fsys)
 	}
 }
 
@@ -650,7 +660,7 @@ func (mltyfsys *multifilesys) OpenContext(ctx context.Context, path string) (fl 
 		}()
 		for pri := range pthl {
 			if path[pri] == '/' {
-				if fsys = fsystms[prfx+path[:pri+1]]; fsys != nil {
+				if fsys, _ = fsystms.Get(prfx + path[:pri+1]); fsys != nil {
 					if ctx != nil {
 						if ctx.Err() != nil {
 							return
@@ -662,7 +672,7 @@ func (mltyfsys *multifilesys) OpenContext(ctx context.Context, path string) (fl 
 				}
 			}
 			if path[pthl-(pri+1)] == '/' {
-				if fsys = fsystms[prfx+path[:pthl-(pri+1)]]; fsys != nil {
+				if fsys, _ = fsystms.Get(prfx + path[:pthl-(pri+1)]); fsys != nil {
 					if fl = fsys.OpenContext(ctx, path[pthl-(pri+1):]); fl != nil {
 						return fl
 					}

@@ -531,7 +531,7 @@ func (fsys *filesys) Close() (err error) {
 	if mltsys, _ := mltyfsys.(*multifilesys); mltsys != nil {
 		if root := fsys.root; root != "" {
 			if fsystms := mltsys.fsystms; fsystms != nil {
-				delete(fsystms, fsys.mltypath)
+				fsystms.Delete(fsys.mltypath)
 			}
 		}
 	}
