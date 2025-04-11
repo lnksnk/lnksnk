@@ -15,6 +15,7 @@ type ParseAPI interface {
 	Busy() bool
 	PreLabel() []rune
 	PostLabel() []rune
+	Process()
 }
 
 type Parsing struct {
@@ -68,6 +69,13 @@ func (prsng *Parsing) CanPostParse() bool {
 		return prsng.EventCanPostParse == nil || prsng.EventCanPostParse()
 	}
 	return prsng.EventCanPostParse == nil || prsng.EventCanPostParse()
+}
+
+func (prsng *Parsing) Process() {
+	if prsng == nil {
+		return
+	}
+	parseReadRune(prsng.readRune, prsng)
 }
 
 func (prsng *Parsing) Close() (err error) {
