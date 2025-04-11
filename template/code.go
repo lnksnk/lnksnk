@@ -1,6 +1,10 @@
 package template
 
-import "github.com/lnksnk/lnksnk/iorw"
+import (
+	"fmt"
+
+	"github.com/lnksnk/lnksnk/iorw"
+)
 
 type codeparsing struct {
 	parsing *Parsing
@@ -76,20 +80,71 @@ func (cde *codeparsing) flushPsv() {
 			return
 		}
 		cdebf := cde.cdebf
-		if lstr, isspace := rune(cdebf.LastByte(true)), iorw.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
-			if psvbf.HasPrefix("`") && psvbf.HasSuffix("`") {
-				cdebf.Print(psvbf.Reader())
-			} else {
-				cdebf.Print("`", psvbf.Reader(), "`")
+		prepcode := func(direct bool) {
+			tmpcde := iorw.NewBuffer()
+			prsng := New(psvbf.Clone(true).Reader(true), "{{$", "$}}", false, nil, func(r ...rune) {
+				psvbf.WriteRunes(r...)
+			}, func() {
+				//matchedPre
+				if !psvbf.Empty() {
+					defer psvbf.Clear()
+					if tmpcde.Empty() {
+						if direct {
+							tmpcde.Print("`", psvbf.Reader(), "`+")
+						} else {
+							tmpcde.Print("print(`", psvbf.Reader(), "`+")
+						}
+					} else {
+						tmpcde.Print("`", psvbf.Reader(), "`+")
+					}
+				}
+			}, nil, func(canreset bool, rns ...rune) (reset bool) {
+				tmpcde.WriteRunes(rns...)
+				return
+			}, func() (reset bool) {
+				return
+			})
+			prsng.Process()
+			if !psvbf.Empty() {
+				defer psvbf.Clear()
+				if tmpcde.Empty() {
+					if direct {
+						tmpcde.Print("`", psvbf.Reader(), "`")
+					} else {
+						tmpcde.Print("print(`", psvbf.Reader(), "`);")
+					}
+				} else {
+					if direct {
+						tmpcde.Print("+`", psvbf.Reader(), "`")
+					} else {
+						tmpcde.Print("+`", psvbf.Reader(), "`);")
+					}
+				}
 			}
+			if !tmpcde.Empty() {
+				fmt.Println(tmpcde)
+				tmpcde.WriteTo(cdebf)
+				tmpcde.Clear()
+			}
+		}
+		if lstr, isspace := rune(cdebf.LastByte(true)), iorw.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
+			if psvbf.Contains("{{$") && psvbf.Contains("$}}") {
+				prepcode(true)
+				return
+			}
+			cdebf.Print("`")
+			psvbf.WriteTo(cdebf)
+			cdebf.Print("`")
 			return
 		}
 		if cdebf != nil {
-			if psvbf.HasPrefix("`") && psvbf.HasSuffix("`") {
-				cdebf.Print("print(", psvbf.Reader(), ");")
-			} else {
-				cdebf.Print("print(`", psvbf.Reader(), "`);")
+			if psvbf.Contains("{{$") && psvbf.Contains("$}}") {
+				prepcode(false)
+				return
 			}
+			cdebf.Print("print(`")
+			psvbf.WriteTo(cdebf)
+			cdebf.Print("`);")
 		}
 		return
 	}
