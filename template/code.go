@@ -1,8 +1,6 @@
 package template
 
 import (
-	"fmt"
-
 	"github.com/lnksnk/lnksnk/iorw"
 )
 
@@ -122,7 +120,6 @@ func (cde *codeparsing) flushPsv() {
 				}
 			}
 			if !tmpcde.Empty() {
-				fmt.Println(tmpcde)
 				tmpcde.WriteTo(cdebf)
 				tmpcde.Clear()
 			}
