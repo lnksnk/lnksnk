@@ -345,61 +345,7 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 		}
 		return
 	}
-	if name == "" {
-		if path == "/" {
-			for _, emd := range fsys.embed {
-				vldfi := emd.FileInfo
-				if vld := isvalid(fsys.mltypath, name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
-					fis = append(fis, vldfi)
-				}
-			}
-			for _, chdf := range fsys.cachedfiles {
-				vldfi := chdf.FileInfo
-				if vld := isvalid(fsys.mltypath, name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
-					fis = append(fis, vldfi)
-				}
-			}
-			osdirs, _ := os.ReadDir(fsys.root)
-			for _, osdir := range osdirs {
-				if !osdir.IsDir() {
-					osfi, _ := osdir.Info()
-					if osfi != nil {
-						fipath := fsys.mltypath + osfi.Name()
-						fipthroot := fipath[:strings.LastIndex(fipath, "/")+1]
-						if fipthroot != "/" && fipthroot[0] != '/' {
-							fipthroot = "/" + fipthroot
-						}
-						if vld := isvalid(fsys.mltypath, name, fipthroot, osfi.Name(), fipath); vld {
-							_, _, media := mimes.FindMimeType(osfi.Name())
-							fis = append(fis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), false, osfi.Sys(), fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath, fsys.mltypath, func(ctx ...context.Context) io.Reader {
-								if f, _ := os.Open(fsys.root + fipath); f != nil {
-									return ContextReader(f, func() context.Context {
-										if len(ctx) > 0 {
-											return ctx[0]
-										}
-										return nil
-									}())
-								}
-								return nil
-							})})
-						}
-					}
-				}
-			}
-			return
-		}
-		for _, emd := range fsys.embed {
-			vldfi := emd.FileInfo
-			if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
-				fis = append(fis, vldfi)
-			}
-		}
-		for _, chdf := range fsys.cachedfiles {
-			vldfi := chdf.FileInfo
-			if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
-				fis = append(fis, vldfi)
-			}
-		}
+	var findosfinfos = func(path string, mask string) (osfis []FileInfo) {
 		osdirs, _ := os.ReadDir(fsys.root + path)
 		for _, osdir := range osdirs {
 			if !osdir.IsDir() {
@@ -410,9 +356,9 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 					if fipthroot != "/" && fipthroot[0] != '/' {
 						fipthroot = "/" + fipthroot
 					}
-					if vld := isvalid(fsys.mltypath, name, fipthroot, osfi.Name(), fipath); vld {
+					if vld := isvalid(fsys.mltypath, mask, fipthroot, osfi.Name(), fipath); vld {
 						_, _, media := mimes.FindMimeType(osfi.Name())
-						fis = append(fis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), false, osfi.Sys(), fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath, fsys.mltypath, func(ctx ...context.Context) io.Reader {
+						osfis = append(osfis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), false, osfi.Sys(), fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath, fsys.mltypath, func(ctx ...context.Context) io.Reader {
 							if f, _ := os.Open(fsys.root + fipath); f != nil {
 								return ContextReader(f, func() context.Context {
 									if len(ctx) > 0 {
@@ -429,11 +375,26 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 		}
 		return
 	}
-	for _, nme := range strings.Split(name, ",") {
-		if nme = strings.TrimFunc(nme, iorw.IsSpace); nme == "" {
+	var names []string
+	if name == "" {
+		names = append(names, name)
+	} else {
+		names = append(names, strings.Split(name, ",")...)
+	}
+	chknmdups := map[string]bool{}
+	nmsi := 0
+	nmsl := len(names)
+	for nmsi < nmsl {
+		names[nmsi] = strings.TrimFunc(names[nmsi], iorw.IsSpace)
+		if chknmdups[names[nmsi]] {
+			names = append(names[:nmsi], names[nmsi+1:]...)
+			nmsl--
 			continue
 		}
-
+		chknmdups[names[nmsi]] = true
+		nmsi++
+	}
+	for _, name := range names {
 		if path == "/" {
 			for _, emd := range fsys.embed {
 				vldfi := emd.FileInfo
@@ -447,7 +408,8 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 					fis = append(fis, vldfi)
 				}
 			}
-			return
+			fis = append(fis, findosfinfos("", name)...)
+			continue
 		}
 		for _, emd := range fsys.embed {
 			vldfi := emd.FileInfo
@@ -461,7 +423,8 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 				fis = append(fis, vldfi)
 			}
 		}
-		return
+		fis = append(fis, findosfinfos(path, name)...)
+		continue
 	}
 	return
 }
