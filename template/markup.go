@@ -13,7 +13,6 @@ import (
 type markuptemplate struct {
 	fsys        fs.MultiFileSystem
 	fi          fs.FileInfo
-	rdrs        []io.RuneReader
 	cntntprsngs map[int]*contentparsing
 	prsix       int
 	invalidElem map[string]bool
