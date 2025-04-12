@@ -69,18 +69,21 @@ func (cde *codeparsing) flushPsv() {
 	}
 	if psvbf := cde.psvbf; !psvbf.Empty() {
 		defer psvbf.Clear()
-		if !cde.fndcde {
-			if cbf := cde.c.cbf; cbf != nil {
-				psvbf.WriteTo(cbf)
+		cntnsinlne := psvbf.Contains("{#") && psvbf.Contains("#}")
+		if !cntnsinlne {
+			if !cde.fndcde {
+				if cbf := cde.c.cbf; cbf != nil {
+					psvbf.WriteTo(cbf)
+					return
+				}
+				cde.c.cbf = psvbf.Clone(true)
 				return
 			}
-			cde.c.cbf = psvbf.Clone(true)
-			return
 		}
 		cdebf := cde.cdebf
 		prepcode := func(direct bool) {
 			tmpcde := iorw.NewBuffer()
-			prsng := New(psvbf.Clone(true).Reader(true), "{{$", "$}}", false, nil, func(r ...rune) {
+			prsng := New(psvbf.Clone(true).Reader(true), "{#", "#}", false, nil, func(r ...rune) {
 				psvbf.WriteRunes(r...)
 			}, func() {
 				//matchedPre
@@ -131,7 +134,7 @@ func (cde *codeparsing) flushPsv() {
 			}
 		}
 		if lstr, isspace := rune(cdebf.LastByte(true)), iorw.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
-			if psvbf.Contains("{{$") && psvbf.Contains("$}}") {
+			if cntnsinlne {
 				prepcode(true)
 				return
 			}
@@ -141,7 +144,7 @@ func (cde *codeparsing) flushPsv() {
 			return
 		}
 		if cdebf != nil {
-			if psvbf.Contains("{{$") && psvbf.Contains("$}}") {
+			if cntnsinlne {
 				prepcode(false)
 				return
 			}

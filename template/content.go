@@ -497,6 +497,10 @@ func (c *contentparsing) resetCdeParsing() {
 			c.cde = nextCodeParsing(c.m, c.prscde)
 			c.prscde.EventMatchedPre = nil
 			c.prscde.EventMatchedPost = nil
+			if c.cbf.Contains("{#") && c.cbf.Contains("#}") {
+				c.cde.psvbf = c.cbf.Clone(true)
+				c.cde.cdebf = iorw.NewBuffer()
+			}
 		}
 	}
 }
