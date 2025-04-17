@@ -23,20 +23,19 @@ type contentparsing struct {
 	lstattrbs map[string]interface{}
 	attrbs    map[string]interface{}
 	cbf       *iorw.Buffer
-	prscde    *Parsing
 	cde       *codeparsing
 	fsys      fs.MultiFileSystem
 	fi        fs.FileInfo
 	prvc      *contentparsing
 }
 
-func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFileSystem, fi fs.FileInfo) (c *contentparsing) {
-	c = &contentparsing{m: m, prvc: prvc, fsys: fsys, fi: fi, parsing: nextparsing("<", ">", &textparsing{}, nil), prscde: nextparsing("<@", "@>", nil, nil)}
+func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFileSystem, fi fs.FileInfo, elemlvl ElemLevel) (c *contentparsing) {
+	c = &contentparsing{m: m, prvc: prvc, fsys: fsys, fi: fi, parsing: nextparsing("<", ">", &textparsing{}, nil)}
 	path := fi.Path()
 	c.elmroot = strings.Replace(fi.Root(), "/", ":", -1)
 	c.elmname = strings.Replace(path, "/", ":", -1)
 	c.elmbase = strings.Replace(fi.Base(), "/", ":", -1)
-	c.elmlvl = ElemSingle
+	c.elmlvl = elemlvl
 	ext := fi.Ext()
 	if ext != "" {
 		if path == fi.Root()+"index"+ext {
@@ -45,14 +44,31 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 			c.elmname = strings.Replace(path[:len(path)-len(ext)], "/", ":", -1)
 		}
 	}
-	c.parsing.EventPreRunes = func(r ...rune) {
-		c.prscde.parse(r...)
-	}
+	c.parsing.EventPreRunes = c.preRunes
 	c.parsing.EventMatchedPre = c.matchPre
 	c.parsing.EventPostRunes = c.postRunes
 	c.parsing.EventMatchedPost = c.matchPost
-	c.resetCdeParsing()
 
+	c.cde = nextCodeParsing(c, m, func() string {
+		if prvc != nil {
+			if cde := prvc.cde; cde != nil {
+				if cdeprsg := cde.parsing; cdeprsg != nil {
+					return string(cdeprsg.prelbl)
+				}
+			}
+		}
+		return "<@"
+	}(), func() string {
+		if prvc != nil {
+			if cde := prvc.cde; cde != nil {
+				if cdeprsg := cde.parsing; cdeprsg != nil {
+					return string(cdeprsg.postlbl)
+				}
+			}
+		}
+		return "@>"
+	}())
+	c.resetCdeParsing()
 	return
 }
 
@@ -75,12 +91,11 @@ func (c *contentparsing) Close() (err error) {
 		return
 	}
 	m := c.m
-	cbf := c.cbf
 	cde := c.cde
 	if cde != nil {
 		cde.flushPsv()
 	}
-	c.prscde = nil
+	cbf := c.cbf
 	c.cbf = nil
 	c.m = nil
 	c.fi = nil
@@ -98,6 +113,7 @@ func (c *contentparsing) Close() (err error) {
 			if prvc == c {
 				m.cntntbf = cbf
 			} else {
+				defer cbf.Close()
 				m.Parse(cbf.Reader(true))
 			}
 		}
@@ -105,15 +121,16 @@ func (c *contentparsing) Close() (err error) {
 			if cdebf := cde.cdebf; !cdebf.Empty() {
 				if prvc == c {
 					m.cdebf = cdebf
-				} else if prvc.cde != nil {
+				} else if prvcde := prvc.cde; prvcde != nil {
+					defer cdebf.Close()
 					if !prvc.noncode() {
 						prvc.cde.flushPsv()
 					}
-					if !prvc.cde.Busy() {
-						prvc.cde.Parse(prvc.prscde.prelbl...)
+					if !prvcde.Busy() {
+						prvcde.Parse(prvcde.parsing.prelbl...)
 					}
 					m.Parse(cdebf.Reader(true))
-					prvc.cde.Parse(prvc.prscde.postlbl...)
+					prvcde.Parse(prvcde.parsing.postlbl...)
 				}
 			}
 		}
@@ -123,7 +140,38 @@ func (c *contentparsing) Close() (err error) {
 }
 
 func (c *contentparsing) preRunes(rns ...rune) {
-	c.prscde.Parse(rns...)
+	if c == nil {
+		return
+	}
+	if cde := c.cde; cde != nil {
+		for _, r := range rns {
+			cde.parse(r)
+		}
+	}
+}
+
+func (c *contentparsing) content() *iorw.Buffer {
+	if c == nil {
+		return nil
+	}
+	cbf := c.cbf
+	if cbf == nil {
+		c.cbf = iorw.NewBuffer()
+		return c.cbf
+	}
+	return cbf
+}
+
+func (c *contentparsing) writeRunes(rns ...rune) {
+	if c == nil {
+		return
+	}
+	cbf := c.cbf
+	if cbf == nil {
+		c.cbf = iorw.NewBuffer(rns)
+		return
+	}
+	cbf.WriteRunes(rns...)
 }
 
 func (c *contentparsing) matchPre() {
@@ -171,8 +219,8 @@ func (c *contentparsing) resetTest(parse bool, rns ...rune) {
 }
 
 func (c *contentparsing) parse(r rune) {
-	if c.prscde.Busy() {
-		c.prscde.parse(r)
+	if cde := c.cde; cde != nil && cde.Busy() {
+		cde.parse(r)
 		return
 	}
 	c.parsing.parse(r)
@@ -317,7 +365,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 		return
 	}
 	if attrbs := c.attrbs; attrbs != nil {
-		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, "::", "::").String())
+		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, "::", "::").Runes())
 	}
 	c.tstname = nil
 	c.tstlvl = ElemUnkown
@@ -390,17 +438,12 @@ func (c *contentparsing) matchPost() (reset bool) {
 		}
 		c.parsing.Reset()
 		c.resetTest(false)
-		if !c.noncode() {
-			if cde := c.cde; cde != nil {
-				cde.flushPsv()
-			}
+		if cde := c.cde; cde != nil {
+			cde.flushPsv()
 		}
-		nxtc := nextContentParsing(c, c.m, c.fsys, fi)
+		nxtc := appendCntntParsing(c, c.m, c.fsys, fi, tstlvl)
 		nxtc.attrbs = lstattrbs
 		lstattrbs = nil
-		nxtc.elmlvl = tstlvl
-		c.m.prsix++
-		c.m.cntntprsngs[c.m.prsix] = nxtc
 		if tstlvl == ElemSingle {
 			attrbs := nxtc.attrbs
 			if attrbs == nil {
@@ -413,7 +456,8 @@ func (c *contentparsing) matchPost() (reset bool) {
 				attrbs["base"] = nxtc.fi.Base()
 				attrbs["cntnt"] = ""
 			}
-			c.m.Parse(ioext.MapReplaceReader(fi.Reader(), attrbs, "[#", "#]"))
+			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, "[#", "#]")
+			c.m.Parse(mps)
 			nxtc.Close()
 		}
 		return
@@ -470,15 +514,10 @@ func (c *contentparsing) resetCdeParsing() {
 	if c == nil {
 		return
 	}
-	c.prscde.EventPreRunes = func(r ...rune) {
-		cbf := c.cbf
-		if cbf == nil {
-			c.cbf = iorw.NewBuffer(r)
-			return
-		}
-		cbf.WriteRunes(r...)
+	if cde := c.cde; cde != nil {
+		cde.reset()
 	}
-	c.prscde.EventMatchedPre = func() {
+	/*c.prscde.EventMatchedPre = func() {
 		if c.noncode() {
 			c.prscde.EventPreRunes(c.prscde.prelbl...)
 			c.prscde.EventMatchedPre = func() {
@@ -492,17 +531,16 @@ func (c *contentparsing) resetCdeParsing() {
 				c.prscde.EventPreRunes(c.prscde.postlbl...)
 				return
 			}
-
 		} else {
 			c.cde = nextCodeParsing(c.m, c.prscde)
 			c.prscde.EventMatchedPre = nil
 			c.prscde.EventMatchedPost = nil
-			if c.cbf.Contains("{#") && c.cbf.Contains("#}") {
+			if c.cbf.Contains("{@") && c.cbf.Contains("@}") {
 				c.cde.psvbf = c.cbf.Clone(true)
-				c.cde.cdebf = iorw.NewBuffer()
+				c.cde.flushPsv()
 			}
 		}
-	}
+	}*/
 }
 
 type ElemLevel int
