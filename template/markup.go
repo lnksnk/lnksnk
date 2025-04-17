@@ -21,6 +21,26 @@ type markuptemplate struct {
 	cdebf       *iorw.Buffer
 }
 
+func appendCntntParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFileSystem, fi fs.FileInfo, elemlvl ElemLevel) (c *contentparsing) {
+	if m == nil {
+		return
+	}
+	m.prsix = len(m.cntntprsngs)
+
+	func() map[int]*contentparsing {
+		cntntprsngs := m.cntntprsngs
+		if cntntprsngs == nil {
+			m.cntntprsngs = map[int]*contentparsing{}
+			return m.cntntprsngs
+		}
+		return cntntprsngs
+	}()[m.prsix] = func() *contentparsing {
+		c = nextContentParsing(prvc, m, fsys, fi, elemlvl)
+		return c
+	}()
+	return
+}
+
 func (m *markuptemplate) Code() *iorw.Buffer {
 	if m == nil {
 		return nil
@@ -53,19 +73,21 @@ func (m *markuptemplate) Parse(in interface{}) {
 	if m == nil {
 		return
 	}
-	var nxtrdr = func(inrd io.RuneReader) io.RuneReader {
+	var nxtrdr = func(inrd interface{}) (nxrnr io.RuneReader) {
 		if m.prsix == 0 {
 			if c, ck := m.cntntprsngs[m.prsix]; ck {
 				if c != nil {
-					return ioext.MapReplaceReader(inrd, map[string]interface{}{
+					mps := ioext.MapReplaceReader(inrd, map[string]interface{}{
 						"p-root":   c.fi.Root(),
 						"p-base":   c.fi.Base(),
 						"p-e-root": c.elmroot,
 						"p-e-base": c.elmbase}, "[#", "#]")
+					return mps
 				}
 			}
 		}
-		return inrd
+		nxrnr, _ = inrd.(io.RuneReader)
+		return nxrnr
 	}
 	if r, rok := in.(io.Reader); rok {
 		rdr, _ := r.(io.RuneReader)
@@ -84,7 +106,7 @@ func (m *markuptemplate) Parse(in interface{}) {
 		return
 	}
 	if bf, bfk := in.(*iorw.Buffer); bfk {
-		parseReader(nxtrdr(bf.Reader()), m)
+		parseReader(nxtrdr(bf), m)
 	}
 }
 
@@ -136,6 +158,6 @@ func MarkupTemplate(a ...interface{}) (m *markuptemplate) {
 		}
 	}
 	m = &markuptemplate{fsys: fsys, fi: fi}
-	m.cntntprsngs = map[int]*contentparsing{len(m.cntntprsngs): nextContentParsing(nil, m, fsys, fi)}
+	appendCntntParsing(nil, m, fsys, fi, ElemSingle)
 	return
 }
