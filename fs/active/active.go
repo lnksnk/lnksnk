@@ -489,10 +489,10 @@ func (atvfsys *activeFileSystem) Map(path ...interface{}) (fsys fs.FileSystem) {
 	if atvfsys == nil || len(path) == 0 {
 
 	}
+	path = append(path, func(fs fs.FileSystem, fi fs.FileInfo, ntfy fs.Notify) {
+		atvfsys.update(fs, fi, ntfy)
+	})
 	if mltyfsys := atvfsys.MultiFileSystem; mltyfsys != nil {
-		path = append(path, func(fs fs.FileSystem, fi fs.FileInfo, ntfy fs.Notify) {
-			atvfsys.update(fs, fi, ntfy)
-		})
 		fsys = mltyfsys.Map(path...)
 	}
 	return
