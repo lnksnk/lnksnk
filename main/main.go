@@ -15,7 +15,10 @@ import (
 	"github.com/lnksnk/lnksnk/dbms/postgres"
 	"github.com/lnksnk/lnksnk/dbms/sqlite"
 	"github.com/lnksnk/lnksnk/es"
+	"github.com/lnksnk/lnksnk/fonts"
 	"github.com/lnksnk/lnksnk/fs"
+	"github.com/lnksnk/lnksnk/fs/embed"
+
 	"github.com/lnksnk/lnksnk/fs/active"
 	"github.com/lnksnk/lnksnk/iorw"
 	"github.com/lnksnk/lnksnk/listen"
@@ -86,6 +89,18 @@ func main() {
 		fmt.Println(time.Now())
 	}
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
+	/*embed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+		srcfsys.Map(srcroot)
+		srcfsys.Set(srcroot+"/css.html", src)
+	}, mltyfsys, material.MaterialFS, ".min.css", ".go,.css", true, "/fonts/material", "")
+	embed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+		srcfsys.Map(srcroot)
+		srcfsys.Set(srcroot+"/css.html", src)
+	}, mltyfsys, roboto.RobotoFS, ".css", ".go", true, "/fonts/roboto", "")*/
+	embed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+		srcfsys.Map(srcroot)
+		srcfsys.Set(srcroot+"/css.html", src)
+	}, mltyfsys, fonts.Fonts("material", "roboto"), ".css", ".go", true, "/fonts", "material", "roboto")
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var inout = serveio.NewReaderWriter(serveio.NewReader(r), serveio.NewWriter(w))
 		defer inout.Close()
