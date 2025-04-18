@@ -15,15 +15,53 @@ type EmbedFS interface {
 	ReadFile(name string) ([]byte, error)
 }
 
+type EmbedFSReadFile interface {
+	ReadFile(name string) ([]byte, error)
+}
+
+type EmbedFSReadFileFunc func(string) ([]byte, error)
+
+func (emdfsreadfile EmbedFSReadFileFunc) ReadFile(name string) ([]byte, error) {
+	return emdfsreadfile(name)
+}
+
+type EmbedFSReadDir interface {
+	ReadDir(name string) ([]gofs.DirEntry, error)
+}
+
+type EmbedFSReadDirFunc func(string) ([]gofs.DirEntry, error)
+
+func (emdfsreaddir EmbedFSReadDirFunc) ReadDir(name string) ([]gofs.DirEntry, error) {
+	return emdfsreaddir(name)
+}
+
+type EmbedFSOpen interface {
+	Open(string) (gofs.File, error)
+}
+
+type EmbedFSOpenFunc func(string) (gofs.File, error)
+
+func (emdfsopen EmbedFSOpenFunc) Open(name string) (gofs.File, error) {
+	return emdfsopen(name)
+}
+
 // ImoprtResource
 // example embed.ImportResource(mltyfsys, fontsext.FSFonts, ".css", true, "/fontsext", "material", "roboto")
-func ImportResource(fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
+func ImportResource(capturedsource func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem), fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
 	var cptrdpths = map[string][]string{}
 	var chksrchdrexts = map[string]bool{}
 	if srchdrexts = strings.TrimFunc(srchdrexts, iorw.IsSpace); srchdrexts != "" {
 		for _, srcext := range strings.Split(srchdrexts, ",") {
-			if srcext = filepath.Ext(srcext); srcext != "" {
-				chksrchdrexts[srcext] = true
+			tstext := ""
+			for {
+				tmpext := filepath.Ext(srcext[:len(srcext)-len(tstext)])
+				if tmpext == "" {
+					break
+				}
+				tstext = tmpext + tstext
+			}
+			if tstext != "" {
+				chksrchdrexts[tstext] = true
 			}
 		}
 	}
@@ -31,16 +69,59 @@ func ImportResource(fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, e
 	var excldexts = map[string]bool{}
 	if excldeexts = strings.TrimFunc(excldeexts, iorw.IsSpace); excldeexts != "" {
 		for _, ecldext := range strings.Split(excldeexts, ",") {
-			if ecldext = filepath.Ext(ecldext); ecldext != "" {
-				excldexts[ecldext] = true
+			if ecldext = strings.TrimFunc(ecldext, iorw.IsSpace); ecldext != "" {
+				tstext := ""
+
+				for {
+					tmpext := filepath.Ext(ecldext[:len(ecldext)-len(tstext)])
+					if tmpext == "" {
+						break
+					}
+					tstext = tmpext + tstext
+				}
+				if tstext != "" {
+					excldexts[tstext] = true
+				}
 			}
 		}
 	}
 
 	for _, pth := range paths {
-		importResourcePath(fsys, emdfs, incldsubdirs, pathroot+"/"+pth, pth, func(epath string, de gofs.DirEntry) (exclde bool) {
-			if len(excldeexts) > 0 && !de.IsDir() {
-				exclde = excldexts[filepath.Ext(epath)]
+		if pathroot != "" {
+			if pathroot == "/" {
+				pathroot = ""
+			} else {
+				if pathroot[len(pathroot)-1] == '/' {
+					pathroot = pathroot[:len(pathroot)-1]
+				}
+			}
+
+		}
+		importResourcePath(fsys, emdfs, incldsubdirs, pathroot+func() string {
+			if pth != "" {
+				if pth[0] != '/' && pathroot[len(pathroot)-1] != '/' {
+					return "/" + pth
+				}
+				if pth[0] == '/' && pathroot[len(pathroot)-1] != '/' {
+					return pth
+				}
+				if pth[0] != '/' && pathroot[len(pathroot)-1] == '/' {
+					return pth
+				}
+			}
+			return pth
+		}(), pth, func(epath string, de gofs.DirEntry) (exclde bool) {
+			if len(excldexts) > 0 && !de.IsDir() {
+				tstext := ""
+				for {
+					tmpext := filepath.Ext(epath[:len(epath)-len(tstext)])
+					if tmpext == "" {
+						break
+					}
+					tstext = tmpext + tstext
+				}
+
+				exclde = tstext != "" && excldexts[tstext]
 			}
 			return
 		}, func(flpath string, flext string) {
@@ -54,13 +135,13 @@ func ImportResource(fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, e
 		for ext := range chksrchdrexts {
 			if (srchdrexts == "" && len(chksrchdrexts) == 0) || (srchdrexts != "" && len(chksrchdrexts) > 0 && chksrchdrexts[ext]) {
 				pths := cptrdpths[ext]
-				if strings.EqualFold(".css", ext) {
+				if strings.EqualFold(".css", ext) || strings.EqualFold(".min.css", ext) {
 					for _, pth := range pths {
 						srcrf.Println(`<link rel="stylesheet" type="text/css" href="` + pth + `">`)
 					}
 					continue
 				}
-				if strings.EqualFold(".js", ext) {
+				if strings.EqualFold(".js", ext) || strings.EqualFold(".min.js", ext) {
 					for _, pth := range pths {
 						srcrf.Println(`<script type="text/javascript" src="` + pth + `"></script>`)
 					}
@@ -70,24 +151,29 @@ func ImportResource(fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, e
 		}
 		if !srcrf.Empty() {
 			defer srcrf.Close()
-			fsys.Map(pathroot)
-			if fi := fsys.Stat(pathroot + "/index.html"); fi == nil {
-				fsys.Set(pathroot+"/index.html", srcrf.Reader())
+			if capturedsource == nil {
+				fsys.Map(pathroot)
+				if !fsys.Exist(pathroot + "/index.html") {
+					fsys.Set(pathroot+"/index.html", srcrf.Reader())
+					return
+				}
 				return
 			}
-			if fi := fsys.Stat(pathroot + "/head.html"); fi == nil {
-				fsys.Set(pathroot+"/head.html", srcrf.Reader())
-				return
-			}
+			capturedsource(pathroot, srcrf, fsys)
 		}
 	}
 }
 
 func importResourcePath(fsys fs.MultiFileSystem, emdfs EmbedFS, incldsubdirs bool, pathroot string, path string, excldfl func(string, gofs.DirEntry) bool, cptrdfle func(string, string)) {
-	emddirs, _ := emdfs.ReadDir(path)
+	emddirs, _ := emdfs.ReadDir(func() string {
+		if path == "" {
+			return "."
+		}
+		return path
+	}())
 	if len(emddirs) > 0 {
 		fsys.Map(pathroot)
-		if path[len(path)-1] != '/' {
+		if path == "" || path[len(path)-1] != '/' {
 			path += "/"
 		}
 		if path[0] != '/' {
@@ -138,7 +224,15 @@ func importResourcePath(fsys fs.MultiFileSystem, emdfs EmbedFS, incldsubdirs boo
 					defer f.Close()
 					fsys.Set(subroot, f)
 					if cptrdfle != nil {
-						cptrdfle(subroot, filepath.Ext(subroot))
+						cptrext := ""
+						for {
+							cptrtmpext := filepath.Ext(subroot[:len(subroot)-len(cptrext)])
+							if cptrtmpext == "" {
+								break
+							}
+							cptrext = cptrtmpext + cptrext
+						}
+						cptrdfle(subroot, cptrext)
 					}
 				}()
 			}
