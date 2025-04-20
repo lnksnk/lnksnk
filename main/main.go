@@ -20,7 +20,7 @@ import (
 	"github.com/lnksnk/lnksnk/ui"
 
 	"github.com/lnksnk/lnksnk/fs/active"
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 	"github.com/lnksnk/lnksnk/listen"
 	"github.com/lnksnk/lnksnk/mimes"
 	"github.com/lnksnk/lnksnk/serve/serveio"
@@ -89,11 +89,11 @@ func main() {
 		fmt.Println(time.Now())
 	}
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
-	/*embed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+	/*embed.ImportResource(func(srcroot string, src *ioext.Buffer, srcfsys fs.MultiFileSystem) {
 		srcfsys.Map(srcroot)
 		srcfsys.Set(srcroot+"/css.html", src)
 	}, mltyfsys, material.MaterialFS, ".min.css", ".go,.css", true, "/fonts/material", "")
-	embed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+	embed.ImportResource(func(srcroot string, src *ioext.Buffer, srcfsys fs.MultiFileSystem) {
 		srcfsys.Map(srcroot)
 		srcfsys.Set(srcroot+"/css.html", src)
 	}, mltyfsys, roboto.RobotoFS, ".css", ".go", true, "/fonts/roboto", "")*/
@@ -129,8 +129,8 @@ func main() {
 				var vm = es.New()
 				var runvm = func(prgm interface{}, prgout io.Writer) {
 					if eprg, _ := prgm.(*es.Program); eprg != nil {
-						vm.Set("print", func(a ...interface{}) { iorw.Fprint(prgout, a...) })
-						vm.Set("println", func(a ...interface{}) { iorw.Fprintln(prgout, a...) })
+						vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
+						vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
 						rslt, err := vm.RunProgram(eprg)
 						if err != nil {
 							out.Print("err:" + err.Error())
@@ -213,7 +213,7 @@ func main() {
 		}
 	})
 
-	listen.Serve("tcp", ":1089", hndlr)
+	listen.Serve("tcp", ":1090", hndlr)
 	//http.Serve(ln, h2c.NewHandler(hndlr, &http2.Server{}))
 	<-chn
 }
