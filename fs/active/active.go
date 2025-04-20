@@ -78,30 +78,6 @@ func (c *cachedinfo) Plain() bool {
 	return len(c.finfos) == 0 && c.code.Empty()
 }
 
-func (c *cachedinfo) bufferCNTNT() *iorw.Buffer {
-	if c == nil {
-		return nil
-	}
-	cntnt := c.cntnt
-	if cntnt == nil {
-		c.cntnt = iorw.NewBuffer()
-		return c.cntnt
-	}
-	return cntnt
-}
-
-func (c *cachedinfo) bufferCODE() *iorw.Buffer {
-	if c == nil {
-		return nil
-	}
-	code := c.code
-	if code == nil {
-		c.code = iorw.NewBuffer()
-		return c.code
-	}
-	return code
-}
-
 // Valid implements CachedInfo.
 func (c *cachedinfo) Valid() bool {
 	if c == nil {
