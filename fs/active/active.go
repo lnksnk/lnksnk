@@ -460,28 +460,6 @@ func internparse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi CachedInfo, p
 		chdfi.unmtchd = mrkptmplt.InvalidElements()
 		internsync(fsys, chdinfos, chdfi.path, true, compile)
 		return
-		//template.MarkupTemplate(fsys, fi).Parse(chdfi.Buffer.String())
-		//}
-		/*actvtsax := &activesax{chdinfos: chdinfos, fsys: fsys, fi: fi,
-			rdr: chdfi.Buffer.Reader(), path: path, root: root, base: base}
-		sax.Parse(actvtsax, path, root, base)
-		cntnt := chdfi.cntnt
-		chdfi.cntnt = actvtsax.rawcntnt
-		if cntnt != nil {
-			cntnt.Close()
-		}
-		code := chdfi.code
-		chdfi.code = nil
-		if code != nil {
-			code.Close()
-		}
-
-		actvtsax.rawcntnt = nil
-		chdfi.unmtchd = actvtsax.invalidElem
-		chdfi.finfos = actvtsax.finfos
-		actvtsax.finfos = nil
-		actvtsax.invalidElem = nil
-		internsync(fsys, chdinfos, chdfi.path, true)*/
 	}
 }
 
