@@ -2,9 +2,10 @@ package fonts
 
 import (
 	"embed"
-	"io/fs"
 
+	fs "github.com/lnksnk/lnksnk/fs"
 	fsembed "github.com/lnksnk/lnksnk/fs/embed"
+	"github.com/lnksnk/lnksnk/iorw"
 )
 
 type FSFonts struct {
@@ -16,24 +17,9 @@ type FSFonts struct {
 //go:embed *
 var FontsFS embed.FS
 
-func Fonts(paths ...string) fsembed.EmbedFS {
-	if paths == nil {
-		paths = append(paths, "roboto", "material")
-	}
-	return &struct {
-		fsembed.EmbedFSOpen
-		fsembed.EmbedFSReadDir
-		fsembed.EmbedFSReadFile
-	}{EmbedFSOpen: fsembed.EmbedFSOpenFunc(func(name string) (fs.File, error) {
-		return FontsFS.Open(name)
-	}), EmbedFSReadDir: fsembed.EmbedFSReadDirFunc(func(name string) ([]fs.DirEntry, error) {
-		for _, pth := range paths {
-			if pthl, nml := len(pth), len(name); pthl <= nml && name[:pthl] == pth {
-				return FontsFS.ReadDir(name)
-			}
-		}
-		return FontsFS.ReadDir(name)
-	}), EmbedFSReadFile: fsembed.EmbedFSReadFileFunc(func(name string) ([]byte, error) {
-		return FontsFS.ReadFile(name)
-	})}
+func EmbedFonts(fsys fs.MultiFileSystem) {
+	fsembed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+		srcfsys.Map(srcroot)
+		srcfsys.Set(srcroot+"/index.html", src)
+	}, fsys, FontsFS, ".css", ".go", true, "/fonts", "material", "roboto")
 }
