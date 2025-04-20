@@ -1,6 +1,6 @@
 package template
 
-import "github.com/lnksnk/lnksnk/iorw"
+import "github.com/lnksnk/lnksnk/ioext"
 
 type proplevel int
 
@@ -70,7 +70,7 @@ func (attrbprsr *attributeparser) passiveRunes(rns ...rune) {
 		if tstlvl == AttribAssign {
 			txttst := attrbprsr.txttst
 			if !txttst.isText() {
-				if iorw.IsSpace(r) {
+				if ioext.IsSpace(r) {
 					continue
 				}
 				if txttst.Parse(r) {

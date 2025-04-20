@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 	"github.com/lnksnk/lnksnk/mimes"
 )
 
@@ -148,7 +148,7 @@ func (fsys *filesys) Remove(path string, rmvfunc ...func(FileInfo)) (diddel bool
 }
 
 type embedfile struct {
-	*iorw.Buffer
+	*ioext.Buffer
 	FileInfo
 }
 
@@ -200,7 +200,7 @@ func (fsys *filesys) Set(path string, a ...interface{}) bool {
 		}
 		return path
 	}()
-	emd := &embedfile{Buffer: iorw.NewBuffer(a...)}
+	emd := &embedfile{Buffer: ioext.NewBuffer(a...)}
 	emd.FileInfo = NewFileInfo(name, emd.Buffer.Size(), 0, time.Now(), false, nil, fsys.activexts[ext], !fsys.cachexts[ext], media, path, fsys.mltypath, func(ctx ...context.Context) io.Reader {
 		if len(ctx) == 1 && ctx[0] != nil {
 			return emd.Buffer.Reader(ctx)
@@ -418,7 +418,7 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 	nmsi := 0
 	nmsl := len(names)
 	for nmsi < nmsl {
-		names[nmsi] = strings.TrimFunc(names[nmsi], iorw.IsSpace)
+		names[nmsi] = strings.TrimFunc(names[nmsi], ioext.IsSpace)
 		if chknmdups[names[nmsi]] {
 			names = append(names[:nmsi], names[nmsi+1:]...)
 			nmsl--
@@ -531,7 +531,7 @@ func syncPath(fsys *filesys, path string, nftyfunc func(FileInfo, Notify)) {
 				if sncfi.Size() > 0 {
 					if f, _ := os.Open(fsys.root + sncpath); f != nil {
 						defer f.Close()
-						bf := iorw.NewBuffer(f)
+						bf := ioext.NewBuffer(f)
 						atv := fsys.activexts[sncext]
 						_, _, media := mimes.FindMimeType(sncext, sncext)
 						chdst = &cachedstat{Buffer: bf, FileInfo: NewFileInfo(sncfi.Name(), sncfi.Size(), sncfi.Mode(), sncfi.ModTime(), sncfi.IsDir(), sncfi.Sys(), atv, !atv, media, sncpath, fsys.mltypath, func(ctx ...context.Context) io.Reader { return bf.Reader(ctx) })}
@@ -789,7 +789,7 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 		}
 		/*go func() {
 			if f, _ := os.Open(fsys.root + pthroot + path); f != nil {
-				bf := iorw.NewBuffer(f)
+				bf := ioext.NewBuffer(f)
 				chdstt = &cachedstat{Buffer: bf, FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
 					if pthroot != "" && pthroot[0] == '/' {
 						return pthroot[1:]
@@ -889,8 +889,8 @@ func (fsys *filesys) OpenContext(ctx context.Context, path string) File {
 		}
 		go func() {
 			if f, _ := os.Open(fsys.root + pthroot + path); f != nil {
-				bf := iorw.NewBuffer(f)
-				chdstt = &cachedstat{Buffer: iorw.NewBuffer(f), FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
+				bf := ioext.NewBuffer(f)
+				chdstt = &cachedstat{Buffer: ioext.NewBuffer(f), FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
 					if pthroot != "" && pthroot[0] == '/' {
 						return pthroot[1:]
 					}
@@ -1278,7 +1278,7 @@ func (f *file) ModTime() time.Time {
 
 type cachedstat struct {
 	FileInfo
-	*iorw.Buffer
+	*ioext.Buffer
 }
 
 func (chdstat *cachedstat) Reader(ctx ...context.Context) io.Reader {

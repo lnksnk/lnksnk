@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 )
 
 type MultiFileSystem interface {
@@ -200,7 +200,7 @@ func (mltyfsys *multifilesys) Iterate(syspaths ...string) func(func(string, File
 			if syslpthsl > 0 {
 				spthsi := 0
 				for spthsi < syslpthsl {
-					if syspaths[spthsi] = strings.TrimFunc(syspaths[spthsi], iorw.IsSpace); syspaths[spthsi] == "" {
+					if syspaths[spthsi] = strings.TrimFunc(syspaths[spthsi], ioext.IsSpace); syspaths[spthsi] == "" {
 						syspaths = append(syspaths[:spthsi], syspaths[spthsi+1:]...)
 						syslpthsl--
 						continue
@@ -353,7 +353,7 @@ func (mltyfsys *multifilesys) List(paths ...string) (fios []FileInfo) {
 
 	dppth := map[string]bool{}
 	for pthsi < pthsl {
-		if paths[pthsi] = strings.TrimFunc(paths[pthsi], iorw.IsSpace); paths[pthsi] == "" {
+		if paths[pthsi] = strings.TrimFunc(paths[pthsi], ioext.IsSpace); paths[pthsi] == "" {
 			paths = append(paths[:pthsi], paths[pthsi+1:]...)
 			pthsl--
 			continue
@@ -729,7 +729,7 @@ func (ctxrdr *contextreader) ReadRune() (r rune, size int, err error) {
 		return
 	}
 	if funcrdr := ctxrdr.funcrd; funcrdr != nil {
-		bfrdr = bufio.NewReader(iorw.ReadFunc(func(p []byte) (n int, err error) {
+		bfrdr = bufio.NewReader(ioext.ReadFunc(func(p []byte) (n int, err error) {
 			return funcrdr(p)
 		}))
 		ctxrdr.bfrdr = bfrdr

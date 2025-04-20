@@ -1,7 +1,7 @@
 package template
 
 import (
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 )
 
 type codeparsing struct {
@@ -9,8 +9,8 @@ type codeparsing struct {
 	m       *markuptemplate
 	fndcde  bool
 	hsecde  bool
-	psvbf   *iorw.Buffer
-	cdebf   *iorw.Buffer
+	psvbf   *ioext.Buffer
+	cdebf   *ioext.Buffer
 	c       *contentparsing
 }
 
@@ -56,7 +56,7 @@ func (cde *codeparsing) passiveRunes(rns ...rune) {
 		psvbf.WriteRunes(rns...)
 		return
 	}
-	cde.psvbf = iorw.NewBuffer(rns)
+	cde.psvbf = ioext.NewBuffer(rns)
 }
 
 func (cde *codeparsing) startCaptureCode() {
@@ -80,7 +80,7 @@ func (cde *codeparsing) codeRunes(canreset bool, rns ...rune) (reset bool) {
 		cdebf.WriteRunes(rns...)
 		return
 	}
-	cde.cdebf = iorw.NewBuffer(rns)
+	cde.cdebf = ioext.NewBuffer(rns)
 	return
 }
 
@@ -139,10 +139,10 @@ func (cde *codeparsing) flushPsv() {
 		}
 		cdebf := cde.cdebf
 		if cdebf == nil {
-			cdebf = iorw.NewBuffer()
+			cdebf = ioext.NewBuffer()
 			cde.cdebf = cdebf
 		}
-		if lstr, isspace := rune(cdebf.LastByte(true)), iorw.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
+		if lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
 
 			cdebf.Print("`")
 			if contnsinle {

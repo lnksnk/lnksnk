@@ -7,7 +7,7 @@ import (
 
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ioext"
-	"github.com/lnksnk/lnksnk/iorw"
+	//"github.com/lnksnk/lnksnk/ioext"
 )
 
 type markuptemplate struct {
@@ -17,8 +17,8 @@ type markuptemplate struct {
 	prsix       int
 	invalidElem map[string]bool
 	validElem   map[string]fs.FileInfo
-	cntntbf     *iorw.Buffer
-	cdebf       *iorw.Buffer
+	cntntbf     *ioext.Buffer
+	cdebf       *ioext.Buffer
 }
 
 func appendCntntParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFileSystem, fi fs.FileInfo, elemlvl ElemLevel) (c *contentparsing) {
@@ -41,14 +41,14 @@ func appendCntntParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 	return
 }
 
-func (m *markuptemplate) Code() *iorw.Buffer {
+func (m *markuptemplate) Code() *ioext.Buffer {
 	if m == nil {
 		return nil
 	}
 	return m.cdebf
 }
 
-func (m *markuptemplate) Content() *iorw.Buffer {
+func (m *markuptemplate) Content() *ioext.Buffer {
 	if m == nil {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (m *markuptemplate) Parse(in interface{}) {
 		parseReader(nxtrdr(strings.NewReader(s)), m)
 		return
 	}
-	if bf, bfk := in.(*iorw.Buffer); bfk {
+	if bf, bfk := in.(*ioext.Buffer); bfk {
 		parseReader(nxtrdr(bf), m)
 	}
 }

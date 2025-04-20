@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 )
 
 type gocvsreader struct {
@@ -70,7 +70,7 @@ func (g *gocvsreader) Columns() (cols []string) {
 				clsl := len(cols)
 				for rn := range clsl {
 					for n, r := range cols[rn] {
-						if iorw.IsSpace(r) {
+						if ioext.IsSpace(r) {
 							if n == clsl-1 {
 								cols[rn] = ""
 								break
@@ -80,7 +80,7 @@ func (g *gocvsreader) Columns() (cols []string) {
 						cols[rn] = cols[rn][n:]
 						tl := len(cols[rn])
 						for tn := range cols[rn] {
-							if iorw.IsSpace(rune(cols[rn][tl-(tn+1)])) {
+							if ioext.IsSpace(rune(cols[rn][tl-(tn+1)])) {
 								if tn == tl-1 {
 									cols[rn] = ""
 									break
@@ -141,7 +141,7 @@ func (g *gocvsreader) Next(dest []driver.Value) (err error) {
 			for rn := range rcrdl {
 				if g.trimvals {
 					for n, r := range record[rn] {
-						if iorw.IsSpace(r) {
+						if ioext.IsSpace(r) {
 							if n == rcrdl-1 {
 								record[rn] = ""
 								break
@@ -151,7 +151,7 @@ func (g *gocvsreader) Next(dest []driver.Value) (err error) {
 						record[rn] = record[rn][n:]
 						tl := len(record[rn])
 						for tn := range record[rn] {
-							if iorw.IsSpace(rune(record[rn][tl-(tn+1)])) {
+							if ioext.IsSpace(rune(record[rn][tl-(tn+1)])) {
 								if tn == tl-1 {
 									record[rn] = ""
 									break
@@ -159,7 +159,7 @@ func (g *gocvsreader) Next(dest []driver.Value) (err error) {
 								continue
 							}
 							record[rn] = record[rn][:tl-(tn)]
-							dest[rn] = strings.TrimFunc(record[rn], iorw.IsSpace)
+							dest[rn] = strings.TrimFunc(record[rn], ioext.IsSpace)
 							break
 						}
 						break

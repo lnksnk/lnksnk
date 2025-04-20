@@ -6,7 +6,6 @@ import (
 
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ioext"
-	"github.com/lnksnk/lnksnk/iorw"
 )
 
 type contentparsing struct {
@@ -25,7 +24,7 @@ type contentparsing struct {
 	tstatrbs  *attributeparser
 	lstattrbs map[string]interface{}
 	attrbs    map[string]interface{}
-	cbf       *iorw.Buffer
+	cbf       *ioext.Buffer
 	cde       *codeparsing
 	fsys      fs.MultiFileSystem
 	fi        fs.FileInfo
@@ -168,13 +167,13 @@ func (c *contentparsing) preRunes(rns ...rune) {
 	}
 }
 
-func (c *contentparsing) content() *iorw.Buffer {
+func (c *contentparsing) content() *ioext.Buffer {
 	if c == nil {
 		return nil
 	}
 	cbf := c.cbf
 	if cbf == nil {
-		c.cbf = iorw.NewBuffer()
+		c.cbf = ioext.NewBuffer()
 		return c.cbf
 	}
 	return cbf
@@ -186,7 +185,7 @@ func (c *contentparsing) writeRunes(rns ...rune) {
 	}
 	cbf := c.cbf
 	if cbf == nil {
-		c.cbf = iorw.NewBuffer(rns)
+		c.cbf = ioext.NewBuffer(rns)
 		return
 	}
 	cbf.WriteRunes(rns...)
@@ -362,7 +361,7 @@ func validElmchar(cr rune) bool {
 }
 
 func validElemChar(prvr, r rune, funcspace ...func(rune)) (valid bool) {
-	if iorw.IsSpace(r) {
+	if ioext.IsSpace(r) {
 		if len(funcspace) > 0 && funcspace[0] != nil {
 			funcspace[0](r)
 		}

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/lnksnk/lnksnk/fs"
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 	"github.com/lnksnk/lnksnk/parameters"
 	"github.com/lnksnk/lnksnk/template"
 )
@@ -281,7 +281,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 			ai++
 		}
 	}
-	qrybf := iorw.NewBuffer()
+	qrybf := ioext.NewBuffer()
 	defer qrybf.Close()
 	if fsys := s.fsys; fsys != nil {
 		s.fsys = nil
@@ -342,7 +342,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 		}, func() (reset bool) {
 			//check param
 			if len(prmnme) > 0 {
-				tstnme := strings.TrimFunc(string(prmnme), iorw.IsSpace)
+				tstnme := strings.TrimFunc(string(prmnme), ioext.IsSpace)
 				if tstnme == "" {
 					return
 				}
@@ -441,7 +441,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 
 		for or := range orgrqry {
 			if or == ';' {
-				if prds := strings.TrimFunc(qrybf.Clone(true).Reader(true).SubString(0), iorw.IsSpace); prds != "" {
+				if prds := strings.TrimFunc(qrybf.Clone(true).Reader(true).SubString(0), ioext.IsSpace); prds != "" {
 					prds += ";"
 					prpdqry = append(prpdqry, prds)
 				}
@@ -476,7 +476,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 		}
 	}
 	if !qrybf.Empty() {
-		if prds := strings.TrimFunc(qrybf.Reader(true).SubString(0), iorw.IsSpace); prds != "" && prds != ";" {
+		if prds := strings.TrimFunc(qrybf.Reader(true).SubString(0), ioext.IsSpace); prds != "" && prds != ";" {
 			prpdqry = append(prpdqry, prds)
 		}
 	}

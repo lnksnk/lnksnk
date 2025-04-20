@@ -11,7 +11,6 @@ import (
 	"github.com/lnksnk/lnksnk/es"
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ioext"
-	"github.com/lnksnk/lnksnk/iorw"
 	"github.com/lnksnk/lnksnk/template"
 )
 
@@ -65,8 +64,8 @@ type cachedinfo struct {
 	finfos map[string]fs.FileInfo
 	*fileinfo
 	unmtchd map[string]bool
-	code    *iorw.Buffer
-	cntnt   *iorw.Buffer
+	code    *ioext.Buffer
+	cntnt   *ioext.Buffer
 	prgm    interface{}
 }
 
@@ -226,7 +225,7 @@ func (c *cachedinfo) Close() (err error) {
 }
 
 type fileinfo struct {
-	*iorw.Buffer
+	*ioext.Buffer
 	ext     string
 	path    string
 	base    string
@@ -240,7 +239,7 @@ type fileinfo struct {
 func fileInfoFromFi(fi fs.FileInfo) (chdfi *fileinfo) {
 	if fi != nil {
 		chdfi = &fileinfo{
-			Buffer:  iorw.NewBuffer(fi.Reader()),
+			Buffer:  ioext.NewBuffer(fi.Reader()),
 			ext:     fi.Ext(),
 			path:    fi.Path(),
 			base:    fi.Base(),
@@ -361,7 +360,7 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 				}
 			}(fsys, fi, chdinfos, chdinfo)
 			if out != nil {
-				iorw.Fprint(out, chdpsv)
+				ioext.Fprint(out, chdpsv)
 			}
 			if !chdinfo.Plain() && run != nil {
 				if chdprgm := chdinfo.Program(); chdprgm != nil {
@@ -375,7 +374,7 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 	}
 	if chdinfo = createcachedfileinfo(chdinfos, fi, fsys, compile); chdinfo != nil {
 		if out != nil {
-			iorw.Fprint(out, chdinfo.Content())
+			ioext.Fprint(out, chdinfo.Content())
 		}
 		if pgrm := chdinfo.Program(); pgrm != nil && run != nil {
 			run(pgrm, out)
@@ -456,7 +455,7 @@ func (atvfsys *activeFileSystem) compile(cde ...interface{}) (prgm interface{}, 
 	if atvfsys == nil {
 		return
 	}
-	prgm, err = es.Compile("", iorw.NewBuffer(cde...).String(), false)
+	prgm, err = es.Compile("", ioext.NewBuffer(cde...).String(), false)
 	return
 }
 

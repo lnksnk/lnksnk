@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/lnksnk/lnksnk/fs"
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 )
 
 type EmbedFS interface {
@@ -47,10 +47,10 @@ func (emdfsopen EmbedFSOpenFunc) Open(name string) (gofs.File, error) {
 
 // ImoprtResource
 // example embed.ImportResource(mltyfsys, fontsext.FSFonts, ".css", true, "/fontsext", "material", "roboto")
-func ImportResource(capturedsource func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem), fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
+func ImportResource(capturedsource func(srcroot string, src *ioext.Buffer, srcfsys fs.MultiFileSystem), fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
 	var cptrdpths = map[string][]string{}
 	var chksrchdrexts = map[string]bool{}
-	if srchdrexts = strings.TrimFunc(srchdrexts, iorw.IsSpace); srchdrexts != "" {
+	if srchdrexts = strings.TrimFunc(srchdrexts, ioext.IsSpace); srchdrexts != "" {
 		for _, srcext := range strings.Split(srchdrexts, ",") {
 			tstext := ""
 			for {
@@ -67,9 +67,9 @@ func ImportResource(capturedsource func(srcroot string, src *iorw.Buffer, srcfsy
 	}
 
 	var excldexts = map[string]bool{}
-	if excldeexts = strings.TrimFunc(excldeexts, iorw.IsSpace); excldeexts != "" {
+	if excldeexts = strings.TrimFunc(excldeexts, ioext.IsSpace); excldeexts != "" {
 		for _, ecldext := range strings.Split(excldeexts, ",") {
-			if ecldext = strings.TrimFunc(ecldext, iorw.IsSpace); ecldext != "" {
+			if ecldext = strings.TrimFunc(ecldext, ioext.IsSpace); ecldext != "" {
 				tstext := ""
 
 				for {
@@ -131,7 +131,7 @@ func ImportResource(capturedsource func(srcroot string, src *iorw.Buffer, srcfsy
 		})
 	}
 	if len(cptrdpths) > 0 {
-		srcrf := iorw.NewBuffer()
+		srcrf := ioext.NewBuffer()
 		for ext := range chksrchdrexts {
 			if (srchdrexts == "" && len(chksrchdrexts) == 0) || (srchdrexts != "" && len(chksrchdrexts) > 0 && chksrchdrexts[ext]) {
 				pths := cptrdpths[ext]

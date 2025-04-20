@@ -1,6 +1,6 @@
 package template
 
-import "github.com/lnksnk/lnksnk/iorw"
+import "github.com/lnksnk/lnksnk/ioext"
 
 type textparsing struct {
 	txtr rune
@@ -10,7 +10,7 @@ type textparsing struct {
 func (txtprs *textparsing) Parse(r rune) bool {
 	if txtprs != nil {
 		if txtprs.txtr == 0 {
-			if iorw.IsTxtPar(r) {
+			if ioext.IsTxtPar(r) {
 				txtprs.txtr = r
 			}
 			return txtprs.isText()
