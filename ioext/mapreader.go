@@ -5,8 +5,6 @@ import (
 	"io"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/lnksnk/lnksnk/iorw"
 )
 
 type MapReader interface {
@@ -46,13 +44,6 @@ func (mpfnc MAPFunc) Map() map[string]interface{} {
 	return mpfnc()
 }
 
-type mapreader struct {
-	io.RuneReader
-	IString
-	IRunes
-	IMAP
-}
-
 var (
 	emptyMapReader = &struct {
 		IMAP
@@ -61,7 +52,7 @@ var (
 		IRunes
 	}{IMAP: MAPFunc(func() map[string]interface{} {
 		return nil
-	}), RuneReader: iorw.ReadRuneFunc(func() (rune, int, error) {
+	}), RuneReader: ReadRuneFunc(func() (rune, int, error) {
 		return 0, 0, io.EOF
 	}), IString: StringFunc(func() string {
 		return ""
@@ -93,7 +84,7 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...stri
 			}
 			rns := make([]rune, len(int32arr))
 			copy(rns, int32arr)
-			readrune = iorw.ReadRuneFunc(func() (r rune, size int, err error) {
+			readrune = ReadRuneFunc(func() (r rune, size int, err error) {
 				if len(rns) > 0 {
 					r = rns[0]
 					rns = rns[1:]
@@ -102,7 +93,7 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...stri
 				}
 				return 0, 0, io.EOF
 			})
-		} else if bf, bfk := in.(*iorw.Buffer); bfk {
+		} else if bf, bfk := in.(*Buffer); bfk {
 			if bf.Empty() {
 				return emptyMapReader
 			} else {
@@ -230,7 +221,7 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...stri
 			}
 			return false
 		}
-		if cptrbf, cprbfk := cptrv.(*iorw.Buffer); cprbfk {
+		if cptrbf, cprbfk := cptrv.(*Buffer); cprbfk {
 			if cptrbf.Empty() {
 				return bfl > 0
 			}
@@ -253,7 +244,7 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...stri
 	keyi := -1
 	if prpstl == 0 || (prpstl == 1 && prepost[0] == "") || (prpstl >= 2 && prepost[0] == "" && prepost[1] == "") || prpstl > 2 {
 
-		finalReader = iorw.ReadRuneFunc(func() (fr rune, fsize int, ferr error) {
+		finalReader = ReadRuneFunc(func() (fr rune, fsize int, ferr error) {
 		rdbf:
 			if bfrnrdr != nil {
 				fr, fsize, ferr = bfrnrdr.ReadRune()
@@ -510,7 +501,7 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...stri
 		}{IMAP: MAPFunc(func() map[string]interface{} {
 			return mp
 		}),
-			RuneReader: iorw.ReadRuneFunc(finalReader),
+			RuneReader: ReadRuneFunc(finalReader),
 			IString: StringFunc(func() (s string) {
 				if finalReader == nil {
 					return
@@ -768,7 +759,7 @@ rdbuf:
 				}
 				goto rdorg
 			}
-			if cptrbf, cprbfk := cptrv.(*iorw.Buffer); cprbfk {
+			if cptrbf, cprbfk := cptrv.(*Buffer); cprbfk {
 				if cptrbf.Empty() {
 					if bfl > 0 {
 						goto rdbuf
@@ -776,7 +767,7 @@ rdbuf:
 					goto rdorg
 				}
 				if bfl > 0 {
-					mpr.bfrnrdr = iorw.NewSliceRuneReader(cptrbf.Reader(), iorw.NewRunesReader(mpr.bfrdrne...))
+					mpr.bfrnrdr = NewSliceRuneReader(cptrbf.Reader(), NewRunesReader(mpr.bfrdrne...))
 					mpr.bfrdrne = nil
 					goto rdbuf
 				}
@@ -786,7 +777,7 @@ rdbuf:
 			if cptr, cprk := cptrv.(io.Reader); cprk {
 				if rnrdr, rnrdrk := cptr.(io.RuneReader); rnrdrk {
 					if bfl > 0 {
-						mpr.bfrnrdr = iorw.NewSliceRuneReader(rnrdr, iorw.NewRunesReader(mpr.bfrdrne...))
+						mpr.bfrnrdr = NewSliceRuneReader(rnrdr, NewRunesReader(mpr.bfrdrne...))
 						mpr.bfrdrne = nil
 						goto rdbuf
 					}
@@ -794,7 +785,7 @@ rdbuf:
 					goto rdbuf
 				}
 				if bfl > 0 {
-					mpr.bfrnrdr = iorw.NewSliceRuneReader(bufio.NewReader(cptr), iorw.NewRunesReader(mpr.bfrdrne...))
+					mpr.bfrnrdr = NewSliceRuneReader(bufio.NewReader(cptr), NewRunesReader(mpr.bfrdrne...))
 					mpr.bfrdrne = nil
 					goto rdbuf
 				}
