@@ -17,7 +17,7 @@ import (
 	"github.com/lnksnk/lnksnk/es"
 	"github.com/lnksnk/lnksnk/fonts"
 	"github.com/lnksnk/lnksnk/fs"
-	"github.com/lnksnk/lnksnk/fs/embed"
+	"github.com/lnksnk/lnksnk/ui"
 
 	"github.com/lnksnk/lnksnk/fs/active"
 	"github.com/lnksnk/lnksnk/iorw"
@@ -34,7 +34,7 @@ func main() {
 	mltyfsys.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
 	mltyfsys.Map("/embedding")
 	mltyfsys.Map("/", "C:/GitHub/lnksnk.github.io", true)
-	mltyfsys.Map("/etl", "C:/GitHub/lnketl", true)
+	//mltyfsys.Map("/etl", "C:/GitHub/lnketl", true)
 	mltyfsys.Map("/media", "C:/movies", true)
 	mltyfsys.Set("/embedding/embed.html", `<h2><@print("embed");@></h2>`)
 	mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
@@ -97,10 +97,8 @@ func main() {
 		srcfsys.Map(srcroot)
 		srcfsys.Set(srcroot+"/css.html", src)
 	}, mltyfsys, roboto.RobotoFS, ".css", ".go", true, "/fonts/roboto", "")*/
-	embed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
-		srcfsys.Map(srcroot)
-		srcfsys.Set(srcroot+"/css.html", src)
-	}, mltyfsys, fonts.Fonts("material", "roboto"), ".css", ".go", true, "/fonts", "material", "roboto")
+	fonts.EmbedFonts(mltyfsys)
+	ui.EmbedUiJS(mltyfsys)
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var inout = serveio.NewReaderWriter(serveio.NewReader(r), serveio.NewWriter(w))
 		defer inout.Close()
@@ -215,7 +213,7 @@ func main() {
 		}
 	})
 
-	listen.Serve("tcp", ":1089", hndlr)
+	listen.Serve("tcp", ":1090", hndlr)
 	//http.Serve(ln, h2c.NewHandler(hndlr, &http2.Server{}))
 	<-chn
 }
