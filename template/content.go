@@ -16,6 +16,9 @@ type contentparsing struct {
 	elmname   string
 	elmroot   string
 	elmbase   string
+	root      string
+	base      string
+	path      string
 	tstname   []rune
 	tstr      rune
 	tstlvl    ElemLevel
@@ -31,17 +34,26 @@ type contentparsing struct {
 
 func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFileSystem, fi fs.FileInfo, elemlvl ElemLevel) (c *contentparsing) {
 	c = &contentparsing{m: m, prvc: prvc, fsys: fsys, fi: fi, parsing: nextparsing("<", ">", &textparsing{}, nil)}
-	path := fi.Path()
-	c.elmroot = strings.Replace(fi.Root(), "/", ":", -1)
-	c.elmname = strings.Replace(path, "/", ":", -1)
-	c.elmbase = strings.Replace(fi.Base(), "/", ":", -1)
+	c.path = fi.Path()
+	c.root = fi.Root()
+	c.base = fi.Base()
+	c.elmroot = strings.Replace(c.root, "/", ":", -1)
+	c.elmname = strings.Replace(c.path, "/", ":", -1)
+	c.elmbase = strings.Replace(c.base, "/", ":", -1)
 	c.elmlvl = elemlvl
+	if len(m.cntntprsngs) == 0 {
+		c.attrbs = map[string]interface{}{
+			"p-e-base": c.elmbase,
+			"p-e-root": c.elmroot,
+			"p-base":   c.base,
+			"p-root":   c.root}
+	}
 	ext := fi.Ext()
 	if ext != "" {
-		if path == fi.Root()+"index"+ext {
+		if c.path == fi.Root()+"index"+ext {
 			c.elmname = c.elmroot
 		} else {
-			c.elmname = strings.Replace(path[:len(path)-len(ext)], "/", ":", -1)
+			c.elmname = strings.Replace(c.path[:len(c.path)-len(ext)], "/", ":", -1)
 		}
 	}
 	c.parsing.EventPreRunes = c.preRunes
@@ -133,6 +145,12 @@ func (c *contentparsing) Close() (err error) {
 					prvcde.Parse(prvcde.parsing.postlbl...)
 				}
 			}
+		}
+		attrs := c.attrbs
+		c.attrbs = nil
+		if attrs != nil {
+			clear(attrs)
+			attrs = nil
 		}
 	}
 
@@ -446,15 +464,29 @@ func (c *contentparsing) matchPost() (reset bool) {
 		lstattrbs = nil
 		if tstlvl == ElemSingle {
 			attrbs := nxtc.attrbs
+			pgec := c.m.cntntprsngs[0]
 			if attrbs == nil {
-				attrbs = map[string]interface{}{"cntnt": "", "e-root": nxtc.elmroot, "e-base": nxtc.elmbase, "root": nxtc.fi.Root(), "base": nxtc.fi.Base()}
+				attrbs = map[string]interface{}{
+					"cntnt":    "",
+					"e-root":   nxtc.elmroot,
+					"e-base":   nxtc.elmbase,
+					"root":     nxtc.root,
+					"base":     nxtc.base,
+					"p-e-root": pgec.elmroot,
+					"p-e-base": pgec.elmbase,
+					"p-root":   pgec.root,
+					"p-base":   pgec.base}
 				nxtc.attrbs = attrbs
 			} else {
 				attrbs["e-root"] = nxtc.elmroot
 				attrbs["e-base"] = nxtc.elmbase
-				attrbs["root"] = nxtc.fi.Root()
-				attrbs["base"] = nxtc.fi.Base()
+				attrbs["root"] = nxtc.root
+				attrbs["base"] = nxtc.base
 				attrbs["cntnt"] = ""
+				attrbs["p-e-root"] = pgec.elmroot
+				attrbs["p-e-base"] = pgec.elmbase
+				attrbs["p-root"] = pgec.root
+				attrbs["p-base"] = pgec.base
 			}
 			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, "[#", "#]")
 			c.m.Parse(mps)
@@ -471,31 +503,45 @@ func (c *contentparsing) matchPost() (reset bool) {
 			attrbs := c.attrbs
 			cbf := c.cbf
 			c.cbf = nil
+			pgec := c.m.cntntprsngs[0]
 			if attrbs == nil {
 				attrbs = map[string]interface{}{"cntnt": func() interface{} {
 					if cbf.Empty() {
 						return ""
 					}
 					return cbf
-				}(), "e-root": c.elmroot, "e-base": c.elmbase, "root": c.fi.Root(), "base": c.fi.Base()}
+				}(),
+					"e-root":   c.elmroot,
+					"e-base":   c.elmbase,
+					"root":     c.root,
+					"base":     c.base,
+					"p-e-root": pgec.elmroot,
+					"p-e-base": pgec.elmbase,
+					"p-root":   pgec.root,
+					"p-base":   pgec.base}
 				c.attrbs = attrbs
 			} else {
 				attrbs["e-root"] = c.elmroot
 				attrbs["e-base"] = c.elmbase
-				attrbs["root"] = c.fi.Root()
-				attrbs["base"] = c.fi.Base()
+				attrbs["root"] = c.root
+				attrbs["base"] = c.base
 				attrbs["cntnt"] = func() interface{} {
 					if cbf.Empty() {
 						return ""
 					}
 					return cbf
 				}()
+				attrbs["p-e-root"] = pgec.elmroot
+				attrbs["p-e-base"] = pgec.elmbase
+				attrbs["p-root"] = pgec.root
+				attrbs["p-base"] = pgec.base
 			}
 			if lstattrbs != nil {
 
 				lstattrbs = nil
 			}
 			c.resetCdeParsing()
+			c.elmlvl = ElemSingle
 			c.m.Parse(ioext.MapReplaceReader(c.fi.Reader(), attrbs, "[#", "#]"))
 			c.Close()
 			return
