@@ -3,14 +3,17 @@ package ui
 import (
 	"embed"
 
-	"github.com/lnksnk/lnksnk/embedutils"
-	"github.com/lnksnk/lnksnk/resources"
+	"github.com/lnksnk/lnksnk/fs"
+	fsembed "github.com/lnksnk/lnksnk/fs/embed"
+	"github.com/lnksnk/lnksnk/iorw"
 )
 
 //go:embed js/*.*
-var uijsfs embed.FS
+var UiJsFS embed.FS
 
-func init() {
-	gblrsngfs := resources.GLOBALRSNG().FS()
-	embedutils.ImportResource(gblrsngfs, uijsfs, true, "/ui", "js")
+func EmbedUiJS(fsys fs.MultiFileSystem) {
+	fsembed.ImportResource(func(srcroot string, src *iorw.Buffer, srcfsys fs.MultiFileSystem) {
+		srcfsys.Map(srcroot)
+		srcfsys.Set(srcroot+"/index.html", src)
+	}, fsys, UiJsFS, ".js", ".go", true, "/ui", "js")
 }
