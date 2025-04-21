@@ -420,7 +420,7 @@ func (emailmngr *EMailManager) Pop3Quit(alias string) (err error) {
 
 type ActiveEmailManager struct {
 	atvrntme            active.Runtime
-	prmsfnc             func() parameters.ParametersAPI
+	prmsfnc             func() parameters.Parameters
 	emailmngr           *EMailManager
 	emailrdrs           map[*emailreader.EmailReader]*emailreader.EmailReader
 	emailwtrs           map[*emailwriter.EmailWriter]*emailwriter.EmailWriter
@@ -609,11 +609,11 @@ func (atvemailmngr *ActiveEmailManager) Close() (err error) {
 }
 
 // ActiveEmailManager return registered connections
-func (emailmngr *EMailManager) ActiveEmailManager(rntme active.Runtime, prmsfnc func() parameters.ParametersAPI, fs *fsutils.FSUtils) (atvemailmngr *ActiveEmailManager) {
+func (emailmngr *EMailManager) ActiveEmailManager(rntme active.Runtime, prmsfnc func() parameters.Parameters, fs *fsutils.FSUtils) (atvemailmngr *ActiveEmailManager) {
 	return newActiveDBMS(emailmngr, rntme, prmsfnc, fs)
 }
 
-func newActiveDBMS(emailmngr *EMailManager, rntme active.Runtime, prmsfnc func() parameters.ParametersAPI, fs *fsutils.FSUtils) (atvemailmngr *ActiveEmailManager) {
+func newActiveDBMS(emailmngr *EMailManager, rntme active.Runtime, prmsfnc func() parameters.Parameters, fs *fsutils.FSUtils) (atvemailmngr *ActiveEmailManager) {
 	if emailmngr != nil && rntme != nil {
 		atvemailmngr = &ActiveEmailManager{emailmngr: emailmngr, atvrntme: rntme, prmsfnc: prmsfnc, fs: fs}
 	}

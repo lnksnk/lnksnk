@@ -156,7 +156,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	var terminal *terminals = nil
 	var Out serveio.Writer = nil
 	var In serveio.Reader = nil
-	var params parameters.ParametersAPI = nil
+	var params parameters.Parameters = nil
 	var caching *concurrent.Map
 	var invkcachng func() *concurrent.Map
 	var activemap map[string]interface{} = nil
@@ -199,7 +199,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 			al--
 			continue
 		}
-		if paramsd, _ := a[ai].(parameters.ParametersAPI); paramsd != nil {
+		if paramsd, _ := a[ai].(parameters.Parameters); paramsd != nil {
 			if params == nil {
 				params = paramsd
 			}
@@ -384,7 +384,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	//nvm.Set("cchng", CHACHING)
 	nvm.Set("db", dbhnlr)
 	//nvm.Set("emailsvc", emailsvchndl)
-	/*nvm.Set("email", EMAILING.ActiveEmailManager(nvm, func() parameters.ParametersAPI {
+	/*nvm.Set("email", EMAILING.ActiveEmailManager(nvm, func() parameters.Parameters {
 		return params
 	}, fs))*/
 	for actvkey, actvval := range activemap {

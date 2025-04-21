@@ -56,7 +56,7 @@ func NewImapService(a ...interface{}) (imapsvc *ImapService) {
 	return
 }
 
-func (imapsvc *ImapService) IMAPSvcHandler(ctx context.Context, runtime active.Runtime, prms parameters.ParametersAPI) (imapsvchndl *IMAPSvrHandler) {
+func (imapsvc *ImapService) IMAPSvcHandler(ctx context.Context, runtime active.Runtime, prms parameters.Parameters) (imapsvchndl *IMAPSvrHandler) {
 	if imapsvc != nil {
 		imapsvchndl = &IMAPSvrHandler{
 			imapsvc: imapsvc, ctx: ctx, prms: prms, runtime: runtime,

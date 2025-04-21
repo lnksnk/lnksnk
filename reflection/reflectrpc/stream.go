@@ -13,10 +13,10 @@ type rpcstream struct {
 	bfrw   *bufio.ReadWriter
 	wtr    io.WriteCloser
 	rpcitm *rpcitem
-	params parameters.ParametersAPI
+	params parameters.Parameters
 }
 
-func NewRpcStream(rpcitm *rpcitem, conn io.ReadWriteCloser, rdr io.ReadCloser, wtr io.WriteCloser, bfrw *bufio.ReadWriter, params parameters.ParametersAPI) (rpcstrm *rpcstream) {
+func NewRpcStream(rpcitm *rpcitem, conn io.ReadWriteCloser, rdr io.ReadCloser, wtr io.WriteCloser, bfrw *bufio.ReadWriter, params parameters.Parameters) (rpcstrm *rpcstream) {
 	if rpcitm != nil {
 		if conn != nil && rdr == nil {
 			wtr, _ = conn.(io.WriteCloser)

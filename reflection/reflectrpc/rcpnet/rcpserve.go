@@ -84,7 +84,7 @@ func RpcHttpServe(rpcstck *reflectrpc.RpcStack, w http.ResponseWriter, r *http.R
 		} else {
 			if rpcpath != "" {
 
-				var params parameters.ParametersAPI = parameters.NewParameters()
+				var params parameters.Parameters = parameters.NewParameters()
 				defer params.ClearAll()
 				parameters.LoadParametersFromRawURL(params, r.URL.RawQuery)
 				var rcpcall = ""

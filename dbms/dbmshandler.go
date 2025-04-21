@@ -17,7 +17,7 @@ type DBMSHandler interface {
 	QueryContext(context.Context, string, string, ...interface{}) (Reader, error)
 	Execute(string, string, ...interface{}) (Result, error)
 	ExecuteContext(context.Context, string, string, ...interface{}) (Result, error)
-	Params() parameters.ParametersAPI
+	Params() parameters.Parameters
 	AttachReader(Reader)
 	DettachReader(Reader)
 }
@@ -25,7 +25,7 @@ type DBMSHandler interface {
 type dbmshandler struct {
 	dbms        DBMS
 	rdrs        *sync.Map
-	params      parameters.ParametersAPI
+	params      parameters.Parameters
 	fiqryreader func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
 }
 
@@ -50,7 +50,7 @@ func (dh *dbmshandler) DettachReader(rdr Reader) {
 }
 
 // Params implements DBMSHandler.
-func (dh *dbmshandler) Params() parameters.ParametersAPI {
+func (dh *dbmshandler) Params() parameters.Parameters {
 	if dh == nil {
 		return nil
 	}
@@ -139,10 +139,10 @@ func NewDBMSHandler(dbms DBMS, a ...interface{}) DBMSHandler {
 	if dbms == nil {
 		return nil
 	}
-	var params parameters.ParametersAPI
+	var params parameters.Parameters
 	var fiqryreader func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
 	for _, d := range a {
-		if paramsd, prmsk := d.(parameters.ParametersAPI); prmsk {
+		if paramsd, prmsk := d.(parameters.Parameters); prmsk {
 			if params == nil {
 				params = paramsd
 			}

@@ -96,7 +96,7 @@ func nextfile(flhdr *multipart.FileHeader) File {
 	return &file{name: flhdr.Filename, size: flhdr.Size, flhdr: flhdr}
 }
 
-type ParametersAPI interface {
+type Parameters interface {
 	Keys() []string
 	FileKeys() []string
 	Set(string, bool, ...string)
@@ -561,7 +561,7 @@ func NewParameters() *parameters {
 }
 
 // LoadParametersFromRawURL - populate paramaters just from raw url
-func LoadParametersFromRawURL(params ParametersAPI, rawURL string) {
+func LoadParametersFromRawURL(params Parameters, rawURL string) {
 	if params != nil && rawURL != "" {
 		if rawURL != "" {
 			rawURL = strings.Replace(rawURL, ";", "%3b", -1)
@@ -591,7 +591,7 @@ func LoadParametersFromRawURL(params ParametersAPI, rawURL string) {
 }
 
 // LoadParametersFromUrlValues - Load Parameters from url.Values
-func LoadParametersFromUrlValues(params ParametersAPI, urlvalues url.Values) (err error) {
+func LoadParametersFromUrlValues(params Parameters, urlvalues url.Values) (err error) {
 	if params != nil && urlvalues != nil {
 		for pname, pvalue := range urlvalues {
 			params.Set(pname, false, pvalue...)
@@ -601,7 +601,7 @@ func LoadParametersFromUrlValues(params ParametersAPI, urlvalues url.Values) (er
 }
 
 // LoadParametersFromMultipartForm - Load Parameters from *multipart.Form
-func LoadParametersFromMultipartForm(params ParametersAPI, mpartform *multipart.Form) (err error) {
+func LoadParametersFromMultipartForm(params Parameters, mpartform *multipart.Form) (err error) {
 	if params != nil && mpartform != nil {
 		for pname, pvalue := range mpartform.Value {
 			params.Set(pname, false, pvalue...)
@@ -621,7 +621,7 @@ func LoadParametersFromMultipartForm(params ParametersAPI, mpartform *multipart.
 }
 
 // LoadParametersFromHTTPRequest - Load Parameters from http.Request
-func LoadParametersFromHTTPRequest(params ParametersAPI, r *http.Request) {
+func LoadParametersFromHTTPRequest(params Parameters, r *http.Request) {
 	if params != nil {
 		if r.URL != nil {
 			LoadParametersFromRawURL(params, r.URL.RawQuery)

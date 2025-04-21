@@ -47,7 +47,7 @@ type statement struct {
 	queryargs [][]interface{}
 	fsys      fs.MultiFileSystem
 	fireader  func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
-	params    parameters.ParametersAPI
+	params    parameters.Parameters
 	rdr       Reader
 	rcrd      Record
 	args      map[string]interface{}
@@ -216,7 +216,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 	if al := len(a); al > 0 {
 		ai := 0
 		for ai < al {
-			if prmsd, prmsk := a[ai].(parameters.ParametersAPI); prmsk {
+			if prmsd, prmsk := a[ai].(parameters.Parameters); prmsk {
 				if params == nil && prmsd != nil {
 					params = prmsd
 					s.params = params

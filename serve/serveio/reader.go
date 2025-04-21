@@ -30,7 +30,7 @@ type Reader interface {
 	Protocol() string
 	IsSSL() bool
 	Proto() string
-	Params() parameters.ParametersAPI
+	Params() parameters.Parameters
 }
 
 type reader struct {
@@ -48,11 +48,11 @@ type reader struct {
 	orgrdr      io.ReadCloser
 	rangetype   string
 	rangeoffset int64
-	params      parameters.ParametersAPI
+	params      parameters.Parameters
 }
 
 // Params implements Reader.
-func (rqr *reader) Params() parameters.ParametersAPI {
+func (rqr *reader) Params() parameters.Parameters {
 	if rqr == nil {
 		return nil
 	}

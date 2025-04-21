@@ -13,7 +13,7 @@ type IMAPSvrHandler struct {
 	ctx     context.Context
 	fs      *fsutils.FSUtils
 	runtime active.Runtime
-	prms    parameters.ParametersAPI
+	prms    parameters.Parameters
 }
 
 func (imapsvchndl *IMAPSvrHandler) InvokeFunction(funcref interface{}, args ...interface{}) (result interface{}) {

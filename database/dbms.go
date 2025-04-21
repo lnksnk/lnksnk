@@ -20,13 +20,13 @@ type DBMSHandler struct {
 	fs                *fsutils.FSUtils
 	dbms              *DBMS
 	runtime           active.Runtime
-	prms              parameters.ParametersAPI
+	prms              parameters.Parameters
 	readers           *sync.Map
 	exctrs            *sync.Map
 	CallPrepStatement StatementHandlerFunc
 }
 
-func (dbmshndlr *DBMSHandler) Params() (prms parameters.ParametersAPI) {
+func (dbmshndlr *DBMSHandler) Params() (prms parameters.Parameters) {
 	if dbmshndlr != nil {
 		prms = dbmshndlr.prms
 	}
@@ -359,7 +359,7 @@ func (dbmshndlr *DBMSHandler) Register(alias string, driver string, datasource s
 	return
 }
 
-func (dbms *DBMS) DBMSHandler(ctx context.Context, runtime active.Runtime, prms parameters.ParametersAPI, fs *fsutils.FSUtils, callprepstmnt StatementHandlerFunc) (dbmshndlr *DBMSHandler) {
+func (dbms *DBMS) DBMSHandler(ctx context.Context, runtime active.Runtime, prms parameters.Parameters, fs *fsutils.FSUtils, callprepstmnt StatementHandlerFunc) (dbmshndlr *DBMSHandler) {
 	dbmshndlr = &DBMSHandler{ctx: ctx, dbms: dbms, runtime: runtime, prms: prms, fs: fs, CallPrepStatement: callprepstmnt}
 	return
 }
@@ -511,7 +511,7 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 			var onselect interface{} = nil
 			var onnext interface{} = nil
 			var rdr *Reader = nil
-			var prms parameters.ParametersAPI = nil
+			var prms parameters.Parameters = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
 
@@ -606,7 +606,7 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if prmsd, _ := a[ai].(parameters.ParametersAPI); prmsd != nil {
+						} else if prmsd, _ := a[ai].(parameters.Parameters); prmsd != nil {
 							if prms == nil {
 								prms = prmsd
 							}
@@ -690,7 +690,7 @@ func (dbms *DBMS) Execute(alias string, a ...interface{}) (err error) {
 			var onexec interface{} = nil
 			var onexecerror interface{} = nil
 			var rdr *Reader = nil
-			var prms parameters.ParametersAPI = nil
+			var prms parameters.Parameters = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
 			var al = 0
@@ -763,7 +763,7 @@ func (dbms *DBMS) Execute(alias string, a ...interface{}) (err error) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if prmsd, _ := a[ai].(parameters.ParametersAPI); prmsd != nil {
+						} else if prmsd, _ := a[ai].(parameters.Parameters); prmsd != nil {
 							if prms == nil {
 								prms = prmsd
 							}
@@ -829,7 +829,7 @@ func (dbms *DBMS) Prepair(alias string, a ...interface{}) (exectr *Executor) {
 			var onexec interface{} = nil
 			var onexecerror interface{} = nil
 			var rdr *Reader = nil
-			var prms parameters.ParametersAPI = nil
+			var prms parameters.Parameters = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
 			var al = 0
@@ -902,7 +902,7 @@ func (dbms *DBMS) Prepair(alias string, a ...interface{}) (exectr *Executor) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if prmsd, _ := a[ai].(parameters.ParametersAPI); prmsd != nil {
+						} else if prmsd, _ := a[ai].(parameters.Parameters); prmsd != nil {
 							if prms == nil {
 								prms = prmsd
 							}

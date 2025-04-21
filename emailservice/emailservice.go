@@ -24,7 +24,7 @@ func (emailsvc *EmailService) IMAP() (imapsvc *imapservice.ImapService) {
 	return
 }
 
-func (emailsvc *EmailService) EMAILSvcHandler(ctx context.Context, runtime active.Runtime, prms parameters.ParametersAPI) (emailsvchndl *EMAILSvcHandler) {
+func (emailsvc *EmailService) EMAILSvcHandler(ctx context.Context, runtime active.Runtime, prms parameters.Parameters) (emailsvchndl *EMAILSvcHandler) {
 	if emailsvc != nil {
 		emailsvchndl = &EMAILSvcHandler{emailsvc: emailsvc, imapsvchndl: emailsvc.IMAP().IMAPSvcHandler(ctx, runtime, prms), ctx: ctx, runtime: runtime, prms: prms}
 	}

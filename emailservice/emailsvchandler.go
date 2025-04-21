@@ -15,7 +15,7 @@ type EMAILSvcHandler struct {
 	ctx         context.Context
 	fs          *fsutils.FSUtils
 	runtime     active.Runtime
-	prms        parameters.ParametersAPI
+	prms        parameters.Parameters
 }
 
 func (emailsvshndl *EMAILSvcHandler) IMAP() *imapservice.IMAPSvrHandler {
