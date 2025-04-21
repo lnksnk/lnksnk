@@ -41,8 +41,8 @@ var aliascmdexec dbserve.AliasCommandFunc = func(alias, path, ext string, dbhnl 
 			}
 		} else {
 			if params := dbhnl.Params(); params != nil {
-				if (params.ContainsParameter("qry") && params.Type("qry") == "std") || (params.ContainsParameter("query") && params.Type("query") == "std") {
-					for _, qry := range append(params.Parameter("qry"), params.Parameter("query")...) {
+				if (params.Exist("qry") && params.Type("qry") == "std") || (params.Exist("query") && params.Type("query") == "std") {
+					for _, qry := range append(params.Get("qry"), params.Get("query")...) {
 						qryarr = append(qryarr, qry)
 					}
 				}

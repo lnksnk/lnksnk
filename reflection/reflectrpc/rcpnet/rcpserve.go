@@ -85,7 +85,7 @@ func RpcHttpServe(rpcstck *reflectrpc.RpcStack, w http.ResponseWriter, r *http.R
 			if rpcpath != "" {
 
 				var params parameters.ParametersAPI = parameters.NewParameters()
-				defer params.CleanupParameters()
+				defer params.ClearAll()
 				parameters.LoadParametersFromRawURL(params, r.URL.RawQuery)
 				var rcpcall = ""
 				if callsep := strings.LastIndex(rpcpath, "-"); callsep > -1 {
@@ -100,10 +100,10 @@ func RpcHttpServe(rpcstck *reflectrpc.RpcStack, w http.ResponseWriter, r *http.R
 						if rpcitm := rpcstck.RpcItem(rpcpath); rpcitm != nil {
 							w.Header().Set("Content-Type", "application/json; charset=utf-8")
 							var args []interface{} = nil
-							if stdkeys := params.StandardKeys(); len(stdkeys) > 0 {
+							if stdkeys := params.Keys(); len(stdkeys) > 0 {
 								for _, argk := range stdkeys {
 									if strings.EqualFold(argk, "args") {
-										argsv := params.Parameter(argk)
+										argsv := params.Get(argk)
 										for _, arv := range argsv {
 											args = append(args, arv)
 										}

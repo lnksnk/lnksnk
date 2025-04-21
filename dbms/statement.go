@@ -359,13 +359,13 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 					}
 				}
 				if params := s.params; params != nil {
-					for _, pnme := range params.StandardKeys() {
+					for _, pnme := range params.Keys() {
 						if strings.EqualFold(pnme, tstnme) {
 							prmfndl := len(prmargsfnd)
 							prmargsfnd = append(prmargsfnd, prmfndl)
 							dflsv, dflsk := dfltargs[strings.ToUpper(pnme)]
 							prmargvalsfnd[prmfndl] = func() interface{} {
-								prmsv := params.Parameter(string(prmnme))
+								prmsv := params.Get(string(prmnme))
 								if len(prmsv) == 0 {
 									if dflsk {
 										s, _ := dflsv.(string)
@@ -373,7 +373,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 									}
 									return ""
 								}
-								prmsvs := strings.Join(params.Parameter(pnme), "")
+								prmsvs := strings.Join(params.Get(pnme), "")
 								if prmsvs == "" {
 									if dflsk {
 										s, _ := dflsv.(string)

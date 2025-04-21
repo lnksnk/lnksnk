@@ -44,7 +44,7 @@ func internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsu
 	}()
 
 	var params *parameters.Parameters
-	defer params.CleanupParameters()
+	defer params.ClearAll()
 	var ctx context.Context = nil
 	var rangeOffset = int64(0)
 	var rangeType = ""
@@ -189,9 +189,9 @@ func internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsu
 				vm = active.NewVM()
 				vm.Set("_serial", serial)
 				vm.Set("_params", map[string]interface{}{
-					"get":   params.Parameter,
-					"set":   params.SetParameter,
-					"exist": params.ContainsParameter,
+					"get":   params.Get,
+					"set":   params.Set,
+					"exist": params.Exist,
 				})
 				vm.Set("fs", fs)
 				vm.FS = fs

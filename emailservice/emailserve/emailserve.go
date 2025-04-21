@@ -86,7 +86,7 @@ func ServeRequest(prefix string, w serveio.Writer, r serveio.Reader, a ...interf
 		if pathext == "" {
 			pathext = ".json"
 		}
-		defer params.CleanupParameters()
+		defer params.ClearAll()
 
 		if emailsvchndl == nil {
 			if ctx == nil {

@@ -1,8 +1,6 @@
 package dbms
 
 import (
-	"database/sql"
-
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
@@ -10,16 +8,16 @@ type Drivers interface {
 	ioext.IterateMap[string, Driver]
 	ioext.IterateMapEvents[string, Driver]
 	Register(string, ...interface{}) Driver
-	DefaultInvokable(func(string) (InvokeDB func(datasource string, a ...interface{}) (db *sql.DB, err error), ParseSqlParam func(totalArgs int) (s string)))
+	DefaultInvokable(func(string) (InvokeDB InvokeDBFunc, ParseSqlParam ParseSqlArgFunc))
 }
 
 type drivers struct {
 	ioext.IterateMap[string, Driver]
-	dfltinvkbl func(string) (InvokeDB func(datasource string, a ...interface{}) (db *sql.DB, err error), ParseSqlParam func(totalArgs int) (s string))
+	dfltinvkbl func(string) (InvokeDB InvokeDBFunc, ParseSqlParam ParseSqlArgFunc)
 }
 
 // DefaultInvokable implements Drivers.
-func (dvrs *drivers) DefaultInvokable(dfltinvkbl func(string) (InvokeDB func(datasource string, a ...interface{}) (db *sql.DB, err error), ParseSqlParam func(totalArgs int) (s string))) {
+func (dvrs *drivers) DefaultInvokable(dfltinvkbl func(string) (InvokeDB InvokeDBFunc, ParseSqlParam ParseSqlArgFunc)) {
 	if dvrs == nil {
 		return
 	}

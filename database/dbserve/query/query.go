@@ -71,15 +71,15 @@ var aliascmdquery dbserve.AliasCommandFunc = func(alias, path, ext string, dbhnl
 			}
 		} else {
 			if params := dbhnl.Params(); params != nil {
-				for _, col := range append(params.Parameter("col"), append(params.Parameter("cols"), params.Parameter("columns")...)...) {
+				for _, col := range append(params.Get("col"), append(params.Get("cols"), params.Get("columns")...)...) {
 					cols = append(cols, strings.Split(col, ",")...)
 				}
-				if (params.ContainsParameter("qry") && params.Type("qry") == "std") || (params.ContainsParameter("query") && params.Type("query") == "std") {
-					for _, qry := range append(params.Parameter("qry"), params.Parameter("query")...) {
+				if (params.Exist("qry") && params.Type("qry") == "std") || (params.Exist("query") && params.Type("query") == "std") {
+					for _, qry := range append(params.Get("qry"), params.Get("query")...) {
 						qryarr = append(qryarr, qry)
 					}
 				}
-				layout = strings.TrimFunc(params.StringParameter("layout", ""), iorw.IsSpace)
+				layout = strings.TrimFunc(params.String("layout", ""), iorw.IsSpace)
 			}
 		}
 		if path != "" && path[len(path)-1] != '/' && len(qryarr) == 0 {

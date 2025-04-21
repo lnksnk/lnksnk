@@ -7,9 +7,29 @@ import (
 	"github.com/lnksnk/lnksnk/fs"
 )
 
-type Driver interface {
+type IInvokeDB interface {
 	Invoke(string, ...interface{}) (*sql.DB, error)
-	ParseSqlArg(int) string
+}
+
+type InvokeDBFunc func(string, ...interface{}) (*sql.DB, error)
+
+func (invkf InvokeDBFunc) Invoke(datasource string, a ...interface{}) (db *sql.DB, err error) {
+	return invkf(datasource, a...)
+}
+
+type IParseSqlArg interface {
+	ParseSqlArg(t int) string
+}
+
+type ParseSqlArgFunc func(int) string
+
+func (prsargf ParseSqlArgFunc) ParseSqlArg(t int) string {
+	return prsargf(t)
+}
+
+type Driver interface {
+	IInvokeDB
+	IParseSqlArg
 	Dispose()
 	Name() string
 	DataSource() string

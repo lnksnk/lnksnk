@@ -11,7 +11,7 @@ import (
 
 var cmdregister dbserve.CommandFunc = func(path, ext string, dbhnl *database.DBMSHandler, w serveio.Writer, r serveio.Reader, fs *fsutils.FSUtils) (err error) {
 	if prms := dbhnl.Params(); prms != nil {
-		isname, name, isdatasource, datasource, isdriver, driver, connect := prms.ContainsParameter("name") && prms.StringParameter("name", "") != "", prms.StringParameter("name", ""), prms.ContainsParameter("datasource") && prms.StringParameter("datasource", "") != "", prms.StringParameter("datasource", ""), prms.ContainsParameter("driver") && prms.StringParameter("driver", "") != "", prms.StringParameter("driver", ""), prms.StringParameter("connect", "") == "Y"
+		isname, name, isdatasource, datasource, isdriver, driver, connect := prms.Exist("name") && prms.String("name", "") != "", prms.String("name", ""), prms.Exist("datasource") && prms.String("datasource", "") != "", prms.String("datasource", ""), prms.Exist("driver") && prms.String("driver", "") != "", prms.String("driver", ""), prms.String("connect", "") == "Y"
 		var errorsfnd []interface{} = nil
 		var warnings []interface{} = nil
 		if isname && isdatasource && isdriver {
@@ -60,7 +60,7 @@ var cmdregister dbserve.CommandFunc = func(path, ext string, dbhnl *database.DBM
 
 var cmdunregister dbserve.CommandFunc = func(path, ext string, dbhnl *database.DBMSHandler, w serveio.Writer, r serveio.Reader, fs *fsutils.FSUtils) (err error) {
 	if prms := dbhnl.Params(); prms != nil {
-		isname, name := prms.ContainsParameter("name") && prms.StringParameter("name", "") != "", prms.StringParameter("name", "")
+		isname, name := prms.Exist("name") && prms.String("name", "") != "", prms.String("name", "")
 		var errorsfnd []interface{} = nil
 		if isname {
 			if dbhnl.Unregister(name) {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,33 +33,25 @@ func main() {
 	mltyfsys.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
 	mltyfsys.Map("/embedding")
 	mltyfsys.Map("/", "C:/GitHub/lnksnk.github.io", true)
-	//mltyfsys.Map("/etl", "C:/GitHub/lnketl", true)
+	mltyfsys.Map("/etl", "C:/GitHub/lnketl", true)
 	mltyfsys.Map("/media", "C:/movies", true)
 	mltyfsys.Set("/embedding/embed.html", `<h2><@print("embed");@></h2>`)
 	mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
 	glbldbms := dbms.NewDBMS(mltyfsys)
-	glbldbms.Drivers().DefaultInvokable(func(driver string) (InvokeDB func(datasource string, a ...interface{}) (db *sql.DB, err error), ParseSqlParam func(totalArgs int) (s string)) {
-		if driver == "postgres" {
-			return postgres.InvokeDB, postgres.ParseSqlParam
-		}
-		if driver == "mssql" || driver == "sqlserver" {
-			return mssql.InvokeDB, mssql.ParseSqlParam
-		}
+	dbdrivers := map[string][]interface{}{}
+	dbdrivers["postgres"] = []interface{}{dbms.InvokeDBFunc(postgres.InvokeDB), dbms.ParseSqlArgFunc(postgres.ParseSqlParam)}
+	dbdrivers["mssql"] = []interface{}{dbms.InvokeDBFunc(mssql.InvokeDB), dbms.ParseSqlArgFunc(mssql.ParseSqlParam)}
+	dbdrivers["sqlserver"] = []interface{}{dbms.InvokeDBFunc(mssql.InvokeDB), dbms.ParseSqlArgFunc(mssql.ParseSqlParam)}
+	dbdrivers["azuresql"] = []interface{}{dbms.InvokeDBFunc(mssql.InvokeDBAzure), dbms.ParseSqlArgFunc(mssql.ParseSqlParam)}
+	dbdrivers["oracle"] = []interface{}{dbms.InvokeDBFunc(ora.InvokeDB), dbms.ParseSqlArgFunc(ora.ParseSqlParam)}
+	dbdrivers["sqlite"] = []interface{}{dbms.InvokeDBFunc(sqlite.InvokeDB), dbms.ParseSqlArgFunc(sqlite.ParseSqlParam)}
+	dbdrivers["csv"] = []interface{}{dbms.InvokeDBFunc(dlv.InvokeCSVDB), dbms.ParseSqlArgFunc(dlv.ParseSqlParam)}
+	dbdrivers["dlv"] = []interface{}{dbms.InvokeDBFunc(dlv.InvokeDLVDB), dbms.ParseSqlArgFunc(dlv.ParseSqlParam)}
 
-		if driver == "azuresql" {
-			return mssql.InvokeDBAzure, mssql.ParseSqlParam
-		}
-		if driver == "oracle" {
-			return ora.InvokeDB, ora.ParseSqlParam
-		}
-		if driver == "sqlite" {
-			return sqlite.InvokeDB, sqlite.ParseSqlParam
-		}
-		if driver == "csv" {
-			return dlv.InvokeCSVDB, dlv.ParseSqlParam
-		}
-		if driver == "dlv" {
-			return dlv.InvokeDLVDB, dlv.ParseSqlParam
+	glbldbms.Drivers().DefaultInvokable(func(driver string) (InvokeDB dbms.InvokeDBFunc, ParseSqlParam dbms.ParseSqlArgFunc) {
+		if dbdvrapi, dbdrvapik := dbdrivers[driver]; dbdrvapik {
+			InvokeDB, _ = dbdvrapi[0].(dbms.InvokeDBFunc)
+			ParseSqlParam, _ = dbdvrapi[1].(dbms.ParseSqlArgFunc)
 		}
 		return
 	})
@@ -72,7 +63,7 @@ func main() {
 	glbldbms.Drivers().Register("sqlite")
 	glbldbms.Drivers().Register("csv", mltyfsys)
 	if mltyfsys.Exist("/embedding/embed.html") {
-		glbldbms.Connections().Register("datafiles", "csv", "/datafiles", mltyfsys)
+		glbldbms.Connections().Register("datafiles", "csv", "/datafiles")
 		fmt.Println(time.Now())
 		if rdr, rdrerr := glbldbms.Query("datafiles", "OMNI Data- RMasterfile_DAT CREDIT 07-08-2022.txt", map[string]interface{}{"ColDelim": "\t", "Trim": true}); rdrerr == nil {
 			defer rdr.Close()
@@ -89,14 +80,6 @@ func main() {
 		fmt.Println(time.Now())
 	}
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
-	/*embed.ImportResource(func(srcroot string, src *ioext.Buffer, srcfsys fs.MultiFileSystem) {
-		srcfsys.Map(srcroot)
-		srcfsys.Set(srcroot+"/css.html", src)
-	}, mltyfsys, material.MaterialFS, ".min.css", ".go,.css", true, "/fonts/material", "")
-	embed.ImportResource(func(srcroot string, src *ioext.Buffer, srcfsys fs.MultiFileSystem) {
-		srcfsys.Map(srcroot)
-		srcfsys.Set(srcroot+"/css.html", src)
-	}, mltyfsys, roboto.RobotoFS, ".css", ".go", true, "/fonts/roboto", "")*/
 	fonts.EmbedFonts(mltyfsys)
 	ui.EmbedUiJS(mltyfsys)
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -213,13 +213,13 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 
 		var possibleArgName map[string]int = map[string]int{}
 		var possibleArgSize map[string]int = map[string]int{}
-		paramkeys := prms.StandardKeys()
+		paramkeys := prms.Keys()
 		prmkschkd := map[string]bool{}
 		if len(args) > 0 {
 			for dfltk, dfltv := range args {
 				for prmn, prmk := range paramkeys {
 					if strings.EqualFold(prmk, dfltk) {
-						if prms.StringParameter(prmk, "") == "" {
+						if prms.String(prmk, "") == "" {
 							paramkeys = append(paramkeys[:prmn], paramkeys[prmn+1:]...)
 							prmkschkd[dfltk] = true
 							possibleArgName[dfltk] = 0
@@ -242,7 +242,7 @@ func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args m
 		}
 
 		for _, dfltk := range paramkeys {
-			prmv := prms.Parameter(dfltk)
+			prmv := prms.Get(dfltk)
 			possibleArgName[dfltk] = 1
 			possibleArgSize[dfltk] = len(prmv)
 		}
@@ -458,7 +458,7 @@ func (stmnt *Statement) Arguments() (args []interface{}) {
 						args = append(args, argv)
 					}
 				} else if prms := stmnt.prms; prms != nil && argtpe == 1 {
-					prmv := prms.Parameter(argnme)
+					prmv := prms.Get(argnme)
 					prmvl := len(prmv)
 					if prmvl == 0 {
 						args = append(args, "")

@@ -392,16 +392,15 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	}
 
 	nvm.Set("_params", map[string]interface{}{
-		"set":       params.SetParameter,
-		"get":       params.Parameter,
+		"set":       params.Set,
+		"get":       params.Get,
 		"type":      params.Type,
-		"exist":     params.ContainsParameter,
-		"fileExist": params.ContainsFileParameter,
-		"setFile":   params.SetFileParameter,
-		"getFile":   params.FileParameter,
-		"keys":      params.StandardKeys,
+		"exist":     params.Exist,
+		"fileExist": params.FileExist,
+		"setFile":   params.SetFile,
+		"getFile":   params.GetFile,
+		"keys":      params.Keys,
 		"fileKeys":  params.FileKeys,
-		"fileName":  params.FileName,
 	})
 	nvm.Set("_cache", map[string]interface{}{
 		"count": func() (cnt int) {
