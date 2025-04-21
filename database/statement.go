@@ -23,7 +23,7 @@ type Statement struct {
 	cn       *Connection
 	isRemote bool
 	//prepstmnt []*sql.Stmt
-	prms     *parameters.Parameters
+	prms     parameters.ParametersAPI
 	rdr      *Reader
 	args     *sync.Map
 	stmntlck *sync.RWMutex
@@ -60,7 +60,7 @@ func (stmnthndlfnc StatementHandlerFunc) Prepair(a ...interface{}) []interface{}
 	return stmnthndlfnc(a...)
 }
 
-func (stmnt *Statement) Prepair(prms *parameters.Parameters, rdr *Reader, args map[string]interface{}, a ...interface{}) (preperr error) {
+func (stmnt *Statement) Prepair(prms parameters.ParametersAPI, rdr *Reader, args map[string]interface{}, a ...interface{}) (preperr error) {
 	if stmnt != nil {
 		defer func() {
 			if preperr != nil && stmnt != nil {

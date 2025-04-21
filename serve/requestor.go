@@ -156,7 +156,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 	var terminal *terminals = nil
 	var Out serveio.Writer = nil
 	var In serveio.Reader = nil
-	var params *parameters.Parameters = nil
+	var params parameters.ParametersAPI = nil
 	var caching *concurrent.Map
 	var invkcachng func() *concurrent.Map
 	var activemap map[string]interface{} = nil
@@ -199,7 +199,7 @@ func InvokeVM(a ...interface{}) (nvm *active.VM) {
 			al--
 			continue
 		}
-		if paramsd, _ := a[ai].(*parameters.Parameters); paramsd != nil {
+		if paramsd, _ := a[ai].(parameters.ParametersAPI); paramsd != nil {
 			if params == nil {
 				params = paramsd
 			}

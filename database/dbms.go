@@ -511,7 +511,7 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 			var onselect interface{} = nil
 			var onnext interface{} = nil
 			var rdr *Reader = nil
-			var prms *parameters.Parameters = nil
+			var prms parameters.ParametersAPI = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
 
@@ -606,7 +606,7 @@ func (dbms *DBMS) Query(alias string, a ...interface{}) (reader *Reader) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if prmsd, _ := a[ai].(*parameters.Parameters); prmsd != nil {
+						} else if prmsd, _ := a[ai].(parameters.ParametersAPI); prmsd != nil {
 							if prms == nil {
 								prms = prmsd
 							}
@@ -690,7 +690,7 @@ func (dbms *DBMS) Execute(alias string, a ...interface{}) (err error) {
 			var onexec interface{} = nil
 			var onexecerror interface{} = nil
 			var rdr *Reader = nil
-			var prms *parameters.Parameters = nil
+			var prms parameters.ParametersAPI = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
 			var al = 0
@@ -763,7 +763,7 @@ func (dbms *DBMS) Execute(alias string, a ...interface{}) (err error) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if prmsd, _ := a[ai].(*parameters.Parameters); prmsd != nil {
+						} else if prmsd, _ := a[ai].(parameters.ParametersAPI); prmsd != nil {
 							if prms == nil {
 								prms = prmsd
 							}
@@ -829,7 +829,7 @@ func (dbms *DBMS) Prepair(alias string, a ...interface{}) (exectr *Executor) {
 			var onexec interface{} = nil
 			var onexecerror interface{} = nil
 			var rdr *Reader = nil
-			var prms *parameters.Parameters = nil
+			var prms parameters.ParametersAPI = nil
 			var args map[string]interface{} = nil
 			var runtime active.Runtime = nil
 			var al = 0
@@ -902,7 +902,7 @@ func (dbms *DBMS) Prepair(alias string, a ...interface{}) (exectr *Executor) {
 							a = append(a[:ai], a[ai+1:]...)
 							al--
 							continue
-						} else if prmsd, _ := a[ai].(*parameters.Parameters); prmsd != nil {
+						} else if prmsd, _ := a[ai].(parameters.ParametersAPI); prmsd != nil {
 							if prms == nil {
 								prms = prmsd
 							}

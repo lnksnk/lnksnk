@@ -43,7 +43,7 @@ func internalRequest(path string, In serveio.Reader, Out serveio.Writer, fs *fsu
 		}
 	}()
 
-	var params *parameters.Parameters
+	var params parameters.ParametersAPI
 	defer params.ClearAll()
 	var ctx context.Context = nil
 	var rangeOffset = int64(0)

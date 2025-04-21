@@ -24,7 +24,7 @@ func ServeRequest(prefix string, w serveio.Writer, r serveio.Reader, a ...interf
 
 	var callPrepStatement database.StatementHandlerFunc = nil
 	var runtime active.Runtime = nil
-	var params *parameters.Parameters = nil
+	var params parameters.ParametersAPI = nil
 	var fs *fsutils.FSUtils = nil
 	var emailsvchndl *emailservice.EMAILSvcHandler
 	var path string = ""
@@ -48,7 +48,7 @@ func ServeRequest(prefix string, w serveio.Writer, r serveio.Reader, a ...interf
 				al--
 				continue
 			}
-			if dparams, _ := d.(*parameters.Parameters); dparams != nil && params == nil {
+			if dparams, _ := d.(parameters.ParametersAPI); dparams != nil && params == nil {
 				params = dparams
 				a = append(a[:ai], a[ai+1:]...)
 				al--

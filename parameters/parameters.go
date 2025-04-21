@@ -116,7 +116,7 @@ type ParametersAPI interface {
 }
 
 // Parameters -> structure containing parameters
-type Parameters struct {
+type parameters struct {
 	urlkeys        *sync.Map
 	standard       *sync.Map //map[string][]string
 	standardcount  int
@@ -128,7 +128,7 @@ var emptyParmVal = []string{}
 var emptyParamFile = []File{}
 
 // Keys - list of standard parameters names (keys)
-func (params *Parameters) Keys() (keys []string) {
+func (params *parameters) Keys() (keys []string) {
 	if params != nil {
 		if standard, standardcount := params.standard, params.standardcount; standard != nil && standardcount > 0 {
 			if keys == nil {
@@ -148,7 +148,7 @@ func (params *Parameters) Keys() (keys []string) {
 }
 
 // FileKeys - list of file parameters names (keys)
-func (params *Parameters) FileKeys() (keys []string) {
+func (params *parameters) FileKeys() (keys []string) {
 	if params != nil {
 		if filesdata, filesdatacount := params.filesdata, params.filesdatacount; filesdata != nil && filesdatacount > 0 {
 			if keys == nil {
@@ -171,11 +171,11 @@ func (params *Parameters) FileKeys() (keys []string) {
 // pname : name
 // pvalue : value of strings to add
 // clear : clear existing value of parameter
-func (params *Parameters) Set(pname string, clear bool, pvalue ...string) {
+func (params *parameters) Set(pname string, clear bool, pvalue ...string) {
 	storeParameter(params, false, pname, clear, pvalue...)
 }
 
-func storeParameter(params *Parameters, isurl bool, pname string, clear bool, pvalue ...string) {
+func storeParameter(params *parameters, isurl bool, pname string, clear bool, pvalue ...string) {
 	if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 		return
 	}
@@ -217,7 +217,7 @@ func storeParameter(params *Parameters, isurl bool, pname string, clear bool, pv
 
 // Exist -> check if parameter exist
 // pname : name
-func (params *Parameters) Exist(pname string) bool {
+func (params *parameters) Exist(pname string) bool {
 	if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 		return false
 	}
@@ -231,7 +231,7 @@ func (params *Parameters) Exist(pname string) bool {
 
 // Type -> check if parameter was loaded as a url/standard parameter
 // pname : name
-func (params *Parameters) Type(pname string) string {
+func (params *parameters) Type(pname string) string {
 	if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 		return ""
 	}
@@ -251,7 +251,7 @@ func (params *Parameters) Type(pname string) string {
 }
 
 // Remove  -> remove parameter and return any slice of string value
-func (params *Parameters) Remove(pname string) (value []string) {
+func (params *parameters) Remove(pname string) (value []string) {
 	if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 		return
 	}
@@ -270,7 +270,7 @@ func (params *Parameters) Remove(pname string) (value []string) {
 }
 
 // Empty  -> return true if there are no parameters
-func (params *Parameters) Empty() (empty bool) {
+func (params *parameters) Empty() (empty bool) {
 	if params != nil {
 		empty = true
 		if standard := params.standard; standard != nil {
@@ -287,7 +287,7 @@ func (params *Parameters) Empty() (empty bool) {
 // pname : name
 // pfile : value of interface to add either FileHeader from mime/multipart or any io.Reader implementation
 // clear : clear existing value of parameter
-func (params *Parameters) SetFile(pname string, clear bool, pfile ...interface{}) {
+func (params *parameters) SetFile(pname string, clear bool, pfile ...interface{}) {
 	if params != nil {
 		if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 			return
@@ -330,7 +330,7 @@ func (params *Parameters) SetFile(pname string, clear bool, pfile ...interface{}
 }
 
 // FilesEmpty -> return true if no file parameters exist
-func (params *Parameters) FilesEmpty() (empty bool) {
+func (params *parameters) FilesEmpty() (empty bool) {
 	if params != nil {
 		empty = true
 		filesdata := params.filesdata
@@ -347,7 +347,7 @@ func (params *Parameters) FilesEmpty() (empty bool) {
 
 // FileExist -> check if file parameter exist
 // pname : name
-func (params *Parameters) FileExist(pname string) bool {
+func (params *parameters) FileExist(pname string) bool {
 	if params != nil {
 		if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 			return false
@@ -363,7 +363,7 @@ func (params *Parameters) FileExist(pname string) bool {
 }
 
 // RemoveFile  -> remove file parameter and return any slice of File value
-func (params *Parameters) RemoveFile(pname string) (value []File) {
+func (params *parameters) RemoveFile(pname string) (value []File) {
 	if pname = strings.ToUpper(strings.TrimSpace(pname)); pname == "" {
 		return
 	}
@@ -379,7 +379,7 @@ func (params *Parameters) RemoveFile(pname string) (value []File) {
 }
 
 // Get - return a specific parameter values
-func (params *Parameters) Get(pname string, index ...int) []string {
+func (params *parameters) Get(pname string, index ...int) []string {
 	if params != nil {
 		if pname = strings.ToUpper(strings.TrimSpace(pname)); pname != "" {
 			if standard := params.standard; standard != nil {
@@ -412,7 +412,7 @@ func (params *Parameters) Get(pname string, index ...int) []string {
 }
 
 // String return parameter as string concatenated with sep
-func (params *Parameters) String(pname string, sep string, index ...int) (s string) {
+func (params *parameters) String(pname string, sep string, index ...int) (s string) {
 	if params != nil {
 		if pval := params.Get(pname, index...); len(pval) > 0 {
 			return strings.Join(pval, sep)
@@ -472,7 +472,7 @@ func (params *Parameters) String(pname string, sep string, index ...int) (s stri
 }
 
 // GetFile return file paramater - array of file
-func (params *Parameters) GetFile(pname string, index ...int) []File {
+func (params *parameters) GetFile(pname string, index ...int) []File {
 	if params != nil {
 		if pname = strings.ToUpper(strings.TrimSpace(pname)); pname != "" {
 			filesdata := params.filesdata
@@ -506,7 +506,7 @@ func (params *Parameters) GetFile(pname string, index ...int) []File {
 }
 
 // Clear all standard parameters
-func (params *Parameters) Clear() {
+func (params *parameters) Clear() {
 	if params == nil {
 		return
 	}
@@ -525,7 +525,7 @@ func (params *Parameters) Clear() {
 }
 
 // Clear all file parameters
-func (params *Parameters) ClearFiles() {
+func (params *parameters) ClearFiles() {
 	if params == nil {
 		return
 	}
@@ -547,7 +547,7 @@ func (params *Parameters) ClearFiles() {
 }
 
 // ClearAll function that can be called to assist in cleaning up instance of Parameter container
-func (params *Parameters) ClearAll() {
+func (params *parameters) ClearAll() {
 	if params == nil {
 		return
 	}
@@ -556,8 +556,8 @@ func (params *Parameters) ClearAll() {
 }
 
 // NewParameters return new instance of Paramaters container
-func NewParameters() *Parameters {
-	return &Parameters{}
+func NewParameters() *parameters {
+	return &parameters{}
 }
 
 // LoadParametersFromRawURL - populate paramaters just from raw url
@@ -582,7 +582,7 @@ func LoadParametersFromRawURL(params ParametersAPI, rawURL string) {
 			if urlvals, e := url.ParseQuery(rawURL); e == nil {
 				if len(urlvals) > 0 {
 					for pname, pvalue := range urlvals {
-						storeParameter(params.(*Parameters), true, pname, false, pvalue...)
+						storeParameter(params.(*parameters), true, pname, false, pvalue...)
 					}
 				}
 			}
