@@ -9,7 +9,7 @@ type Rows interface {
 	Data() []interface{}
 	Err() error
 	Last() bool
-	Events() interface{}
+	Events() *RowsEvents
 }
 
 type IRows interface {
@@ -23,6 +23,15 @@ type IRows interface {
 }
 
 type RowsEvents struct {
+	Error func(error)
+}
+
+func (r *RowsEvents) error(err error) {
+	if r != nil && err != nil {
+		if evterr := r.Error; evterr != nil {
+			evterr(err)
+		}
+	}
 }
 
 type rows struct {
@@ -34,7 +43,7 @@ type rows struct {
 	started bool
 	first   bool
 	last    bool
-	evnts   *ReaderEvents
+	evnts   *RowsEvents
 }
 
 type dbirows struct {
@@ -136,14 +145,14 @@ func (dbirws *dbirows) Scan(dest ...any) (err error) {
 }
 
 // Events implements Rows.
-func (r *rows) Events() interface{} {
+func (r *rows) Events() *RowsEvents {
 	if r == nil {
 
 	}
 	if evnts := r.evnts; evnts != nil {
 		return evnts
 	}
-	r.evnts = &ReaderEvents{}
+	r.evnts = &RowsEvents{}
 	return r.evnts
 }
 
@@ -210,6 +219,9 @@ func (r *rows) Columns() ([]string, error) {
 		cltpes, cltpeserr := irows.ColumnTypes()
 		if cltpeserr != nil {
 			r.lsterr = cltpeserr
+			if evnts := r.evnts; evnts != nil {
+				evnts.error(r.lsterr)
+			}
 			return nil, r.lsterr
 		}
 		if cltpsl := len(cltpes); cltpsl > 0 {
@@ -222,6 +234,9 @@ func (r *rows) Columns() ([]string, error) {
 			return cols, nil
 		}
 		if cols, r.lsterr = irows.Columns(); r.lsterr != nil {
+			if evnts := r.evnts; evnts != nil {
+				evnts.error(r.lsterr)
+			}
 			return nil, r.lsterr
 		}
 		r.cols = cols
@@ -267,12 +282,11 @@ func (r *rows) Next() (nxt bool) {
 					r.dta = dta
 				}
 
-				r.lsterr = irows.Scan(dta...)
-				/*for n, d := range dta {
-					if rw, rwk := d.(*sql.Rows); rwk {
-						dta[n] = &reader{rws: &rows{irows: &dbirows{dbrows: rw}}}
+				if r.lsterr = irows.Scan(dta...); r.lsterr != nil {
+					if evnts := r.evnts; evnts != nil {
+						evnts.error(r.lsterr)
 					}
-				}*/
+				}
 				if nxt = r.lsterr == nil; nxt {
 					r.last, r.lsterr = !irows.Next(), irows.Err()
 					nxt = r.lsterr == nil
@@ -285,7 +299,11 @@ func (r *rows) Next() (nxt bool) {
 			r.first = false
 			dta := r.dta
 			if cl, dtal := len(r.cols), len(dta); cl > 0 && cl == dtal {
-				r.lsterr = irows.Scan(dta...)
+				if r.lsterr = irows.Scan(dta...); r.lsterr != nil {
+					if evnts := r.evnts; evnts != nil {
+						evnts.error(r.lsterr)
+					}
+				}
 				if nxt = r.lsterr == nil; nxt {
 					r.last, r.lsterr = !irows.Next(), irows.Err()
 					nxt = r.lsterr == nil

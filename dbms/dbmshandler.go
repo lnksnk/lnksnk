@@ -20,6 +20,76 @@ type DBMSHandler interface {
 	Params() parameters.Parameters
 	AttachReader(Reader)
 	DettachReader(Reader)
+	Events() *DBMSHandlerEvents
+}
+
+type DBMSHandlerEvents struct {
+	AttachedReader func(Reader)
+	DetachedReader func(Reader)
+	QueryError     func(error)
+	ExecuteError   func(error)
+	Error          func(error)
+	Disposed       func()
+}
+
+func (dbmshnldevnts *DBMSHandlerEvents) dispose() {
+	if dbmshnldevnts == nil {
+		return
+	}
+	if disposed := dbmshnldevnts.Disposed; disposed != nil {
+		disposed()
+	}
+	dbmshnldevnts.AttachedReader = nil
+	dbmshnldevnts.DetachedReader = nil
+	dbmshnldevnts.Disposed = nil
+	dbmshnldevnts.Error = nil
+	dbmshnldevnts.ExecuteError = nil
+	dbmshnldevnts.QueryError = nil
+}
+
+func (dbmshnldevnts *DBMSHandlerEvents) error(err error) {
+	if dbmshnldevnts == nil {
+		return
+	}
+	if error := dbmshnldevnts.Error; error != nil {
+		error(err)
+	}
+}
+
+func (dbmshnldevnts *DBMSHandlerEvents) attachedRdr(rdr Reader) {
+	if dbmshnldevnts == nil {
+		return
+	}
+	if attachedRdr := dbmshnldevnts.AttachedReader; attachedRdr != nil {
+		attachedRdr(rdr)
+	}
+}
+
+func (dbmshnldevnts *DBMSHandlerEvents) detachedRdr(rdr Reader) {
+	if dbmshnldevnts == nil {
+		return
+	}
+	if detachedRdr := dbmshnldevnts.DetachedReader; detachedRdr != nil {
+		detachedRdr(rdr)
+	}
+}
+
+func (dbmshnldevnts *DBMSHandlerEvents) queryErr(err error) {
+	if dbmshnldevnts == nil {
+		return
+	}
+	if queryErr := dbmshnldevnts.QueryError; queryErr != nil {
+		queryErr(err)
+	}
+}
+
+func (dbmshnldevnts *DBMSHandlerEvents) executeErr(err error) {
+	if dbmshnldevnts == nil {
+		return
+	}
+	if executeErr := dbmshnldevnts.ExecuteError; executeErr != nil {
+		executeErr(err)
+	}
 }
 
 type dbmshandler struct {
@@ -27,6 +97,15 @@ type dbmshandler struct {
 	rdrs        *sync.Map
 	params      parameters.Parameters
 	fiqryreader func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
+	evnts       *DBMSHandlerEvents
+}
+
+// Events implements DBMSHandler.
+func (dh *dbmshandler) Events() *DBMSHandlerEvents {
+	if dh == nil {
+		return nil
+	}
+	return dh.evnts
 }
 
 // AttachReader implements DBMSHandler.
@@ -36,6 +115,9 @@ func (dh *dbmshandler) AttachReader(rdr Reader) {
 	}
 	if rdrs := dh.rdrs; rdrs != nil {
 		rdrs.Store(rdr, rdr)
+		if evnts := dh.evnts; evnts != nil {
+			evnts.attachedRdr(rdr)
+		}
 	}
 }
 
@@ -45,7 +127,11 @@ func (dh *dbmshandler) DettachReader(rdr Reader) {
 		return
 	}
 	if rdrs := dh.rdrs; rdrs != nil {
-		rdrs.CompareAndDelete(rdr, rdr)
+		if rdrs.CompareAndDelete(rdr, rdr) {
+			if evnts := dh.evnts; evnts != nil {
+				evnts.detachedRdr(rdr)
+			}
+		}
 	}
 }
 
@@ -72,7 +158,12 @@ func (dh *dbmshandler) ExecuteContext(ctx context.Context, alias string, query s
 	}
 	if dbms := dh.dbms; dbms != nil {
 		if cn, ck := dbms.Connections().Get(alias); ck {
-			return cn.ExecuteContext(ctx, query, append(a, dh.params, dh.fiqryreader)...)
+			if result, err = cn.ExecuteContext(ctx, query, append(a, dh.params, dh.fiqryreader)...); err != nil {
+				if evnts := dh.evnts; evnts != nil {
+					evnts.executeErr(err)
+				}
+			}
+			return
 		}
 	}
 	return
@@ -96,9 +187,16 @@ func (dh *dbmshandler) QueryContext(ctx context.Context, alias string, stmnt str
 			if rdr, err = cn.QueryContext(ctx, stmnt, append(a, dh.params, dh.fiqryreader)...); err == nil {
 				if rdf, rdk := rdr.(*reader); rdk && rdrs != nil {
 					rdrs.Store(rdf, rdf)
+					if evnts := dh.evnts; evnts != nil {
+						evnts.attachedRdr(rdr)
+					}
 				}
 				return
 			}
+			if evnts := dh.evnts; evnts != nil {
+				evnts.queryErr(err)
+			}
+			return
 		}
 	}
 	return
@@ -109,6 +207,8 @@ func (dh *dbmshandler) Close() (err error) {
 	if dh == nil {
 		return
 	}
+	evnts := dh.evnts
+	dh.evnts = nil
 	rdrs := dh.rdrs
 	dh.rdrs = nil
 	if rdrs != nil {
@@ -124,7 +224,9 @@ func (dh *dbmshandler) Close() (err error) {
 			rdr.Close()
 		}
 	}
-
+	if evnts != nil {
+		evnts.dispose()
+	}
 	return
 }
 

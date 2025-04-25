@@ -10,12 +10,43 @@ type Reader interface {
 	Last() bool
 	AttachHandler(DBMSHandler)
 	Records() func(func(Record) bool)
-	Events() interface{}
+	Events() *ReaderEvents
 	Record() Record
 }
 
 type ReaderEvents struct {
 	*RowsEvents
+	ReaderError func(error)
+	Select      func(Record) bool
+	Disposed    func()
+}
+
+func (rdrevnts *ReaderEvents) calselect(rc Record) bool {
+	if rdrevnts == nil {
+		return true
+	}
+	if slctevt := rdrevnts.Select; slctevt != nil {
+		return slctevt(rc)
+	}
+	return true
+}
+
+func (rdrevnts *ReaderEvents) rowsErr(rwserr error) {
+	if rdrevnts == nil {
+		return
+	}
+	if rdrerrevt := rdrevnts.ReaderError; rdrerrevt != nil {
+		rdrerrevt(rwserr)
+	}
+}
+
+func (rdrevnts *ReaderEvents) disposed() {
+	if rdrevnts == nil {
+		return
+	}
+	if rdrdspseevt := rdrevnts.Disposed; rdrdspseevt != nil {
+		rdrdspseevt()
+	}
 }
 
 type reader struct {
@@ -36,7 +67,7 @@ func (rdr *reader) Record() Record {
 }
 
 // Events implements Reader.
-func (rdr *reader) Events() interface{} {
+func (rdr *reader) Events() *ReaderEvents {
 	if rdr == nil {
 		return nil
 	}
@@ -44,8 +75,9 @@ func (rdr *reader) Events() interface{} {
 		return evnts
 	}
 	if rws := rdr.rws; rws != nil {
-		if rsevt, _ := rws.Events().(*RowsEvents); rsevt != nil {
+		if rsevt := rws.Events(); rsevt != nil {
 			rdr.evnts = &ReaderEvents{RowsEvents: rsevt}
+			rsevt.Error = rdr.evnts.rowsErr
 			return rdr.evnts
 		}
 	}
@@ -60,10 +92,6 @@ func (rdr *reader) Records() func(func(Record) bool) {
 		}
 		if rdr.rws != nil && rdr.rws.Err() == nil {
 			for rdr.Next() {
-				/*rc.dta = rdr.Data()
-				rc.first = rdr.First()
-				rc.last = rdr.Last()
-				rc.cnt++*/
 				if !nxtrc(rdr.Record()) {
 					return
 				}
@@ -159,6 +187,9 @@ func (rdr *reader) Next() (nxt bool) {
 			}
 			rc = &record{rdr: rdr, cnt: 1, cols: cols, coltpes: coltpes, first: rws.First(), last: rws.Last(), dta: rws.Data()}
 			rdr.rc = rc
+			if evnts := rdr.evnts; evnts != nil {
+				nxt = evnts.calselect(rc)
+			}
 			return
 		}
 		if rc.first = rws.First(); rc.first {
@@ -171,6 +202,9 @@ func (rdr *reader) Next() (nxt bool) {
 		rc.last = rws.Last()
 		rc.dta = rdr.Data()
 		rc.cnt++
+		if evnts := rdr.evnts; evnts != nil {
+			nxt = evnts.calselect(rc)
+		}
 		return
 	}
 	rdr.Close()
@@ -219,6 +253,8 @@ func (rdr *reader) Close() {
 		return
 	}
 	stmnt := rdr.stmnt
+	evnts := rdr.evnts
+	rdr.evnts = nil
 	rc := rdr.rc
 	rdr.rc = nil
 	dbhndlr, dsphndlr := rdr.dbhndlr, rdr.dsphndlr
@@ -239,5 +275,8 @@ func (rdr *reader) Close() {
 		rc.cols = nil
 		rc.coltpes = nil
 		rc.dta = nil
+	}
+	if evnts != nil {
+		evnts.disposed()
 	}
 }
