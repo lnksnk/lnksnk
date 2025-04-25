@@ -1,5 +1,6 @@
 go.work
 go.work.sum
+main/*.exe
 sys/*.log
 sys/__debug_bin.conf.js
 sys/__debug_bin*
