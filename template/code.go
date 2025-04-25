@@ -61,6 +61,7 @@ func (cde *codeparsing) passiveRunes(rns ...rune) {
 
 func (cde *codeparsing) startCaptureCode() {
 	if cde.noncode() {
+		cde.flushPsv()
 		cde.c.content().WriteRunes(cde.parsing.prelbl...)
 	}
 }
