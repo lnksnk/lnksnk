@@ -77,16 +77,31 @@ func (m *markuptemplate) Parse(in interface{}) {
 		if m.prsix == 0 {
 			if c, ck := m.cntntprsngs[m.prsix]; ck {
 				if c != nil {
-					mps := ioext.MapReplaceReader(inrd, map[string]interface{}{
+					var mpr ioext.MapReader
+					mpr = ioext.MapReplaceReader(inrd, map[string]interface{}{
 						"p-root":   c.fi.Root(),
 						"p-base":   c.fi.Base(),
 						"p-e-root": c.elmroot,
 						"p-e-base": c.elmbase}, "[#", "#]")
-					return mps
+					return mpr
 				}
 			}
 		}
-		nxrnr, _ = inrd.(io.RuneReader)
+		if nxrnr, _ = inrd.(io.RuneReader); nxrnr == nil {
+			if bf, bfk := inrd.(*ioext.Buffer); bfk {
+				if bf.Empty() {
+					nxrnr = ioext.ReadRuneFunc(func() (rune, int, error) {
+						return 0, 0, io.EOF
+					})
+					return
+				}
+				nxrnr = bf.Reader()
+				return
+			}
+			nxrnr = ioext.ReadRuneFunc(func() (rune, int, error) {
+				return 0, 0, io.EOF
+			})
+		}
 		return nxrnr
 	}
 	if r, rok := in.(io.Reader); rok {
@@ -122,14 +137,13 @@ func (m *markuptemplate) Wrapup() {
 func parseReader(rdr io.RuneReader, m *markuptemplate) error {
 	for {
 		r, size, err := rdr.ReadRune()
-		if size > 0 {
-			parseRune(r, m)
-			continue
+		if size == 0 || err != nil {
+			if err == nil {
+				err = io.EOF
+			}
+			return err
 		}
-		if size == 0 && err == nil {
-			err = nil
-		}
-		return err
+		parseRune(r, m)
 	}
 }
 
