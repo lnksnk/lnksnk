@@ -498,6 +498,9 @@ func (c *contentparsing) matchPost() (reset bool) {
 		c.resetTest(false)
 		fullname = strings.Replace(fullname, "..:", "", -1)
 		if c.m.prsix > 0 && c == c.m.cntntprsngs[c.m.prsix] && fullname == c.elmname && c.elmlvl == ElemStart {
+			if cde := c.cde; cde != nil {
+				cde.flushPsv()
+			}
 			c.elmlvl = ElemEnd
 			attrbs := c.attrbs
 			cbf := c.cbf
