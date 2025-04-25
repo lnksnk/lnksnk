@@ -269,6 +269,10 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 		}
 		if c.tstlvl == ElemStart {
 			if tstatrbs := c.tstatrbs; tstatrbs != nil {
+				if tstatrbs.Busy() {
+					tstatrbs.Parse(r)
+					continue
+				}
 				if (tstatrbs.tstlvl == AttribUknown || tstatrbs.tstlvl == AttribContinue) && r == '/' {
 					c.tstlvl = ElemSingle
 					continue

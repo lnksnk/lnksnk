@@ -25,6 +25,7 @@ type attributeparser struct {
 	tstprvr         rune
 	eventFoundValue func(name []rune, value interface{}, empty bool)
 	eventDispose    func()
+	atvrnes         []rune
 }
 
 func (attrbprsr *attributeparser) passiveRunes(rns ...rune) {
@@ -125,6 +126,7 @@ func (attrbprsr *attributeparser) Close() (err error) {
 	parsing := attrbprsr.Parsing
 	attrbprsr.raw = nil
 	attrbprsr.Parsing = nil
+	attrbprsr.atvrnes = nil
 	if parsing != nil {
 		parsing.Close()
 	}
@@ -149,12 +151,20 @@ func (attrbprsr *attributeparser) activeRunes(canreset bool, rns ...rune) (reset
 	if attrbprsr == nil {
 		return
 	}
+	if reset = canreset; reset {
+		return
+	}
+	attrbprsr.atvrnes = append(attrbprsr.atvrnes, rns...)
 	return
 }
 
 func (attrbprsr *attributeparser) activeDone() (reset bool) {
 	if attrbprsr == nil {
 		return
+	}
+	if atvrnes := attrbprsr.atvrnes; len(attrbprsr.atvrnes) > 0 {
+		defer func() { attrbprsr.atvrnes = nil }()
+		attrbprsr.ParseValue([]rune("pre"), atvrnes, false)
 	}
 	return
 }
