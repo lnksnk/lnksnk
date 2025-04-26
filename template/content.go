@@ -569,30 +569,6 @@ func (c *contentparsing) resetCdeParsing() {
 	if cde := c.cde; cde != nil {
 		cde.reset()
 	}
-	/*c.prscde.EventMatchedPre = func() {
-		if c.noncode() {
-			c.prscde.EventPreRunes(c.prscde.prelbl...)
-			c.prscde.EventMatchedPre = func() {
-				c.prscde.EventPreRunes(c.prscde.prelbl...)
-			}
-			c.prscde.EventPostRunes = func(canreset bool, rns ...rune) (reset bool) {
-				c.prscde.EventPreRunes(rns...)
-				return
-			}
-			c.prscde.EventMatchedPost = func() (reset bool) {
-				c.prscde.EventPreRunes(c.prscde.postlbl...)
-				return
-			}
-		} else {
-			c.cde = nextCodeParsing(c.m, c.prscde)
-			c.prscde.EventMatchedPre = nil
-			c.prscde.EventMatchedPost = nil
-			if c.cbf.Contains("{@") && c.cbf.Contains("@}") {
-				c.cde.psvbf = c.cbf.Clone(true)
-				c.cde.flushPsv()
-			}
-		}
-	}*/
 }
 
 type ElemLevel int
