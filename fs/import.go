@@ -1,53 +1,16 @@
-package embed
+package fs
 
 import (
 	gofs "io/fs"
 	"path/filepath"
 	"strings"
 
-	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
-type EmbedFS interface {
-	Open(name string) (gofs.File, error)
-	ReadDir(name string) ([]gofs.DirEntry, error)
-	ReadFile(name string) ([]byte, error)
-}
-
-type EmbedFSReadFile interface {
-	ReadFile(name string) ([]byte, error)
-}
-
-type EmbedFSReadFileFunc func(string) ([]byte, error)
-
-func (emdfsreadfile EmbedFSReadFileFunc) ReadFile(name string) ([]byte, error) {
-	return emdfsreadfile(name)
-}
-
-type EmbedFSReadDir interface {
-	ReadDir(name string) ([]gofs.DirEntry, error)
-}
-
-type EmbedFSReadDirFunc func(string) ([]gofs.DirEntry, error)
-
-func (emdfsreaddir EmbedFSReadDirFunc) ReadDir(name string) ([]gofs.DirEntry, error) {
-	return emdfsreaddir(name)
-}
-
-type EmbedFSOpen interface {
-	Open(string) (gofs.File, error)
-}
-
-type EmbedFSOpenFunc func(string) (gofs.File, error)
-
-func (emdfsopen EmbedFSOpenFunc) Open(name string) (gofs.File, error) {
-	return emdfsopen(name)
-}
-
 // ImoprtResource
 // example embed.ImportResource(mltyfsys, fontsext.FSFonts, ".css", true, "/fontsext", "material", "roboto")
-func ImportResource(capturedsource func(srcroot string, src *ioext.Buffer, srcfsys fs.MultiFileSystem), fsys fs.MultiFileSystem, emdfs EmbedFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
+func ImportResource(capturedsource func(srcroot string, src *ioext.Buffer, srcfsys MultiFileSystem), fsys MultiFileSystem, emdfs IOFS, srchdrexts string, excldeexts string, incldsubdirs bool, pathroot string, paths ...string) {
 	var cptrdpths = map[string][]string{}
 	var chksrchdrexts = map[string]bool{}
 	if srchdrexts = strings.TrimFunc(srchdrexts, ioext.IsSpace); srchdrexts != "" {
@@ -164,7 +127,7 @@ func ImportResource(capturedsource func(srcroot string, src *ioext.Buffer, srcfs
 	}
 }
 
-func importResourcePath(fsys fs.MultiFileSystem, emdfs EmbedFS, incldsubdirs bool, pathroot string, path string, excldfl func(string, gofs.DirEntry) bool, cptrdfle func(string, string)) {
+func importResourcePath(fsys MultiFileSystem, emdfs IOFS, incldsubdirs bool, pathroot string, path string, excldfl func(string, gofs.DirEntry) bool, cptrdfle func(string, string)) {
 	emddirs, _ := emdfs.ReadDir(func() string {
 		if path == "" {
 			return "."
