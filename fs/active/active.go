@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lnksnk/lnksnk/es"
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ioext"
 	"github.com/lnksnk/lnksnk/template"
@@ -56,8 +55,8 @@ func (chdinfos *chachedinfos) Get(name string) (CachedInfo, bool) {
 
 type activeFileSystem struct {
 	fs.MultiFileSystem
-	//chdfis map[string]CachedInfo
 	chdfis CachedInfos
+	cmple  func(cde ...interface{}) (prgm interface{}, err error)
 }
 
 type cachedinfo struct {
@@ -455,7 +454,10 @@ func (atvfsys *activeFileSystem) compile(cde ...interface{}) (prgm interface{}, 
 	if atvfsys == nil {
 		return
 	}
-	prgm, err = es.Compile("", ioext.NewBuffer(cde...).String(), false)
+	if cmple := atvfsys.cmple; cmple != nil {
+		return cmple(cde...)
+	}
+	//prgm, err = es.Compile("", ioext.NewBuffer(cde...).String(), false)
 	return
 }
 
@@ -497,9 +499,14 @@ func (atvfsys *activeFileSystem) update(fsys fs.FileSystem, fi fs.FileInfo, ntfy
 	}
 }
 
-func AciveFileSystem(mltyfsys ...fs.MultiFileSystem) (actvmltifsys *activeFileSystem) {
+func AciveFileSystem(compile func(cde ...interface{}) (prgm interface{}, err error), mltyfsys ...fs.MultiFileSystem) (actvmltifsys *activeFileSystem) {
 	if len(mltyfsys) == 0 {
-		actvmltifsys = &activeFileSystem{MultiFileSystem: fs.NewMultiFileSystem(), chdfis: NewCachedInfos(nil)}
+		if compile == nil {
+			compile = func(cde ...interface{}) (prgm interface{}, err error) {
+				return
+			}
+		}
+		actvmltifsys = &activeFileSystem{MultiFileSystem: fs.NewMultiFileSystem(), chdfis: NewCachedInfos(nil), cmple: compile}
 		if events, _ := actvmltifsys.chdfis.Events().(*ioext.MapIterateEvents[string, CachedInfo]); events != nil {
 
 		}
