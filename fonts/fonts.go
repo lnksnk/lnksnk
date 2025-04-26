@@ -7,12 +7,6 @@ import (
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
-type FSFonts struct {
-	fs.IOFSOpen
-	fs.IOFSReadDir
-	fs.IOFSReadFile
-}
-
 //go:embed *
 var FontsFS embed.FS
 
