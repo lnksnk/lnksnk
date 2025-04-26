@@ -14,6 +14,7 @@ import (
 	"github.com/lnksnk/lnksnk/dbms/postgres"
 	"github.com/lnksnk/lnksnk/dbms/sqlite"
 	"github.com/lnksnk/lnksnk/es"
+	"github.com/lnksnk/lnksnk/es/fieldmapping"
 	"github.com/lnksnk/lnksnk/fonts"
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ui"
@@ -27,16 +28,18 @@ import (
 
 func main() {
 	chn := make(chan bool, 1)
-	var mltyfsys = active.AciveFileSystem()
+	var mltyfsys = active.AciveFileSystem(func(cde ...interface{}) (prgm interface{}, err error) {
+		return es.Compile("", ioext.NewBuffer(cde...).String(), false)
+	})
 	mltyfsys.CacheExtensions(".html", ".js", ".css", ".svg", ".woff2", ".woff", ".ttf", ".eot", ".sql")
 	mltyfsys.DefaultExtensions(".html", ".js", ".json", ".css")
 	mltyfsys.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
-	mltyfsys.Map("/embedding")
-	mltyfsys.Map("/", "C:/GitHub/lnksnk.github.io", true)
-	mltyfsys.Map("/etl", "C:/GitHub/lnketl", true)
+	//mltyfsys.Map("/embedding")
+	//mltyfsys.Map("/", "C:/GitHub/lnksnk.github.io", true)
+	mltyfsys.Map("/etl", "C:/projects/cim", true)
 	mltyfsys.Map("/media", "C:/movies", true)
-	mltyfsys.Set("/embedding/embed.html", `<h2><@print("embed");@></h2>`)
-	mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
+	//mltyfsys.Set("/embedding/embed.html", `<h2><@print("embed");@></h2>`)
+	//mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
 	glbldbms := dbms.NewDBMS(mltyfsys)
 	dbdrivers := map[string][]interface{}{}
 	dbdrivers["postgres"] = []interface{}{dbms.InvokeDBFunc(postgres.InvokeDB), dbms.ParseSqlArgFunc(postgres.ParseSqlParam)}
@@ -80,8 +83,8 @@ func main() {
 		fmt.Println(time.Now())
 	}
 	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
-	fonts.EmbedFonts(mltyfsys)
-	ui.EmbedUiJS(mltyfsys)
+	fonts.ImportFonts(mltyfsys)
+	ui.ImportUiJS(mltyfsys)
 	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var inout = serveio.NewReaderWriter(serveio.NewReader(r), serveio.NewWriter(w))
 		defer inout.Close()
@@ -138,7 +141,7 @@ func main() {
 				})
 				defer dbhndl.Close()
 				var session = map[string]interface{}{"db": dbhndl, "fs": mltyfsys}
-				vm.SetFieldNameMapper(es.NewFieldMapper(es.UncapFieldNameMapper()))
+				vm.SetFieldNameMapper(fieldmapping.NewFieldMapper(es.UncapFieldNameMapper()))
 				vm.Set("$", session)
 				defer func() {
 					vm = nil

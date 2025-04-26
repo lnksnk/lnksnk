@@ -1,6 +1,19 @@
-package es
+package fieldmapping
 
-import "reflect"
+import (
+	"reflect"
+	"strings"
+)
+
+type FieldNameMapper interface {
+	// FieldName returns a JavaScript name for the given struct field in the given type.
+	// If this method returns "" the field becomes hidden.
+	FieldName(t reflect.Type, f reflect.StructField) string
+
+	// MethodName returns a JavaScript name for the given method in the given type.
+	// If this method returns "" the method becomes hidden.
+	MethodName(t reflect.Type, m reflect.Method) string
+}
 
 type FieldMapper struct {
 	fldmppr FieldNameMapper
@@ -19,6 +32,10 @@ func (fldmppr *FieldMapper) FieldName(t reflect.Type, f reflect.StructField) (fl
 		fldnme = uncapitalize(f.Name) // fldmppr.fldmppr.FieldName(t, f)
 	}
 	return
+}
+
+func uncapitalize(s string) string {
+	return strings.ToLower(s[0:1]) + s[1:]
 }
 
 // MethodName returns a JavaScript name for the given method in the given type.

@@ -13,6 +13,7 @@ import (
 	"github.com/lnksnk/lnksnk/fsutils"
 	"github.com/lnksnk/lnksnk/iorw"
 
+	"github.com/lnksnk/lnksnk/es/fieldmapping"
 	"github.com/lnksnk/lnksnk/es/parser"
 )
 
@@ -75,7 +76,7 @@ func NewVM(a ...interface{}) (vm *VM) {
 			return !yield(ix, arg)
 		})
 	})
-	var fldmppr = es.NewFieldMapper(es.UncapFieldNameMapper())
+	var fldmppr = fieldmapping.NewFieldMapper(es.UncapFieldNameMapper())
 	vm.vm.SetFieldNameMapper(fldmppr)
 	for stngk, stngv := range stngs {
 		if stngv != nil {
