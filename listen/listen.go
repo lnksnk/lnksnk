@@ -16,42 +16,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lnksnk/lnksnk/concurrent"
+	//"github.com/lnksnk/lnksnk/concurrent"
+	"github.com/lnksnk/lnksnk/ioext"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
 
-var listerens = concurrent.NewMap()
+var listeners = ioext.MapIterator[string, *http.Server]()
 
 func ShutdownAll() {
-	for key, value := range listerens.Iterate() {
-		if lstnr, _ := value.(*http.Server); lstnr != nil {
-			lstnr.Shutdown(context.Background())
-			fmt.Println("Shutdown - ", key)
-		}
+	for key, lstnr := range listeners.Iterate() {
+		lstnr.Shutdown(context.Background())
+		fmt.Println("Shutdown - ", key)
 	}
-	/*listerens.Range(func(key, value any) bool {
-		if lstnr, _ := value.(*http.Server); lstnr != nil {
-			lstnr.Shutdown(context.Background())
-			fmt.Println("Shutdown - ", key)
-		}
-		return true
-	})*/
 }
 
-func Shutdown(keys ...interface{}) {
+func Shutdown(keys ...string) {
 	if len(keys) > 0 {
-		keys = append(keys, func(delkeys []interface{}, delvalues []interface{}) {
-			for kn, k := range delkeys {
-				if lstnr, _ := delvalues[kn].(*http.Server); lstnr != nil {
-					lstnr.Shutdown(context.Background())
-					fmt.Println("Shutdown - ", k)
-				}
-			}
-		})
-		listerens.Del(keys...)
+		listeners.Delete(keys...)
 	}
 }
 
@@ -120,7 +104,7 @@ func GenerateTlsConfig(certhost, orgname string) (tslconf *tls.Config, err error
 	return
 }
 
-func (lsnt *listen) Shutdown(keys ...interface{}) {
+func (lsnt *listen) Shutdown(keys ...string) {
 	if lsnt != nil {
 		Shutdown(keys...)
 	}
@@ -211,9 +195,24 @@ dotcp:
 var DefaultHandler http.Handler = nil
 
 func init() {
-	go func() {
-		//httpsrv.Serve(lstnr)
-	}()
+	var lstnevnts = listeners.Events().(*ioext.MapIterateEvents[string, *http.Server])
+	lstnevnts.EventChanged = func(key string, prvsrvc, srvcs *http.Server) {
+		if prvsrvc != nil {
+			go prvsrvc.Shutdown(context.Background())
+		}
+	}
+	lstnevnts.EventDeleted = func(dlted map[string]*http.Server) {
+		for k, srvc := range dlted {
+			delete(dlted, k)
+			go srvc.Shutdown(context.Background())
+		}
+	}
+	lstnevnts.EventDisposed = func(dspsed map[string]*http.Server) {
+		for k, srvc := range dspsed {
+			delete(dspsed, k)
+			go srvc.Shutdown(context.Background())
+		}
+	}
 }
 
 // GenerateTestCertificate generates a test certificate and private key based on the given host.
