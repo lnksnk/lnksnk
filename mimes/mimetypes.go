@@ -7,17 +7,17 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lnksnk/lnksnk/iorw"
+	"github.com/lnksnk/lnksnk/ioext"
 )
 
 //go:embed mimetypes.txt
 var mimetypescsv string
 
 // MimeTypesCSV - return Mime Types CSV reader
-var mimebuf = iorw.NewBuffer()
+var mimebuf = ioext.NewBuffer()
 var mimebuflck = &sync.RWMutex{}
 
-func MimeTypesCSV() *iorw.BuffReader {
+func MimeTypesCSV() *ioext.BuffReader {
 	if mimebuf.Size() == 0 {
 		func() {
 			mimebuflck.Lock()
