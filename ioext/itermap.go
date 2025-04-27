@@ -86,8 +86,6 @@ func MapIterator[K comparable, V any](a ...any) IterateMap[K, V] {
 }
 
 type itermap[K comparable, V any] struct {
-	//orgmp    map[K]V
-	//lck      sync.Mutex
 	orgsncmp *sync.Map
 	dpsemp   bool
 	mpevents IterateMapEvents[K, V]
@@ -102,15 +100,6 @@ func (imp *itermap[K, V]) Contains(name K) bool {
 	if imp == nil {
 		return false
 	}
-
-	/*imp.lck.Lock()
-	orgmp := imp.orgmp
-	if orgmp == nil {
-		imp.lck.Unlock()
-		return false
-	}
-	_, ok := orgmp[name]
-	imp.lck.Unlock()*/
 	_, ok := imp.orgsncmp.Load(name)
 	return ok
 }
@@ -139,26 +128,6 @@ func (imp *itermap[K, V]) Clear() {
 			go evtdeleted(tmp)
 		}
 	}
-
-	/*var tmp map[K]V
-	var evtdeleted func(map[K]V)
-	imp.lck.Lock()
-	orgmp := imp.orgmp
-	if mpevents := imp.mpevents; mpevents != nil {
-		tmp = map[K]V{}
-		evtdeleted = mpevents.Deleted
-	}
-
-	for k, v := range orgmp {
-		if evtdeleted != nil {
-			tmp[k] = v
-		}
-		delete(orgmp, k)
-	}
-	imp.lck.Unlock()
-	if len(tmp) > 0 && evtdeleted != nil {
-		evtdeleted(tmp)
-	}*/
 }
 
 // Delete implements IterateMap.
@@ -207,29 +176,6 @@ func (imp *itermap[K, V]) Delete(name ...K) {
 			go evtdeleted(tmp)
 		}
 	}
-
-	/*var tmp map[K]V
-	var evtdeleted func(map[K]V)
-	imp.lck.Lock()
-	orgmp := imp.orgmp
-	if orgmp == nil {
-		imp.lck.Unlock()
-		return
-	}
-	if mpevents := imp.mpevents; mpevents != nil {
-		tmp = map[K]V{}
-		evtdeleted = mpevents.Deleted
-	}
-	for _, k := range name {
-		if evtdeleted != nil {
-			tmp[k] = orgmp[k]
-		}
-		delete(orgmp, k)
-	}
-	imp.lck.Unlock()
-	if evtdeleted != nil {
-		go evtdeleted(tmp)
-	}*/
 }
 
 // Get implements IterateMap.
@@ -246,18 +192,6 @@ func (imp *itermap[K, V]) Get(name K) (value V, found bool) {
 			value, _ = v.(V)
 		}
 	}
-	/*if imp == nil || imp.orgmp == nil {
-		return
-	}
-
-	imp.lck.Lock()
-	orgmp := imp.orgmp
-	if orgmp == nil {
-		imp.lck.Unlock()
-		return
-	}
-	value, found = imp.orgmp[name]
-	imp.lck.Unlock()*/
 	return
 }
 
@@ -285,39 +219,16 @@ func (imp *itermap[K, V]) Set(name K, value V) {
 			go evtchngd(name, prvval, value)
 		}
 	}
-
-	/*imp.lck.Lock()
-	orgmp := imp.orgmp
-	if mpevents := imp.mpevents; mpevents != nil {
-		evtchngd = mpevents.Changed
-	}
-	if orgmp == nil {
-		imp.orgmp = map[K]V{name: value}
-		imp.dpsemp = true
-		imp.lck.Unlock()
-		if evtchngd != nil {
-			evtchngd(name, prvval, value)
-		}
-		return
-	}
-	prvval = orgmp[name]
-	orgmp[name] = value
-	imp.lck.Unlock()
-	if evtchngd != nil {
-		go evtchngd(name, prvval, value)
-	}*/
 }
 
 func (imp *itermap[K, V]) Events() (events IterateMapEvents[K, V]) {
 	if imp == nil {
 		return nil
 	}
-	//imp.lck.Lock()
 	if events = imp.mpevents; events == nil {
 		imp.mpevents = &MapIterateEvents[K, V]{}
 		events = imp.mpevents
 	}
-	//imp.lck.Unlock()
 	return
 }
 
@@ -333,22 +244,6 @@ func (imp *itermap[K, V]) Iterate() func(yield func(key K, value V) bool) {
 		orgsncmp.Range(func(key, value any) bool {
 			return yield(key.(K), value.(V))
 		})
-		/*tmp := map[K]V{}
-		imp.lck.Lock()
-		orgmp := imp.orgmp
-		if orgmp == nil {
-			imp.lck.Unlock()
-			return
-		}
-		for k, v := range orgmp {
-			tmp[k] = v
-		}
-		imp.lck.Unlock()
-		for k, v := range tmp {
-			if !yield(k, v) {
-				return
-			}
-		}*/
 	}
 }
 
@@ -389,32 +284,6 @@ func (imp *itermap[K, V]) Close() {
 			}
 		}
 	}
-	/*var evtdispose func(map[K]V)
-	var tmp map[K]V
-	imp.lck.Lock()
-	orgmp := imp.orgmp
-	mpevents := imp.mpevents
-	imp.mpevents = nil
-	imp.orgmp = nil
-	if imp.dpsemp {
-		imp.dpsemp = false
-		if orgmp != nil {
-			if mpevents != nil {
-				if len(orgmp) > 0 {
-					tmp = make(map[K]V)
-					for k, v := range orgmp {
-						tmp[k] = v
-					}
-					evtdispose = mpevents.Disposed
-				}
-			}
-			imp.DisposeMap(orgmp)
-		}
-	}
-	imp.lck.Unlock()
-	if evtdispose != nil {
-		go evtdispose(tmp)
-	}*/
 	runtime.SetFinalizer(imp, nil)
 }
 
