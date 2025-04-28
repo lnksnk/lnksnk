@@ -24,6 +24,12 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+type Listening interface {
+	Serve(network string, addr string, tlsconf ...*tls.Config)
+	ServeTLS(network string, addr string, orgname string, tlsconf ...*tls.Config)
+	Shutdown(...string)
+}
+
 var listeners = ioext.MapIterator[string, *http.Server]()
 
 func ShutdownAll() {
