@@ -299,7 +299,7 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 			}
 			if fndspace {
 				if len(c.tstname) > 0 {
-					tstatrbs := nextattrbprsr("[$", "$]", c.parsing.readRune)
+					tstatrbs := nextattrbprsr(c.tstlvl, "[$", "$]", c.parsing.readRune)
 					tstatrbs.eventDispose = c.clearAttibutes
 					tstatrbs.raw = append(tstatrbs.raw, r)
 					c.tstatrbs = tstatrbs
