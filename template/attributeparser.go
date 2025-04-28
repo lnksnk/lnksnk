@@ -113,7 +113,6 @@ func (attrbprsr *attributeparser) passiveDone() {
 	if attrbprsr == nil {
 		return
 	}
-
 }
 
 func (attrbprsr *attributeparser) Close() (err error) {
@@ -164,6 +163,17 @@ func (attrbprsr *attributeparser) activeDone() (reset bool) {
 	}
 	if atvrnes := attrbprsr.atvrnes; len(attrbprsr.atvrnes) > 0 {
 		defer func() { attrbprsr.atvrnes = nil }()
+		if attrbprsr.tstlvl == AttribAssign {
+			name, value := attrbprsr.tstname, attrbprsr.atvrnes
+			attrbprsr.tstname = nil
+			attrbprsr.tstvalue = nil
+			attrbprsr.tstlvl = AttribContinue
+			attrbprsr.tstprvr = 0
+			attrbprsr.txtprs = nil
+			attrbprsr.atvrnes = nil
+			attrbprsr.ParseValue(name, value, len(value) == 0)
+			return
+		}
 		attrbprsr.ParseValue([]rune("pre"), atvrnes, false)
 	}
 	return
