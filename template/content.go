@@ -299,7 +299,7 @@ func (c *contentparsing) postRunes(canreset bool, rns ...rune) (reset bool) {
 			}
 			if fndspace {
 				if len(c.tstname) > 0 {
-					tstatrbs := nextattrbprsr(c.tstlvl, "[$", "$]", c.parsing.readRune)
+					tstatrbs := nextattrbprsr("[$", "$]", c.parsing.readRune)
 					tstatrbs.eventDispose = c.clearAttibutes
 					tstatrbs.raw = append(tstatrbs.raw, r)
 					c.tstatrbs = tstatrbs
@@ -354,10 +354,30 @@ func (c *contentparsing) setArributeValue(name []rune, value interface{}, empty 
 	}
 	lstattrbs := c.lstattrbs
 	if lstattrbs == nil {
-		c.lstattrbs = map[string]interface{}{string(name): value}
+		lstattrbs = map[string]interface{}{string(name): value}
+		c.lstattrbs = lstattrbs
+	}
+	if len(name) > 0 {
+		lstattrbs[string(name)] = value
 		return
 	}
-	lstattrbs[string(name)] = value
+	if len(name) == 0 && !empty {
+		tstnme := "pre"
+		if c.tstlvl == ElemEnd {
+			tstnme = "post"
+		}
+		if vlrns, _ := value.([]int32); len(vlrns) > 0 {
+			crntvl, _ := lstattrbs[tstnme].([]int32)
+			if len(crntvl) == 0 {
+				lstattrbs[tstnme] = append([]rune{}, vlrns...)
+				return
+			}
+			crntvl = append(crntvl, vlrns...)
+			lstattrbs[tstnme] = append([]rune{}, crntvl...)
+		}
+		return
+	}
+
 }
 
 func validElmchar(cr rune) bool {
