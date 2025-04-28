@@ -20,6 +20,7 @@ type attributeparser struct {
 	rawl            int
 	invdl           bool
 	tstlvl          proplevel
+	tstelmlevl      ElemLevel
 	tstname         []rune
 	tstvalue        []rune
 	tstprvr         rune
@@ -174,13 +175,18 @@ func (attrbprsr *attributeparser) activeDone() (reset bool) {
 			attrbprsr.ParseValue(name, value, len(value) == 0)
 			return
 		}
-		attrbprsr.ParseValue([]rune("pre"), atvrnes, false)
+		attrbprsr.ParseValue(func() []rune {
+			if attrbprsr.tstelmlevl == ElemEnd {
+				return []rune("post")
+			}
+			return []rune("pre")
+		}(), atvrnes, false)
 	}
 	return
 }
 
-func nextattrbprsr(prelbl, postlbl string, readRune func() (rune, int, error), eofrns ...rune) (attrbprsr *attributeparser) {
-	attrbprsr = &attributeparser{Parsing: nextparsing(prelbl, postlbl, &textparsing{}, readRune)}
+func nextattrbprsr(elmlvl ElemLevel, prelbl, postlbl string, readRune func() (rune, int, error), eofrns ...rune) (attrbprsr *attributeparser) {
+	attrbprsr = &attributeparser{Parsing: nextparsing(prelbl, postlbl, &textparsing{}, readRune), tstelmlevl: elmlvl}
 	attrbprsr.txttst = &textparsing{}
 	parsing := attrbprsr.Parsing
 	parsing.EventPostRunes = attrbprsr.activeRunes
