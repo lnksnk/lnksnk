@@ -1,16 +1,18 @@
-goja
+ES
 ====
 
 ECMAScript 5.1(+) implementation in Go.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/lnksnk/lnksnk/es.svg)](https://pkg.go.dev/github.com/lnksnk/lnksnk/es)
 
-Goja is an implementation of ECMAScript 5.1 in pure Go with emphasis on standard compliance and
+ES is an implementation of ECMAScript 5.1 in pure Go with emphasis on standard compliance and
 performance.
+
+This project is a fork of goja.
 
 This project was largely inspired by [otto](https://github.com/robertkrimen/otto).
 
-The minimum required Go version is 1.20.
+The minimum required Go version is 1.23.
 
 Features
 --------
@@ -98,7 +100,7 @@ It gives you a much better control over execution environment so can be useful f
 
 ### Is it goroutine-safe?
 
-No. An instance of goja.Runtime can only be used by a single goroutine
+No. An instance of  es.Runtime can only be used by a single goroutine
 at a time. You can create as many instances of Runtime as you like but
 it's not possible to pass object values between runtimes.
 
@@ -141,7 +143,7 @@ Basic Example
 Run JavaScript and get the result value.
 
 ```go
-vm := goja.New()
+vm :=  es.New()
 v, err := vm.RunString("2 + 2")
 if err != nil {
     panic(err)
@@ -176,17 +178,17 @@ function sum(a, b) {
 }
 `
 
-vm := goja.New()
+vm :=  es.New()
 _, err := vm.RunString(SCRIPT)
 if err != nil {
     panic(err)
 }
-sum, ok := goja.AssertFunction(vm.Get("sum"))
+sum, ok :=  es.AssertFunction(vm.Get("sum"))
 if !ok {
     panic("Not a function")
 }
 
-res, err := sum(goja.Undefined(), vm.ToValue(40), vm.ToValue(2))
+res, err := sum( es.Undefined(), vm.ToValue(40), vm.ToValue(2))
 if err != nil {
     panic(err)
 }
@@ -201,7 +203,7 @@ function sum(a, b) {
 }
 `
 
-vm := goja.New()
+vm :=  es.New()
 _, err := vm.RunString(SCRIPT)
 if err != nil {
     panic(err)
@@ -227,7 +229,7 @@ the standard JavaScript naming convention, so if you need to make your JS code l
 dealing with a 3rd party library, you can use a [FieldNameMapper](https://pkg.go.dev/github.com/lnksnk/lnksnk/es#FieldNameMapper):
 
 ```go
-vm := goja.New()
+vm :=  es.New()
 vm.SetFieldNameMapper(TagFieldNameMapper("json", true))
 type S struct {
     Field int `json:"field"`
@@ -244,7 +246,7 @@ There are two standard mappers: [TagFieldNameMapper](https://pkg.go.dev/github.c
 Native Constructors
 -------------------
 
-In order to implement a constructor function in Go use `func (goja.ConstructorCall) *goja.Object`.
+In order to implement a constructor function in Go use `func ( es.ConstructorCall) * es.Object`.
 See [Runtime.ToValue()](https://pkg.go.dev/github.com/lnksnk/lnksnk/es#Runtime.ToValue) documentation for more details.
 
 Regular Expressions
@@ -259,7 +261,7 @@ Any exception thrown in JavaScript is returned as an error of type *Exception. I
 by using the Value() method:
 
 ```go
-vm := goja.New()
+vm :=  es.New()
 _, err := vm.RunString(`
 
 throw("Test");
@@ -284,7 +286,7 @@ func Test() {
     panic(vm.ToValue("Error"))
 }
 
-vm = goja.New()
+vm =  es.New()
 vm.Set("Test", Test)
 _, err := vm.RunString(`
 
@@ -315,7 +317,7 @@ func TestInterrupt(t *testing.T) {
     }
     `
 
-    vm := goja.New()
+    vm :=  es.New()
     time.AfterFunc(200 * time.Millisecond, func() {
         vm.Interrupt("halt")
     })
