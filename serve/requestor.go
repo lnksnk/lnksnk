@@ -823,7 +823,7 @@ var CACHING = concurrent.NewMap()
 type ListenApi interface {
 	Serve(network string, addr string, tlsconf ...*tls.Config)
 	ServeTLS(network string, addr string, orgname string, tlsconf ...*tls.Config)
-	Shutdown(...interface{})
+	Shutdown(...string)
 }
 
 var LISTEN ListenApi = nil
