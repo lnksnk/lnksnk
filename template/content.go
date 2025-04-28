@@ -364,6 +364,18 @@ func validElmchar(cr rune) bool {
 	return ('a' <= cr && cr <= 'z') || ('A' <= cr && cr <= 'Z') || cr == ':' || cr == '.' || cr == '-' || cr == '_' || ('0' <= cr && cr <= '9')
 }
 
+func validNameChar(prvr, r rune) (valid bool) {
+	if ioext.IsSpace(r) {
+		return false
+	}
+	if prvr > 0 {
+		valid = validElmchar(prvr) && validElmchar(r)
+		return
+	}
+	valid = validElmchar(r)
+	return
+}
+
 func validElemChar(prvr, r rune, funcspace ...func(rune)) (valid bool) {
 	if ioext.IsSpace(r) {
 		if len(funcspace) > 0 && funcspace[0] != nil {
@@ -386,7 +398,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 		return
 	}
 	if attrbs := c.attrbs; attrbs != nil {
-		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, "::", "::").Runes())
+		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, validNameChar, "::", "::").Runes())
 	}
 	c.tstname = nil
 	c.tstlvl = ElemUnkown
@@ -491,7 +503,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 				attrbs["p-root"] = pgec.root
 				attrbs["p-base"] = pgec.base
 			}
-			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, "[#", "#]")
+			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, validNameChar, "[#", "#]")
 			c.m.Parse(mps)
 			nxtc.Close()
 		}
@@ -548,7 +560,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 			}
 			c.resetCdeParsing()
 			c.elmlvl = ElemSingle
-			c.m.Parse(ioext.MapReplaceReader(c.fi.Reader(), attrbs, "[#", "#]"))
+			c.m.Parse(ioext.MapReplaceReader(c.fi.Reader(), attrbs, validNameChar, "[#", "#]"))
 			c.Close()
 			return
 		}
