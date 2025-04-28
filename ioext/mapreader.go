@@ -72,7 +72,7 @@ var (
 	})}
 )
 
-func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...string) (mprdr MapReader) {
+func MapReplaceReader(in interface{}, mp map[string]interface{}, a ...interface{}) (mprdr MapReader) {
 	var readrune, _ = in.(func() (rune, int, error))
 	if readrune == nil {
 		if r, rk := in.(io.Reader); rk {
@@ -145,11 +145,34 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, prepost ...stri
 		}
 		return 0
 	})
+	var validatnamerune func(prvr, r rune) bool
+	var prepost []string
+	for _, d := range a {
+		if vdlrd, vdlrk := d.(func(rune, rune) bool); vdlrk {
+			if validatnamerune == nil && vdlrd != nil {
+				validatnamerune = vdlrd
+			}
+			continue
+		}
+		if prs, prsk := d.(string); prsk {
+			if prs == "" {
+				continue
+			}
+			if len(prepost) < 2 {
+				prepost = append(prepost, prs)
+			}
+		}
+	}
+	if validatnamerune == nil {
+		validatnamerune = func(prvr, r rune) bool {
+			return true
+		}
+	}
 	if len(prepost) == 0 {
-		return &mapreader{mp: mp, keys: keys, orgreadrne: readrune}
+		return &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}
 	}
 	if len(prepost) > 0 && prepost[0] != "" && prepost[1] != "" {
-		return &mapprepostreader{mapreader: &mapreader{mp: mp, keys: keys, orgreadrne: readrune}, keys: keys, mnklen: mnklen, mxklen: mxklen, pre: []rune(prepost[0]), prel: len([]rune(prepost[0])), post: []rune(prepost[1]), postl: len([]rune(prepost[1]))}
+		return &mapprepostreader{mapreader: &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}, keys: keys, mnklen: mnklen, mxklen: mxklen, pre: []rune(prepost[0]), prel: len([]rune(prepost[0])), post: []rune(prepost[1]), postl: len([]rune(prepost[1]))}
 	}
 	return
 }
@@ -161,6 +184,7 @@ type mapreader struct {
 	bfrdr      io.RuneReader
 	mp         map[string]interface{}
 	keys       [][]rune
+	vldchr     func(rune, rune) bool
 }
 
 // Close implements MapReader.
@@ -172,6 +196,7 @@ func (m *mapreader) Close() error {
 		m.orgreadrne = nil
 		m.orgrnes = nil
 		m.mp = nil
+		m.vldchr = nil
 	}
 	return nil
 }
@@ -574,7 +599,7 @@ func (mppr *mapprepostreader) ReadRune() (r rune, size int, err error) {
 					}
 					goto rdnxt
 				}
-				if mppr.posti > 0 {
+				if invld := !mppr.vldchr(0, r); invld || mppr.posti > 0 {
 					mppr.bfrnes = append(mppr.bfrnes, mppr.pre...)
 					mppr.prei = 0
 					mppr.bfrnes = append(mppr.bfrnes, mppr.tstkeyrns...)
