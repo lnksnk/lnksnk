@@ -38,8 +38,10 @@ func importDeclFromAst(expr *ast.ImportDeclaration) (imprtdcl _importDecl) {
 		return
 	}
 	var namedimports []_namedImport
-	for _, nmdimprt := range expr.ImportClause.NamedImports.ImportsList {
-		namedimports = append(namedimports, _namedImport{identifier: nmdimprt.IdentifierName, alias: nmdimprt.Alias})
+	if nmimprts := expr.ImportClause.NamedImports; nmimprts != nil {
+		for _, nmdimprt := range nmimprts.ImportsList {
+			namedimports = append(namedimports, _namedImport{identifier: nmdimprt.IdentifierName, alias: nmdimprt.Alias})
+		}
 	}
 	var importclause = _importClause{}
 	if expr.ImportClause.ImportedDefaultBinding != nil {
