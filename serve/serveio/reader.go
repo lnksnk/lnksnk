@@ -264,8 +264,18 @@ func NewContextPathReader(ctx context.Context, in interface{}, path string) (rdr
 	if rdr.ctx != nil {
 		if lcaddr, _ := rdr.ctx.Value(http.LocalAddrContextKey).(net.Addr); lcaddr != nil {
 			rdr.lkladdr = lcaddr.String()
+		} else if httpr != nil {
+			if httprctx := httpr.Context(); httprctx != nil {
+				if lcaddr, _ := httprctx.Value(http.LocalAddrContextKey).(net.Addr); lcaddr != nil {
+					rdr.lkladdr = lcaddr.String()
+				}
+			}
 		}
 		rdr.ctx, rdr.ctxcnl = context.WithCancel(rdr.ctx)
+	} else if httprctx := httpr.Context(); httprctx != nil {
+		if lcaddr, _ := httprctx.Value(http.LocalAddrContextKey).(net.Addr); lcaddr != nil {
+			rdr.lkladdr = lcaddr.String()
+		}
 	}
 	if httpr != nil {
 		rdr.path = httpr.URL.Path
