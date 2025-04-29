@@ -10,6 +10,7 @@ type IterateMapEvents[K comparable, V any] interface {
 	Deleted(map[K]V)
 	Changed(K, V, V)
 	Disposed(map[K]V)
+	Add(K, V)
 }
 
 type IterateMap[K comparable, V any] interface {
@@ -27,6 +28,7 @@ type MapIterateEvents[K comparable, V any] struct {
 	EventDeleted  func(map[K]V)
 	EventDisposed func(map[K]V)
 	EventChanged  func(K, V, V)
+	EventAdd      func(K, V)
 }
 
 func (mpevents *MapIterateEvents[K, V]) Disposed(mp map[K]V) {
@@ -56,31 +58,18 @@ func (mpevents *MapIterateEvents[K, V]) Changed(name K, old, new V) {
 	}
 }
 
+func (mpevents *MapIterateEvents[K, V]) Add(name K, new V) {
+	if mpevents == nil {
+		return
+	}
+	if evt := mpevents.EventAdd; evt != nil {
+		evt(name, new)
+	}
+}
+
 func MapIterator[K comparable, V any](a ...any) IterateMap[K, V] {
-	var orgmap map[K]V
-	intmp := false
-	var mpevents IterateMapEvents[K, V]
-	for d := range a {
-		if orgmapd, dok := interface{}(d).(map[K]V); dok {
-			if dok {
-				if orgmap == nil {
-					orgmap = orgmapd
-				}
-				continue
-			}
-		}
-		if mpeventsd, dok := interface{}(d).(IterateMapEvents[K, V]); dok {
-			if mpevents == nil {
-				mpevents = mpeventsd
-			}
-			continue
-		}
-	}
-	if orgmap == nil {
-		orgmap = map[K]V{}
-		intmp = true
-	}
-	itrmp := &itermap[K, V]{orgsncmp: &sync.Map{}, dpsemp: intmp, mpevents: mpevents}
+
+	itrmp := &itermap[K, V]{orgsncmp: &sync.Map{}}
 
 	runtime.SetFinalizer(itrmp, finalizeItermap[K, V])
 	return itrmp
@@ -88,7 +77,6 @@ func MapIterator[K comparable, V any](a ...any) IterateMap[K, V] {
 
 type itermap[K comparable, V any] struct {
 	orgsncmp *sync.Map
-	dpsemp   bool
 	mpevents IterateMapEvents[K, V]
 }
 
@@ -204,21 +192,28 @@ func (imp *itermap[K, V]) Set(name K, value V) {
 	if imp == nil {
 		return
 	}
-	var evtchngd func(K, V, V)
+
 	var prvval V
 
-	if mpevents := imp.mpevents; mpevents != nil {
-		evtchngd = mpevents.Changed
-	}
+	mpevents := imp.mpevents
 
 	if orgsncmp := imp.orgsncmp; orgsncmp != nil {
 		if prvv, prvok := orgsncmp.Load(name); prvok {
 			prvval, _ = prvv.(V)
+			if pval, val := reflect.ValueOf(prvval), reflect.ValueOf(value); !pval.Equal(val) {
+				orgsncmp.Store(name, value)
+				if mpevents != nil {
+					if evtchngd := mpevents.Changed; evtchngd != nil {
+						go evtchngd(name, prvval, value)
+					}
+				}
+			}
+			return
 		}
 		orgsncmp.Store(name, value)
-		if pval, val := reflect.ValueOf(prvval), reflect.ValueOf(value); !pval.Equal(val) {
-			if evtchngd != nil {
-				go evtchngd(name, prvval, value)
+		if mpevents != nil {
+			if evtadd := mpevents.Add; evtadd != nil {
+				go evtadd(name, value)
 			}
 		}
 	}
@@ -266,25 +261,22 @@ func (imp *itermap[K, V]) Close() {
 	imp.mpevents = nil
 	imp.orgsncmp = nil
 
-	if imp.dpsemp {
-		imp.dpsemp = false
-		if orgsncmp != nil {
-			var evtdispose func(map[K]V)
-			var tmp map[K]V
-			if mpevents != nil {
-				tmp = map[K]V{}
-				evtdispose = mpevents.Disposed
+	if orgsncmp != nil {
+		var evtdispose func(map[K]V)
+		var tmp map[K]V
+		if mpevents != nil {
+			tmp = map[K]V{}
+			evtdispose = mpevents.Disposed
+		}
+		orgsncmp.Range(func(key, value any) bool {
+			if evtdispose != nil {
+				tmp[key.(K)] = value.(V)
 			}
-			orgsncmp.Range(func(key, value any) bool {
-				if evtdispose != nil {
-					tmp[key.(K)] = value.(V)
-				}
-				orgsncmp.Delete(key)
-				return true
-			})
-			if len(tmp) > 0 && evtdispose != nil {
-				go evtdispose(tmp)
-			}
+			orgsncmp.Delete(key)
+			return true
+		})
+		if len(tmp) > 0 && evtdispose != nil {
+			go evtdispose(tmp)
 		}
 	}
 	runtime.SetFinalizer(imp, nil)

@@ -70,6 +70,11 @@ func (c *connections) Register(alias string, driver string, datasource string, a
 	return false, fmt.Errorf("Unbale to register connection %s", alias)
 }
 
+// Add implements Connections.
+func (c *connections) Add(alias string, cn Connection) {
+
+}
+
 // Changed implements Connections.
 func (c *connections) Changed(alias string, prvcn Connection, cn Connection) {
 
@@ -194,6 +199,7 @@ func NewConnections(drvrs Drivers, fsys ...fs.MultiFileSystem) Connections {
 		itrevnts.EventChanged = cnctns.Changed
 		itrevnts.EventDeleted = cnctns.Deleted
 		itrevnts.EventDisposed = cnctns.Disposed
+		itrevnts.EventAdd = cnctns.Add
 	}
 	return cnctns
 }

@@ -43,6 +43,11 @@ func (dvrs *drivers) Register(alias string, a ...interface{}) (dvr Driver) {
 	return
 }
 
+// Add implements Drivers.
+func (dvrs *drivers) Add(string, Driver) {
+
+}
+
 // Changed implements Drivers.
 func (dvrs *drivers) Changed(string, Driver, Driver) {
 
@@ -146,7 +151,8 @@ func NewDrivers() Drivers {
 	if itrevnts, _ := drvs.Events().(*ioext.MapIterateEvents[string, Driver]); itrevnts != nil {
 		itrevnts.EventChanged = drvs.Changed
 		itrevnts.EventDeleted = drvs.Deleted
-		itrevnts.EventDisposed = itrevnts.Disposed
+		itrevnts.EventDisposed = drvs.Disposed
+		itrevnts.EventAdd = drvs.Add
 	}
 	return drvs
 }
