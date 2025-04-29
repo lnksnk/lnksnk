@@ -397,18 +397,25 @@ func internsync(fsys fs.MultiFileSystem, chdinfos CachedInfos, path string, unma
 	} else if strings.HasSuffix(tstname, tstext) {
 		tstname = tstname[:len(tstname)-len(tstext)]
 	}
+	tsnmel := len(tstname)
 	if atvfsys, _ := fsys.(*activeFileSystem); atvfsys != nil {
 		for _, chdfis := range chdinfos.Iterate() {
 			if tstchdfi, _ := chdfis.(*cachedinfo); tstchdfi != nil {
 				if unmthd := tstchdfi.unmtchd; len(unmthd) > 0 {
-					if unmthd[tstname] {
+					if bsel := len(tstchdfi.base); bsel < tsnmel && tstname[:bsel] == strings.Replace(tstchdfi.base, "/", ":", -1) && unmthd[tstname[bsel-1:]] {
+						if unmatched {
+							internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
+						}
+					} else if unmthd[tstname] {
 						if unmatched {
 							internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
 						}
 					}
 				}
 				if finfos := tstchdfi.finfos; len(finfos) > 0 {
-					if finfos[tstname] != nil {
+					if bsel := len(tstchdfi.base); bsel < tsnmel && tstname[:bsel] == strings.Replace(tstchdfi.base, "/", ":", -1) && finfos[tstname[bsel-1:]] != nil {
+						internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
+					} else if finfos[tstname] != nil {
 						internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
 					}
 				}
