@@ -1,6 +1,7 @@
 package ioext
 
 import (
+	"reflect"
 	"runtime"
 	"sync"
 )
@@ -215,8 +216,10 @@ func (imp *itermap[K, V]) Set(name K, value V) {
 			prvval, _ = prvv.(V)
 		}
 		orgsncmp.Store(name, value)
-		if evtchngd != nil {
-			go evtchngd(name, prvval, value)
+		if pval, val := reflect.ValueOf(prvval), reflect.ValueOf(value); !pval.Equal(val) {
+			if evtchngd != nil {
+				go evtchngd(name, prvval, value)
+			}
 		}
 	}
 }
