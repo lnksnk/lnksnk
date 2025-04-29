@@ -35,7 +35,7 @@ type chachedinfos struct {
 }
 
 func NewCachedInfos(chdmp map[string]CachedInfo) (chdinfos *chachedinfos) {
-	chdinfos = &chachedinfos{CachedInfos: ioext.MapIterator[string, CachedInfo](chdmp), MapIterateEvents: &ioext.MapIterateEvents[string, CachedInfo]{}}
+	chdinfos = &chachedinfos{CachedInfos: ioext.MapIterator[string, CachedInfo](), MapIterateEvents: &ioext.MapIterateEvents[string, CachedInfo]{}}
 	return
 }
 
