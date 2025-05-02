@@ -144,3 +144,27 @@ func ImportModule(mod interface{}, rt *Runtime, namedimports ...[][]string) bool
 	}
 	return false
 }
+
+func ModuleFromProgramAndLink(prgrm interface{}, resolveModule func(refscriptormod interface{}, modspecifier string) (rlsvdmodrec interface{}, rslvderr error)) (modrec ModuleRecord, err error) {
+	if astpgrm, astpgrmk := prgrm.(*ast.Program); astpgrmk {
+		modrec, err = ModuleFromAST(astpgrm, func(referencingScriptOrModule interface{}, modspecifier string) (ModuleRecord, error) {
+			if resolveModule != nil {
+				rslvdmodrec, rslvderr := resolveModule(referencingScriptOrModule, modspecifier)
+				if rslvderr != nil {
+					return nil, rslvderr
+				}
+				if modrec, _ = rslvdmodrec.(ModuleRecord); modrec != nil {
+					err = modrec.Link()
+					return modrec, err
+				}
+			}
+			return nil, fmt.Errorf("unable to load specifier %s", modspecifier)
+		})
+		if err == nil && modrec != nil {
+			err = modrec.Link()
+		}
+		return
+	}
+
+	return
+}
