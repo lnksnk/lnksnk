@@ -1159,9 +1159,9 @@ func (c *compiler) compile(in *ast.Program, strict, inGlobal bool, evalVm *vm) {
 	c.createFunctionBindings(funcs)
 	numFuncs := len(scope.bindings)
 	if inGlobal && !ownVarScope {
-		if numFuncs == len(funcs) {
+		if numFuncs > 0 && numFuncs == len(funcs) {
 			c.compileFunctionsGlobalAllUnique(funcs...)
-		} else {
+		} else if len(funcs) > 0 {
 			c.compileFunctionsGlobal(funcs...)
 		}
 	}
