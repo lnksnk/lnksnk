@@ -2,6 +2,7 @@ package active
 
 import (
 	"context"
+	"fmt"
 	"io"
 	gofs "io/fs"
 	"path/filepath"
@@ -60,6 +61,7 @@ type activeFileSystem struct {
 }
 
 type cachedinfo struct {
+	//chdinfos *chachedinfos
 	finfos map[string]fs.FileInfo
 	*fileinfo
 	unmtchd map[string]bool
@@ -436,12 +438,26 @@ func internparse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi CachedInfo, p
 			var err error
 			chdfi.prgm, err = compile(chdfi.code)
 			if err != nil {
+				fmt.Println("err:" + err.Error())
+				cdelines := ""
+				for i, ln := range strings.Split(chdfi.code.String(), "\n") {
+					cdelines += fmt.Sprintf("%d %s\r\n", i+1, strings.TrimRightFunc(ln, ioext.IsSpace))
+				}
+				fmt.Println(cdelines)
+				fmt.Println()
 			}
 		}
 		chdfi.unmtchd = mrkptmplt.InvalidElements()
 		internsync(fsys, chdinfos, chdfi.path, true, compile)
 		return
 	}
+}
+
+func (atvfsys *activeFileSystem) CachedInfo(path string) (chdfi CachedInfo, err error) {
+	if atvfsys == nil {
+		return
+	}
+	return
 }
 
 func (atvfsys *activeFileSystem) Map(path ...interface{}) (fsys fs.FileSystem) {
@@ -464,7 +480,6 @@ func (atvfsys *activeFileSystem) compile(cde ...interface{}) (prgm interface{}, 
 	if cmple := atvfsys.cmple; cmple != nil {
 		return cmple(cde...)
 	}
-	//prgm, err = es.Compile("", ioext.NewBuffer(cde...).String(), false)
 	return
 }
 
