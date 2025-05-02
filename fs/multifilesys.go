@@ -130,6 +130,10 @@ func (mltyfsys *multifilesys) StatContext(ctx context.Context, path string) (fi 
 	fsystms := mltyfsys.fsystms
 	pthl := len(path)
 	pn := 0
+	if pthl >= 2 && path[:2] == "./" {
+		path = path[1:]
+		pthl--
+	}
 	for pn < pthl {
 		if path[pn] == '/' {
 		retry:
