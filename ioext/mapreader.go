@@ -72,7 +72,7 @@ var (
 	})}
 )
 
-func MapReplaceReader(in interface{}, mp map[string]interface{}, a ...interface{}) (mprdr MapReader) {
+func MapReplaceReader(in interface{}, mp map[string]interface{}, flshunmtchd func(string) bool, a ...interface{}) (mprdr MapReader) {
 	var readrune, _ = in.(func() (rune, int, error))
 	if readrune == nil {
 		if r, rk := in.(io.Reader); rk {
@@ -172,7 +172,12 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, a ...interface{
 		return &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}
 	}
 	if len(prepost) > 0 && prepost[0] != "" && prepost[1] != "" {
-		return &mapprepostreader{mapreader: &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}, keys: keys, mnklen: mnklen, mxklen: mxklen, pre: []rune(prepost[0]), prel: len([]rune(prepost[0])), post: []rune(prepost[1]), postl: len([]rune(prepost[1]))}
+		if flshunmtchd == nil {
+			flshunmtchd = func(s string) bool {
+				return false
+			}
+		}
+		return &mapprepostreader{mapreader: &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}, keys: keys, mnklen: mnklen, mxklen: mxklen, pre: []rune(prepost[0]), prel: len([]rune(prepost[0])), post: []rune(prepost[1]), postl: len([]rune(prepost[1])), flshunmtchd: flshunmtchd}
 	}
 	return
 }
@@ -235,35 +240,7 @@ func (m *mapreader) capture(key string) bool {
 		return false
 	}
 	if v, vk := m.mp[key]; vk {
-		if s, sk := v.(string); sk {
-			if s == "" {
-				return false
-			}
-			m.bfrnes = append(m.bfrnes, []rune(s)...)
-			return true
-		}
-		if int32r, int32k := v.([]int32); int32k {
-			if len(int32r) == 0 {
-				return false
-			}
-			m.bfrnes = append(m.bfrnes, int32r...)
-			return true
-		}
-		if b, bk := v.(*Buffer); bk {
-			if b.Empty() {
-				return false
-			}
-			m.bfrdr = b.Reader()
-			return true
-		}
-		if rdr, rdrk := v.(io.RuneReader); rdrk {
-			m.bfrdr = rdr
-			return true
-		}
-		if r, rk := v.(io.Reader); rk {
-			m.bfrdr = bufio.NewReader(r)
-			return true
-		}
+		return tobuf(m, v)
 	}
 	return false
 }
@@ -417,17 +394,19 @@ func (m *mapreader) String() string {
 
 type mapprepostreader struct {
 	*mapreader
-	pre       []rune
-	prei      int
-	pvr       rune
-	prel      int
-	post      []rune
-	posti     int
-	postl     int
-	tstkeyrns []rune
-	keys      [][]rune
-	mnklen    int
-	mxklen    int
+	pre         []rune
+	prei        int
+	pvr         rune
+	prel        int
+	post        []rune
+	posti       int
+	postl       int
+	tstkeyrns   []rune
+	flshunmtchd func(string) bool
+	//unmatchd    func(interface{}) interface{}
+	keys   [][]rune
+	mnklen int
+	mxklen int
 }
 
 func (mppr *mapprepostreader) Close() (err error) {
@@ -492,40 +471,38 @@ func (mppr *mapprepostreader) OrgRune() (r rune, size int, err error) {
 	return 0, 0, io.EOF
 }
 
-func (mppr *mapprepostreader) capture(key string) bool {
-	if mppr == nil || len(mppr.mp) == 0 {
+func tobuf(m *mapreader, v interface{}) bool {
+	if m == nil {
 		return false
 	}
-	if v, vk := mppr.mp[key]; vk {
-		if s, sk := v.(string); sk {
-			if s == "" {
-				return false
-			}
-			mppr.bfrnes = append(mppr.bfrnes, []rune(s)...)
-			return true
+	if s, sk := v.(string); sk {
+		if s == "" {
+			return false
 		}
-		if int32r, int32k := v.([]int32); int32k {
-			if len(int32r) == 0 {
-				return false
-			}
-			mppr.bfrnes = append(mppr.bfrnes, int32r...)
-			return true
+		m.bfrnes = append(m.bfrnes, []rune(s)...)
+		return true
+	}
+	if int32r, int32k := v.([]int32); int32k {
+		if len(int32r) == 0 {
+			return false
 		}
-		if b, bk := v.(*Buffer); bk {
-			if b.Empty() {
-				return false
-			}
-			mppr.bfrdr = b.Reader()
-			return true
+		m.bfrnes = append(m.bfrnes, int32r...)
+		return true
+	}
+	if b, bk := v.(*Buffer); bk {
+		if b.Empty() {
+			return false
 		}
-		if rdr, rdrk := v.(io.RuneReader); rdrk {
-			mppr.bfrdr = rdr
-			return true
-		}
-		if r, rk := v.(io.Reader); rk {
-			mppr.bfrdr = bufio.NewReader(r)
-			return true
-		}
+		m.bfrdr = b.Reader()
+		return true
+	}
+	if rdr, rdrk := v.(io.RuneReader); rdrk {
+		m.bfrdr = rdr
+		return true
+	}
+	if r, rk := v.(io.Reader); rk {
+		m.bfrdr = bufio.NewReader(r)
+		return true
 	}
 	return false
 }
@@ -592,6 +569,15 @@ func (mppr *mapprepostreader) ReadRune() (r rune, size int, err error) {
 							if mppr.capture(string(mppr.tstkeyrns)) {
 								mppr.tstkeyrns = nil
 								goto rdbf
+							}
+							if flshunmtchd := mppr.flshunmtchd; flshunmtchd != nil {
+								if flshunmtchd(string(mppr.tstkeyrns)) {
+									mppr.bfrnes = append(mppr.bfrnes, mppr.pre...)
+									mppr.bfrnes = append(mppr.bfrnes, mppr.tstkeyrns...)
+									mppr.tstkeyrns = nil
+									mppr.bfrnes = append(mppr.bfrnes, mppr.post...)
+									goto rdbf
+								}
 							}
 							mppr.tstkeyrns = nil
 						}
