@@ -169,6 +169,9 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 					return
 				}
 				if dbcn != nil {
+					if len(queryargs) == 0 {
+						queryargs = append(queryargs, []interface{}{})
+					}
 					dbrows, dbrowserr := dbcn.QueryContext(ctx, query[0], queryargs[0]...)
 					if err = dbrowserr; err == nil {
 						s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
