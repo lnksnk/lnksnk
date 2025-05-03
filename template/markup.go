@@ -78,8 +78,8 @@ func (m *markuptemplate) Parse(in interface{}) {
 			if c, ck := m.cntntprsngs[m.prsix]; ck {
 				if c != nil {
 					return ioext.MapReplaceReader(inrd, map[string]interface{}{
-						"p-root":   c.fi.Root(),
-						"p-base":   c.fi.Base(),
+						"p-root":   c.root,
+						"p-base":   c.base,
 						"p-e-root": c.elmroot,
 						"p-e-base": c.elmbase}, validNameChar, "[#", "#]")
 				}
