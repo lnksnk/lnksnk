@@ -161,19 +161,20 @@ func (attrbprsr *attributeparser) activeDone() (reset bool) {
 	if attrbprsr == nil {
 		return
 	}
-	if atvrnes := attrbprsr.atvrnes; len(attrbprsr.atvrnes) > 0 {
-		defer func() { attrbprsr.atvrnes = nil }()
-		if attrbprsr.tstlvl == AttribAssign {
-			name, value := attrbprsr.tstname, attrbprsr.atvrnes
-			attrbprsr.tstname = nil
-			attrbprsr.tstvalue = nil
-			attrbprsr.tstlvl = AttribContinue
-			attrbprsr.tstprvr = 0
-			attrbprsr.txtprs = nil
-			attrbprsr.atvrnes = nil
-			attrbprsr.ParseValue(name, value, len(value) == 0)
-			return
-		}
+	atvrnes := attrbprsr.atvrnes
+	defer func() { attrbprsr.atvrnes = nil }()
+	if attrbprsr.tstlvl == AttribAssign {
+		name, value := attrbprsr.tstname, attrbprsr.atvrnes
+		attrbprsr.tstname = nil
+		attrbprsr.tstvalue = nil
+		attrbprsr.tstlvl = AttribContinue
+		attrbprsr.tstprvr = 0
+		attrbprsr.txtprs = nil
+		attrbprsr.atvrnes = nil
+		attrbprsr.ParseValue(name, value, len(value) == 0)
+		return
+	}
+	if len(atvrnes) > 0 {
 		attrbprsr.ParseValue(nil, atvrnes, false)
 	}
 	return
