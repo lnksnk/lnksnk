@@ -533,7 +533,12 @@ func (c *contentparsing) matchPost() (reset bool) {
 		c.parsing.Reset()
 		c.resetTest(false)
 		fullname = strings.Replace(fullname, "..:", "", -1)
-		if c.m.prsix > 0 && c == c.m.cntntprsngs[c.m.prsix] && fullname == c.elmname && c.elmlvl == ElemStart {
+		if c.m.prsix > 0 && c == c.m.cntntprsngs[c.m.prsix] && (func() bool {
+			if fullname[0] == ':' && c.elmname == c.elmbase+fullname[1:] {
+				return true
+			}
+			return fullname == c.elmname
+		}() && c.elmlvl == ElemStart) {
 			if cde := c.cde; cde != nil {
 				cde.flushPsv()
 			}
