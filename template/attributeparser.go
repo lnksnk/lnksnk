@@ -44,7 +44,7 @@ func (attrbprsr *attributeparser) passiveRunes(rns ...rune) {
 				attrbprsr.tstlvl = AttribName
 				continue
 			}
-			if tstlvl == AttribContinue && fndspace {
+			if (tstlvl == AttribContinue || tstlvl == AttribUknown) && fndspace {
 				continue
 			}
 			attrbprsr.invdl = true
