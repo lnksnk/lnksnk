@@ -81,7 +81,9 @@ func (m *markuptemplate) Parse(in interface{}) {
 						"p-root":   c.root,
 						"p-base":   c.base,
 						"p-e-root": c.elmroot,
-						"p-e-base": c.elmbase}, validNameChar, "[#", "#]")
+						"p-e-base": c.elmbase}, func(unmtchdkey string) bool {
+						return c.m.cntntprsngs[c.m.prsix].noncode()
+					}, validNameChar, "[#", "#]")
 				}
 			}
 		}

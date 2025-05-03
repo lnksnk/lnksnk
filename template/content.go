@@ -418,7 +418,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 		return
 	}
 	if attrbs := c.attrbs; attrbs != nil {
-		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, validNameChar, "::", "::").Runes())
+		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
 	}
 	c.tstname = nil
 	c.tstlvl = ElemUnkown
@@ -523,7 +523,9 @@ func (c *contentparsing) matchPost() (reset bool) {
 				attrbs["p-root"] = pgec.root
 				attrbs["p-base"] = pgec.base
 			}
-			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, validNameChar, "[#", "#]")
+			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, func(unmtchdkey string) bool {
+				return c.m.cntntprsngs[c.m.prsix].noncode()
+			}, validNameChar, "[#", "#]")
 			c.m.Parse(mps)
 			nxtc.Close()
 		}
@@ -548,12 +550,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 			c.cbf = nil
 			pgec := c.m.cntntprsngs[0]
 			if attrbs == nil {
-				attrbs = map[string]interface{}{"cntnt": func() interface{} {
-					if cbf.Empty() {
-						return ""
-					}
-					return cbf
-				}(),
+				attrbs = map[string]interface{}{
 					"e-root":   c.elmroot,
 					"e-base":   c.elmbase,
 					"root":     c.root,
@@ -568,12 +565,6 @@ func (c *contentparsing) matchPost() (reset bool) {
 				attrbs["e-base"] = c.elmbase
 				attrbs["root"] = c.root
 				attrbs["base"] = c.base
-				attrbs["cntnt"] = func() interface{} {
-					if cbf.Empty() {
-						return ""
-					}
-					return cbf
-				}()
 				attrbs["p-e-root"] = pgec.elmroot
 				attrbs["p-e-base"] = pgec.elmbase
 				attrbs["p-root"] = pgec.root
@@ -584,8 +575,22 @@ func (c *contentparsing) matchPost() (reset bool) {
 				lstattrbs = nil
 			}
 			c.resetCdeParsing()
+			c.elmlvl = ElemStart
+			c.m.Parse(ioext.MapReplaceReader(cbf.Reader(true), attrbs, func(unmtchdkey string) bool {
+				return c.m.cntntprsngs[c.m.prsix].noncode()
+			}, validNameChar, "[#", "#]"))
+			cbf = c.cbf
+			c.cbf = nil
 			c.elmlvl = ElemSingle
-			c.m.Parse(ioext.MapReplaceReader(c.fi.Reader(), attrbs, validNameChar, "[#", "#]"))
+			attrbs["cntnt"] = func() interface{} {
+				if cbf.Empty() {
+					return ""
+				}
+				return cbf
+			}()
+			c.m.Parse(ioext.MapReplaceReader(c.fi.Reader(), attrbs, func(unmtchdkey string) bool {
+				return c.m.cntntprsngs[c.m.prsix].noncode()
+			}, validNameChar, "[#", "#]"))
 			c.Close()
 			return
 		}
