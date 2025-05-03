@@ -14,7 +14,9 @@ import (
 	"github.com/lnksnk/lnksnk/dbms/postgres"
 	"github.com/lnksnk/lnksnk/dbms/sqlite"
 	"github.com/lnksnk/lnksnk/es"
+	"github.com/lnksnk/lnksnk/es/ast"
 	"github.com/lnksnk/lnksnk/es/fieldmapping"
+	"github.com/lnksnk/lnksnk/es/parser"
 	"github.com/lnksnk/lnksnk/fonts"
 	"github.com/lnksnk/lnksnk/fs"
 	"github.com/lnksnk/lnksnk/ui"
@@ -28,12 +30,79 @@ import (
 
 func main() {
 	chn := make(chan bool, 1)
-	var mltyfsys = active.AciveFileSystem(func(cde ...interface{}) (prgm interface{}, err error) {
-		return es.Compile("", ioext.NewBuffer(cde...).String(), false)
+	var mltyfsys fs.MultiFileSystem = nil
+	mltyfsys = active.AciveFileSystem(func(cde ...interface{}) (prgm interface{}, err error) {
+		var prsd *ast.Program
+		prsd, err = parser.ParseFile(nil, "", func() string {
+			if len(cde) == 0 {
+				return ""
+			}
+			if len(cde) == 1 {
+				if s, sk := cde[0].(string); sk {
+					return s
+				}
+				if int32r, int32k := cde[0].([]int32); int32k {
+					return string(int32r)
+				}
+				if bf, bfk := cde[0].(*ioext.Buffer); bfk {
+					if bf.Empty() {
+						return ""
+					}
+					return bf.String()
+				}
+			}
+			cdebf := ioext.NewBuffer(cde...)
+			defer cdebf.Close()
+			if cdebf.Empty() {
+				return ""
+			}
+			return cdebf.String()
+		}(), 0, parser.WithDisableSourceMaps, parser.IsModule)
+		if err == nil {
+			func() {
+				defer func() {
+					if x := recover(); x != nil {
+						err, _ = x.(error)
+					}
+				}()
+				if len(prsd.ExportEntries) == 0 {
+					prgm, err = es.CompileAST(prsd, false)
+					return
+				}
+				prgm, err = es.ModuleFromProgramAndLink(prsd, func(refscriptormod interface{}, modspecifier string) (mdrc interface{}, rslvderr error) {
+					if chdapi, _ := mltyfsys.(interface {
+						CachedInfo(string) (active.CachedInfo, error)
+					}); chdapi != nil {
+						chdfi, chdfierr := chdapi.CachedInfo(modspecifier)
+						if chdfi != nil {
+							if mdrc, _ = chdfi.Program().(es.ModuleRecord); mdrc != nil {
+								return mdrc, nil
+							}
+						}
+						if chdfierr != nil {
+							return nil, chdfierr
+						}
+					}
+					return nil, fmt.Errorf("unable to load specifier %s", modspecifier)
+				})
+			}()
+		}
+		return
 	})
 	mltyfsys.CacheExtensions(".html", ".js", ".css", ".svg", ".woff2", ".woff", ".ttf", ".eot", ".sql")
 	mltyfsys.DefaultExtensions(".html", ".js", ".json", ".css")
 	mltyfsys.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
+	/*var prgrmodules = moduling.NewModules(mltyfsys, func(fi fs.FileInfo, mods moduling.Modules) (modrec interface{}, err error) {
+		active.ProcessActiveFile(mltyfsys, fi, nil, nil, nil)
+		src, _ := ioext.ReaderToString(fi.Reader())
+		es.ParseAndLinkModule(fi.Path(), src, func(refscriptormod interface{}, modspecifier string) (rlsvdmodrec interface{}, rslvderr error) {
+			if m, _ := mods.Get(modspecifier); m != nil {
+				return m.ModRec(), nil
+			}
+			return
+		})
+		return
+	})*/
 	//mltyfsys.Map("/embedding")
 	//mltyfsys.Map("/", "C:/GitHub/lnksnk.github.io", true)
 	mltyfsys.Map("/etl", "C:/projects/cim", true)
@@ -58,12 +127,12 @@ func main() {
 		}
 		return
 	})
-	glbldbms.Drivers().Register("postgres")
-	glbldbms.Drivers().Register("mssql")
-	glbldbms.Drivers().Register("sqlserver")
-	glbldbms.Drivers().Register("azuresql")
-	glbldbms.Drivers().Register("oracle")
-	glbldbms.Drivers().Register("sqlite")
+	//glbldbms.Drivers().Register("postgres")
+	//glbldbms.Drivers().Register("mssql")
+	//glbldbms.Drivers().Register("sqlserver")
+	//glbldbms.Drivers().Register("azuresql")
+	//glbldbms.Drivers().Register("oracle")
+	//glbldbms.Drivers().Register("sqlite")
 	glbldbms.Drivers().Register("csv", mltyfsys)
 	if mltyfsys.Exist("/embedding/embed.html") {
 		glbldbms.Connections().Register("datafiles", "csv", "/datafiles")
@@ -82,15 +151,19 @@ func main() {
 		}
 		fmt.Println(time.Now())
 	}
-	glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
+	//glbldbms.Connections().Register("lnksnk_etl", "postgres", "user=lnksnk_etl password=6@N61ng0 host=localhost port=7654 database=lnksnk_etl")
 	fonts.ImportFonts(mltyfsys)
 	ui.ImportUiJS(mltyfsys)
-	var hndlr http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var hndlr http.Handler
+	var listen listen.Listening = listen.NewListen(func(w http.ResponseWriter, r *http.Request) {
+		hndlr.ServeHTTP(w, r)
+	})
+
+	hndlr = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var inout = serveio.NewReaderWriter(serveio.NewReader(r), serveio.NewWriter(w))
 		defer inout.Close()
 		in, out := inout.Reader(), inout.Writer()
 		path := in.Path()
-
 		rqfi := mltyfsys.StatContext(in.Context(), path)
 		if rqfi == nil {
 			return
@@ -113,13 +186,28 @@ func main() {
 			}
 			if actv {
 				var vm = es.New()
-				var runvm = func(prgm interface{}, prgout io.Writer) {
-					if eprg, _ := prgm.(*es.Program); eprg != nil {
+				vm.SetImportModule(func(modname string, namedimports ...[][]string) (imported bool) {
+					if modfi := mltyfsys.Stat(modname); modfi != nil {
+						active.ProcessActiveFile(mltyfsys, modfi, nil, nil, func(pgrm interface{}, w io.Writer) {
+							imported = es.ImportModule(pgrm, vm, namedimports...)
+						})
+					}
+					return imported
+				})
+				vm.SetRequire(func(modname string) (obj *es.Object) {
+					obj = es.RequireModuleExports(nil, vm)
+					return
+				})
+				var runvm = func(prgrm interface{}, prgout io.Writer) {
+					if eprg, _ := prgrm.(*es.Program); eprg != nil {
 						vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
 						vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
 						rslt, err := vm.RunProgram(eprg)
 						if err != nil {
-							out.Print("err:" + err.Error())
+							out.Println("err:" + err.Error())
+							for lnr, ln := range strings.Split(eprg.Src(), "\n") {
+								out.Println(fmt.Sprintf("%d. %s", lnr+1, strings.TrimRightFunc(ln, ioext.IsSpace)))
+							}
 						} else {
 							if rslt != nil {
 								if exp := rslt.Export(); exp != nil {
@@ -199,7 +287,6 @@ func main() {
 		}
 	})
 
-	listen.Serve("tcp", ":1090", hndlr)
-	//http.Serve(ln, h2c.NewHandler(hndlr, &http2.Server{}))
+	listen.Serve("tcp", ":1089")
 	<-chn
 }
