@@ -228,7 +228,24 @@ func main() {
 					vm.Set("print", out.Println)
 				})
 				defer dbhndl.Close()
-				var session = map[string]interface{}{"db": dbhndl, "fs": mltyfsys}
+				var session = map[string]interface{}{
+					"db":     dbhndl,
+					"fs":     mltyfsys,
+					"params": in.Params(),
+					"eval": func(evalpath string) {
+						var evalfi = mltyfsys.StatContext(in.Context(), evalpath)
+						if evalfi == nil {
+							return
+						}
+						if evalfi = active.ProcessActiveFile(
+							mltyfsys,
+							evalfi,
+							out,
+							nil,
+							runvm); evalfi != nil {
+							out.Print(evalfi.Reader(in.Context()))
+						}
+					}}
 				vm.SetFieldNameMapper(fieldmapping.NewFieldMapper(es.UncapFieldNameMapper()))
 				vm.Set("$", session)
 				defer func() {
