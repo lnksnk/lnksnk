@@ -368,7 +368,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 							prmargsfnd = append(prmargsfnd, prmfndl)
 							dflsv, dflsk := dfltargs[strings.ToUpper(pnme)]
 							prmargvalsfnd[prmfndl] = func() interface{} {
-								prmsv := params.Get(string(prmnme))
+								prmsv := params.Get(pnme)
 								if len(prmsv) == 0 {
 									if dflsk {
 										s, _ := dflsv.(string)
@@ -383,7 +383,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 										return s
 									}
 								}
-								return prmsv
+								return prmsvs
 							}
 							qrybf.Print(s.prssqlarg(prmfndl))
 							prmnme = nil
