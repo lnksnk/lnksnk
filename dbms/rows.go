@@ -1,11 +1,15 @@
 package dbms
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 type Rows interface {
 	IRows
+	RowNR() int64
 	First() bool
 	Next() bool
+	SelectNext(func(Rows) bool) bool
 	Data() []interface{}
 	Err() error
 	Last() bool
@@ -38,12 +42,185 @@ type rows struct {
 	cols    []string
 	coltpes []ColumnType
 	dta     []interface{}
+	lstdta  []interface{}
+	nxtdta  []interface{}
+	swpdta  bool
 	IRows
 	lsterr  error
 	started bool
 	first   bool
 	last    bool
+	rwnr    int64
 	evnts   *RowsEvents
+}
+
+// RowNR implements Rows.
+func (r *rows) RowNR() int64 {
+	if r == nil {
+		return -1
+	}
+	if r.swpdta {
+		return r.rwnr + 1
+	}
+	return r.rwnr
+}
+
+// NextResultSet implements Rows.
+// Subtle: this method shadows the method (IRows).NextResultSet of rows.IRows.
+func (r *rows) NextResultSet() bool {
+	panic("unimplemented")
+}
+
+// Scan implements Rows.
+// Subtle: this method shadows the method (IRows).Scan of rows.IRows.
+func (r *rows) Scan(dest ...any) error {
+	panic("unimplemented")
+}
+
+func (r *rows) nextRec(irows IRows, dta, nxtdta, lstdta []interface{}, slctd func(Rows) bool) (nxt bool) {
+	if r == nil {
+		return
+	}
+	if r.last {
+		return
+	}
+	evnts := r.evnts
+	rdrc := false
+	if r.started {
+		if r.first {
+			r.first = false
+		}
+		copy(lstdta, nxtdta)
+		r.rwnr++
+		if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
+			r.Close()
+			return
+		}
+		if !rdrc {
+			r.last = true
+			copy(dta, lstdta)
+			return true
+		}
+		r.swpdta = true
+	rescn2:
+		if r.lsterr = scanRow(irows, nxtdta, evnts); r.lsterr != nil {
+			r.Close()
+			return
+		}
+		if !slctd(r) {
+			if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
+				r.Close()
+				return
+			}
+			if !rdrc {
+				r.swpdta = false
+				r.last = true
+				copy(dta, lstdta)
+				return true
+			}
+			goto rescn2
+		}
+		r.swpdta = false
+		copy(dta, lstdta)
+		return true
+	}
+	r.first = true
+	r.started = true
+	if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
+		r.Close()
+		return
+	}
+	if !rdrc {
+		r.Close()
+		return
+	}
+	r.swpdta = true
+rescn:
+	if r.lsterr = scanRow(irows, nxtdta, evnts); r.lsterr != nil {
+		r.Close()
+		return
+	}
+	if !slctd(r) {
+		if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
+			r.Close()
+			return
+		}
+		if !rdrc {
+			r.Close()
+			return
+		}
+		goto rescn
+	}
+	copy(lstdta, nxtdta)
+	r.rwnr++
+	if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
+		r.Close()
+		return
+	}
+	if !rdrc {
+		r.swpdta = false
+		r.last = true
+		copy(dta, lstdta)
+		return true
+	}
+rescnnxt:
+	if r.lsterr = scanRow(irows, nxtdta, evnts); r.lsterr != nil {
+		r.Close()
+		return
+	}
+	if !slctd(r) {
+		if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
+			r.Close()
+			return
+		}
+		if !rdrc {
+			r.swpdta = false
+			r.last = true
+			copy(dta, lstdta)
+			return true
+		}
+		goto rescnnxt
+	}
+	r.swpdta = false
+	copy(dta, lstdta)
+	return true
+}
+
+func readRow(irows IRows, evnts *RowsEvents) (nxt bool, err error) {
+	if nxt, err = irows.Next(), irows.Err(); err != nil && evnts != nil && evnts.Error != nil {
+		evnts.error(err)
+	}
+	return
+}
+
+func scanRow(irows IRows, storedta []interface{}, evnts *RowsEvents) (err error) {
+	if err = irows.Scan(storedta...); evnts != nil && evnts.Error != nil {
+		evnts.Error(err)
+	}
+	return
+}
+
+// SelectNext implements Rows.
+func (r *rows) SelectNext(slctd func(Rows) bool) (nxt bool) {
+	if r == nil {
+		return false
+	}
+	if len(r.cols) == 0 {
+		if r.Columns(); r.lsterr != nil {
+			return
+		}
+	}
+	if irows := r.IRows; irows != nil {
+		if slctd == nil {
+			nxt = r.nextRec(irows, r.dta, r.nxtdta, r.lstdta, dummyslct)
+			return
+		}
+		nxt = r.nextRec(irows, r.dta, r.nxtdta, r.lstdta, slctd)
+	}
+	return
+}
+func dummyslct(r Rows) bool {
+	return true
 }
 
 type dbirows struct {
@@ -130,8 +307,10 @@ func (dbirws *dbirows) Scan(dest ...any) (err error) {
 	if dbrows := dbirws.dbrows; dbrows != nil {
 		if destl := len(dest); destl > 0 {
 			destref := dbirws.dtarefs
-			if len(destref) != destl {
-				destref = make([]interface{}, destl)
+			if len(destref) != destl || (len(destref) == destl && destref[0] != &dest[0]) {
+				if len(destref) != destl {
+					destref = make([]interface{}, destl)
+				}
 				dbirws.dtarefs = destref
 				for n := range destl {
 					destref[n] = &dest[n]
@@ -171,6 +350,9 @@ func (r *rows) ColumnTypes() (cltps []ColumnType, err error) {
 func (r *rows) Data() []interface{} {
 	if r == nil {
 		return nil
+	}
+	if r.swpdta {
+		return r.nxtdta
 	}
 	return r.dta
 }
@@ -226,11 +408,24 @@ func (r *rows) Columns() ([]string, error) {
 		}
 		if cltpsl := len(cltpes); cltpsl > 0 {
 			cols = make([]string, cltpsl)
-			for cn, cltp := range cltpes {
-				cols[cn] = cltp.Name()
+			for cn := range cltpsl {
+				cols[cn] = cltpes[cn].Name()
 			}
 			r.cols = cols
 			r.coltpes = cltpes
+			dtal, lstdtal, nxtdtal := len(r.dta), len(r.lstdta), len(r.nxtdta)
+			if dtal != cltpsl {
+				r.dta = nil
+				r.dta = make([]interface{}, cltpsl)
+			}
+			if lstdtal != cltpsl {
+				r.lstdta = nil
+				r.lstdta = make([]interface{}, cltpsl)
+			}
+			if nxtdtal != cltpsl {
+				r.nxtdta = nil
+				r.nxtdta = make([]interface{}, cltpsl)
+			}
 			return cols, nil
 		}
 		if cols, r.lsterr = irows.Columns(); r.lsterr != nil {
@@ -262,56 +457,5 @@ func (r *rows) Err() error {
 
 // Next implements Rows.
 func (r *rows) Next() (nxt bool) {
-	if r == nil {
-		return false
-	}
-	if irows := r.IRows; irows != nil {
-		if !r.started {
-			r.started = true
-			r.first = true
-			if len(r.cols) == 0 {
-				if r.Columns(); r.lsterr != nil {
-					return
-				}
-			}
-			if nxt, r.lsterr = irows.Next(), irows.Err(); r.lsterr == nil && nxt {
-				r.first = true
-				dta := r.dta
-				if len(dta) < len(r.cols) {
-					dta = make([]interface{}, len(r.cols))
-					r.dta = dta
-				}
-
-				if r.lsterr = irows.Scan(dta...); r.lsterr != nil {
-					if evnts := r.evnts; evnts != nil {
-						evnts.error(r.lsterr)
-					}
-				}
-				if nxt = r.lsterr == nil; nxt {
-					r.last, r.lsterr = !irows.Next(), irows.Err()
-					nxt = r.lsterr == nil
-				}
-			}
-			return
-		}
-		if nxt = !r.last; nxt {
-			r.first = false
-			r.first = false
-			dta := r.dta
-			if cl, dtal := len(r.cols), len(dta); cl > 0 && cl == dtal {
-				if r.lsterr = irows.Scan(dta...); r.lsterr != nil {
-					if evnts := r.evnts; evnts != nil {
-						evnts.error(r.lsterr)
-					}
-				}
-				if nxt = r.lsterr == nil; nxt {
-					r.last, r.lsterr = !irows.Next(), irows.Err()
-					nxt = r.lsterr == nil
-				}
-			}
-			return
-		}
-		nxt = false
-	}
-	return
+	return r.SelectNext(nil)
 }

@@ -7,7 +7,7 @@ type Record interface {
 	Last() bool
 	Data() []interface{}
 	Columns() []string
-	RowNR() int
+	RowNR() int64
 	ColumnTypes() []ColumnType
 	Field(interface{}) interface{}
 	Reader(interface{}) Reader
@@ -15,7 +15,7 @@ type Record interface {
 
 type record struct {
 	rdr     *reader
-	cnt     int
+	rwnr    int64
 	dta     []interface{}
 	cols    []string
 	coltpes []ColumnType
@@ -37,11 +37,11 @@ func (rc *record) Last() bool {
 	return rc.last
 }
 
-func (rc *record) RowNR() int {
+func (rc *record) RowNR() int64 {
 	if rc == nil {
 		return 0
 	}
-	return rc.cnt
+	return rc.rwnr
 }
 
 func (rc *record) Data() []interface{} {

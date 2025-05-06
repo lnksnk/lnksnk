@@ -157,6 +157,28 @@ func (rdr *reader) Last() bool {
 	return false
 }
 
+func (rdr *reader) prepRecord(rws Rows) (prepped bool) {
+	if rdr == nil || rws == nil {
+		return
+	}
+	rc := rdr.rc
+	if rc == nil {
+		cols, coltpes := rdr.Columns(), rdr.ColumnTypes()
+		if prepped = rdr.rws.Err() == nil; !prepped {
+			rdr.Close()
+			return
+		}
+		rc = &record{rdr: rdr, rwnr: rws.RowNR(), cols: cols, coltpes: coltpes, first: rws.First(), last: rws.Last(), dta: rws.Data()}
+		rdr.rc = rc
+		return
+	}
+	rc.first = rws.First()
+	rc.last = rws.Last()
+	rc.dta = rws.Data()
+	rc.rwnr = rws.RowNR()
+	return true
+}
+
 // Next implements Reader.
 func (rdr *reader) Next() (nxt bool) {
 	if rdr == nil {
@@ -176,36 +198,13 @@ func (rdr *reader) Next() (nxt bool) {
 			return false
 		}
 	}
-	if nxt = rws.Next(); nxt {
-		rc := rdr.rc
-	reinitrc:
-		if rc == nil {
-			cols, coltpes := rdr.Columns(), rdr.ColumnTypes()
-			if nxt = rdr.rws.Err() == nil; !nxt {
-				rdr.Close()
-				return
-			}
-			rc = &record{rdr: rdr, cnt: 1, cols: cols, coltpes: coltpes, first: rws.First(), last: rws.Last(), dta: rws.Data()}
-			rdr.rc = rc
-			if evnts := rdr.evnts; evnts != nil {
-				nxt = evnts.calselect(rc)
-			}
+	evnts := rdr.evnts
+	if nxt = ((evnts == nil || evnts.Select == nil) && rws.Next()) || (evnts != nil && evnts.Select != nil && rws.SelectNext(func(r Rows) bool {
+		return rdr.prepRecord(r) && evnts.calselect(rdr.rc)
+	})); nxt {
+		if nxt = rdr.prepRecord(rws) && rws.Err() == nil; nxt {
 			return
 		}
-		if rc.first = rws.First(); rc.first {
-			rc.cols = nil
-			rc.coltpes = nil
-			rc.dta = nil
-			rc = nil
-			goto reinitrc
-		}
-		rc.last = rws.Last()
-		rc.dta = rdr.Data()
-		rc.cnt++
-		if evnts := rdr.evnts; evnts != nil {
-			nxt = evnts.calselect(rc)
-		}
-		return
 	}
 	rdr.Close()
 	return
