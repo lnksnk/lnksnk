@@ -101,12 +101,10 @@ func nextdb(cn *connection) (db *sql.DB, dvr Driver, err error) {
 	if dvr = cn.dvr; dvr != nil {
 		db = cn.db
 		if db == nil {
-			if dvr != nil {
-				if db, err = dvr.Invoke(cn.datasource, cn.fsys); err != nil {
-					return
-				}
-				cn.db = db
+			if db, err = dvr.Invoke(cn.datasource, cn.fsys); err != nil {
+				return
 			}
+			cn.db = db
 		}
 	}
 	return
