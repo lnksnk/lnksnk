@@ -45,6 +45,7 @@ type rows struct {
 	lstdta  []interface{}
 	nxtdta  []interface{}
 	swpdta  bool
+	sctltd  func(Rows) bool
 	IRows
 	lsterr  error
 	started bool
@@ -77,7 +78,7 @@ func (r *rows) Scan(dest ...any) error {
 	panic("unimplemented")
 }
 
-func (r *rows) nextRec(irows IRows, dta, nxtdta, lstdta []interface{}, slctd func(Rows) bool) (nxt bool) {
+func (r *rows) nextRec(irows IRows, dta, nxtdta, lstdta []interface{}) (nxt bool) {
 	if r == nil {
 		return
 	}
@@ -107,7 +108,7 @@ func (r *rows) nextRec(irows IRows, dta, nxtdta, lstdta []interface{}, slctd fun
 			r.Close()
 			return
 		}
-		if !slctd(r) {
+		if !r.sctltd(r) {
 			if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
 				r.Close()
 				return
@@ -140,7 +141,7 @@ rescn:
 		r.Close()
 		return
 	}
-	if !slctd(r) {
+	if !r.sctltd(r) {
 		if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
 			r.Close()
 			return
@@ -168,7 +169,7 @@ rescnnxt:
 		r.Close()
 		return
 	}
-	if !slctd(r) {
+	if !r.sctltd(r) {
 		if rdrc, r.lsterr = readRow(irows, evnts); r.lsterr != nil {
 			r.Close()
 			return
@@ -210,12 +211,15 @@ func (r *rows) SelectNext(slctd func(Rows) bool) (nxt bool) {
 			return
 		}
 	}
-	if irows := r.IRows; irows != nil {
+	if r.sctltd == nil {
 		if slctd == nil {
-			nxt = r.nextRec(irows, r.dta, r.nxtdta, r.lstdta, dummyslct)
-			return
+			r.sctltd = dummyslct
+		} else {
+			r.sctltd = slctd
 		}
-		nxt = r.nextRec(irows, r.dta, r.nxtdta, r.lstdta, slctd)
+	}
+	if irows := r.IRows; irows != nil {
+		nxt = r.nextRec(irows, r.dta, r.nxtdta, r.lstdta)
 	}
 	return
 }

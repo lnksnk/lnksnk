@@ -9,7 +9,7 @@ type Reader interface {
 	First() bool
 	Last() bool
 	AttachHandler(DBMSHandler)
-	Records() func(func(Record) bool)
+	Records(...func(Record) bool) func(func(Record) bool)
 	Events() *ReaderEvents
 	Record() Record
 }
@@ -85,10 +85,22 @@ func (rdr *reader) Events() *ReaderEvents {
 }
 
 // Records implements Reader.
-func (rdr *reader) Records() func(func(Record) bool) {
+func (rdr *reader) Records(where ...func(Record) bool) func(func(Record) bool) {
 	return func(nxtrc func(Record) bool) {
 		if rdr == nil {
 			return
+		}
+		evnts := rdr.evnts
+		if len(where) > 0 && where[0] != nil {
+			selectevt := evnts.Select
+			if selectevt == nil {
+				evnts.Select = where[0]
+			} else {
+				whereslct := where[0]
+				evnts.Select = func(r Record) bool {
+					return whereslct(r) && selectevt(r)
+				}
+			}
 		}
 		if rdr.rws != nil && rdr.rws.Err() == nil {
 			for rdr.Next() {
