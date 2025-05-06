@@ -211,11 +211,13 @@ func (r *rows) SelectNext(slctd func(Rows) bool) (nxt bool) {
 			return
 		}
 	}
-	if r.sctltd == nil {
-		if slctd == nil {
-			r.sctltd = dummyslct
-		} else {
-			r.sctltd = slctd
+	if !r.started {
+		if r.sctltd == nil {
+			if slctd == nil {
+				r.sctltd = dummyslct
+			} else {
+				r.sctltd = slctd
+			}
 		}
 	}
 	if irows := r.IRows; irows != nil {
