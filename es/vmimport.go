@@ -4,7 +4,10 @@ import (
 	"fmt"
 
 	"github.com/lnksnk/lnksnk/es/ast"
+	"github.com/lnksnk/lnksnk/es/parser"
 	"github.com/lnksnk/lnksnk/es/unistring"
+	"github.com/lnksnk/lnksnk/fs"
+	"github.com/lnksnk/lnksnk/ioext"
 )
 
 type _importClause struct {
@@ -67,6 +70,58 @@ func (rt *Runtime) EvaluateModRec(modrec interface{}) (exports *Object) {
 		if evalprms.State() == PromiseStateFulfilled {
 			exports = rt.NamespaceObjectFor(m)
 		}
+	}
+	return
+}
+
+func CompileProgram(fsys fs.MultiFileSystem, resolveMod func(refscriptormod interface{}, modspecifier string) (rlsvdmodrec interface{}, rslvderr error), cde ...interface{}) (prgm interface{}, err error) {
+	var prsd *ast.Program
+	prsd, err = parser.ParseFile(nil, "", func() string {
+		if len(cde) == 0 {
+			return ""
+		}
+		if len(cde) == 1 {
+			if s, sk := cde[0].(string); sk {
+				return s
+			}
+			if int32r, int32k := cde[0].([]int32); int32k {
+				return string(int32r)
+			}
+			if bf, bfk := cde[0].(*ioext.Buffer); bfk {
+				if bf.Empty() {
+					return ""
+				}
+				return bf.String()
+			}
+		}
+		cdebf := ioext.NewBuffer(cde...)
+		defer cdebf.Close()
+		if cdebf.Empty() {
+			return ""
+		}
+		return cdebf.String()
+	}(), 0, parser.WithDisableSourceMaps, parser.IsModule)
+	if err == nil {
+		func() {
+			defer func() {
+				if x := recover(); x != nil {
+					err, _ = x.(error)
+				}
+			}()
+			if len(prsd.ExportEntries) == 0 {
+				prgm, err = CompileAST(prsd, false)
+				return
+			}
+			prgm, err = ModuleFromProgramAndLink(prsd, func(refscriptormod interface{}, modspecifier string) (mdrc interface{}, rslvderr error) {
+				if mdrc, rslvderr = resolveMod(refscriptormod, modspecifier); rslvderr != nil {
+					return
+				}
+				if mdrc, _ = mdrc.(ModuleRecord); mdrc != nil {
+					return mdrc, nil
+				}
+				return nil, fmt.Errorf("unable to load specifier %s", modspecifier)
+			})
+		}()
 	}
 	return
 }
