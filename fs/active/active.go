@@ -57,7 +57,7 @@ func (chdinfos *chachedinfos) Get(name string) (CachedInfo, bool) {
 type activeFileSystem struct {
 	fs.MultiFileSystem
 	chdfis CachedInfos
-	cmple  func(cde ...interface{}) (prgm interface{}, err error)
+	cmple  func(fsys fs.MultiFileSystem, cde ...interface{}) (prgm interface{}, err error)
 }
 
 type cachedinfo struct {
@@ -478,7 +478,7 @@ func (atvfsys *activeFileSystem) compile(cde ...interface{}) (prgm interface{}, 
 		return
 	}
 	if cmple := atvfsys.cmple; cmple != nil {
-		return cmple(cde...)
+		return cmple(atvfsys, cde...)
 	}
 	return
 }
@@ -521,10 +521,10 @@ func (atvfsys *activeFileSystem) update(fsys fs.FileSystem, fi fs.FileInfo, ntfy
 	}
 }
 
-func AciveFileSystem(compile func(cde ...interface{}) (prgm interface{}, err error), mltyfsys ...fs.MultiFileSystem) (actvmltifsys *activeFileSystem) {
+func AciveFileSystem(compile func(fsys fs.MultiFileSystem, cde ...interface{}) (prgm interface{}, err error), mltyfsys ...fs.MultiFileSystem) (actvmltifsys *activeFileSystem) {
 	if len(mltyfsys) == 0 {
 		if compile == nil {
-			compile = func(cde ...interface{}) (prgm interface{}, err error) {
+			compile = func(fs.MultiFileSystem, ...interface{}) (prgm interface{}, err error) {
 				return
 			}
 		}
