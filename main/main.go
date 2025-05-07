@@ -163,7 +163,7 @@ func main() {
 						nil,
 						runvm)
 					vm.Set("print", out.Print)
-					vm.Set("print", out.Println)
+					vm.Set("println", out.Println)
 				})
 				defer dbhndl.Close()
 				var session = map[string]interface{}{
