@@ -67,7 +67,7 @@ func (mpevents *MapIterateEvents[K, V]) Add(name K, new V) {
 	}
 }
 
-func MapIterator[K comparable, V any](a ...any) IterateMap[K, V] {
+func MapIterator[K comparable, V any]() IterateMap[K, V] {
 
 	itrmp := &itermap[K, V]{orgsncmp: &sync.Map{}}
 
@@ -203,18 +203,14 @@ func (imp *itermap[K, V]) Set(name K, value V) {
 			if pval, val := reflect.ValueOf(prvval), reflect.ValueOf(value); !pval.Equal(val) {
 				orgsncmp.Store(name, value)
 				if mpevents != nil {
-					if evtchngd := mpevents.Changed; evtchngd != nil {
-						go evtchngd(name, prvval, value)
-					}
+					go mpevents.Changed(name, prvval, value)
 				}
 			}
 			return
 		}
 		orgsncmp.Store(name, value)
 		if mpevents != nil {
-			if evtadd := mpevents.Add; evtadd != nil {
-				go evtadd(name, value)
-			}
+			go mpevents.Add(name, value)
 		}
 	}
 }
