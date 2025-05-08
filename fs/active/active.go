@@ -386,7 +386,7 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 
 func createcachedfileinfo(chdinfos CachedInfos, fi fs.FileInfo, fsys fs.MultiFileSystem, compile func(...interface{}) (interface{}, error)) (chdinfo CachedInfo) {
 	chdinfo = &cachedinfo{fileinfo: fileInfoFromFi(fi), finfos: map[string]fs.FileInfo{}}
-	internparse(fsys, chdinfos, chdinfo, fi.Path(), fi.Root(), fi.Base(), compile)
+	internparse(fsys, chdinfos, chdinfo, compile)
 	chdinfos.Set(chdinfo.Path(), chdinfo)
 	return chdinfo
 }
@@ -406,19 +406,19 @@ func internsync(fsys fs.MultiFileSystem, chdinfos CachedInfos, path string, unma
 				if unmthd := tstchdfi.unmtchd; len(unmthd) > 0 {
 					if bsel := len(tstchdfi.base); bsel < tsnmel && tstname[:bsel] == strings.Replace(tstchdfi.base, "/", ":", -1) && unmthd[tstname[bsel-1:]] {
 						if unmatched {
-							internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
+							internparse(fsys, chdinfos, tstchdfi, compile)
 						}
 					} else if unmthd[tstname] {
 						if unmatched {
-							internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
+							internparse(fsys, chdinfos, tstchdfi, compile)
 						}
 					}
 				}
 				if finfos := tstchdfi.finfos; len(finfos) > 0 {
 					if bsel := len(tstchdfi.base); bsel < tsnmel && tstname[:bsel] == strings.Replace(tstchdfi.base, "/", ":", -1) && finfos[tstname[bsel-1:]] != nil {
-						internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
+						internparse(fsys, chdinfos, tstchdfi, compile)
 					} else if finfos[tstname] != nil {
-						internparse(fsys, chdinfos, tstchdfi, tstchdfi.path, tstchdfi.root, tstchdfi.base, compile)
+						internparse(fsys, chdinfos, tstchdfi, compile)
 					}
 				}
 			}
@@ -426,7 +426,7 @@ func internsync(fsys fs.MultiFileSystem, chdinfos CachedInfos, path string, unma
 	}
 }
 
-func internparse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi CachedInfo, path string, root string, base string, compile func(...interface{}) (interface{}, error)) {
+func internparse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi CachedInfo, compile func(...interface{}) (interface{}, error)) {
 	if chdfi, _ := fi.(*cachedinfo); chdfi != nil {
 		mrkptmplt := template.MarkupTemplate(fsys, fi)
 		mrkptmplt.Parse(chdfi.Buffer)
