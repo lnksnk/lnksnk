@@ -6,6 +6,7 @@ import (
 	"io"
 	gofs "io/fs"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -347,12 +348,9 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 		return
 	}
 	tstpath := fi.Path()
-	//tstpath += fi.Path()[1:]
 	chkfnd := false
 	if chdinfo, chkfnd = chdinfos.Get(tstpath); chkfnd && chdinfo != nil {
 		if chdinfo.ModTime() == fi.ModTime() {
-			chdpsv := chdinfo.Content()
-			//chdatv := chdinfo.Code()
 			go func(reffsys fs.MultiFileSystem, reffi fs.FileInfo, chdfios CachedInfos, chdfi CachedInfo) {
 				if !chdfi.Valid() {
 					reftstpath := chdinfo.Path()
@@ -360,26 +358,27 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 					createcachedfileinfo(chdfios, reffi, reffsys, compile)
 				}
 			}(fsys, fi, chdinfos, chdinfo)
-			if out != nil {
-				ioext.Fprint(out, chdpsv)
-			}
-			if !chdinfo.Plain() && run != nil {
-				if chdprgm := chdinfo.Program(); chdprgm != nil {
-					run(chdprgm, out)
-				}
-			}
-			return
+			goto prschd
 		}
 		chdinfos.Delete(chdinfo.Path())
 		chdinfo.Close()
 	}
-	if chdinfo = createcachedfileinfo(chdinfos, fi, fsys, compile); chdinfo != nil {
-		if out != nil {
+	chdinfo = createcachedfileinfo(chdinfos, fi, fsys, compile)
+prschd:
+	if chdinfo != nil {
+		if chdinfo.CodeSize() == fi.Size() && chdinfo.CodeSize() == 0 {
+			return
+		}
+		chdpsv := chdinfo.Content()
+		if out != nil && !reflect.ValueOf(chdpsv).IsNil() {
 			ioext.Fprint(out, chdinfo.Content())
 		}
-		if pgrm := chdinfo.Program(); pgrm != nil && run != nil {
-			run(pgrm, out)
+		if !chdinfo.Plain() && run != nil {
+			if pgrm := chdinfo.Program(); pgrm != nil {
+				run(pgrm, out)
+			}
 		}
+		return nil
 	}
 	return
 }
@@ -544,10 +543,10 @@ func AciveFileSystem(compile func(fsys fs.MultiFileSystem, cde ...interface{}) (
 func ProcessActiveFile(mltyfsys fs.MultiFileSystem, fi fs.FileInfo, out io.Writer, compile func(a ...interface{}) (interface{}, error), run func(interface{}, io.Writer)) fs.FileInfo {
 	if fi != nil && fi.Active() {
 		if atvfsys, _ := mltyfsys.(*activeFileSystem); atvfsys != nil {
-			if compile == nil {
-				compile = atvfsys.compile
+			if compile != nil {
+				return Parse(atvfsys, atvfsys.chdfis, fi, out, compile, run)
 			}
-			fi = Parse(atvfsys, atvfsys.chdfis, fi, out, compile, run)
+			return Parse(atvfsys, atvfsys.chdfis, fi, out, atvfsys.compile, run)
 		}
 		return nil
 	}
