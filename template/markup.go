@@ -69,19 +69,26 @@ func (m *markuptemplate) ValidElements() map[string]fs.FileInfo {
 	return m.validElem
 }
 
-func (m *markuptemplate) Parse(in interface{}) {
+func (m *markuptemplate) Parse(in interface{}, args ...map[string]interface{}) {
 	if m == nil {
 		return
 	}
 	var nxtrdr = func(inrd interface{}) (nxrnr io.RuneReader) {
+		var argsm map[string]interface{}
+		if len(args) > 0 && len(args[0]) > 0 {
+			argsm = args[0]
+		}
 		if m.prsix == 0 {
 			if c, ck := m.cntntprsngs[m.prsix]; ck {
 				if c != nil {
-					return ioext.MapReplaceReader(inrd, map[string]interface{}{
-						"p-root":   c.root,
-						"p-base":   c.base,
-						"p-e-root": c.elmroot,
-						"p-e-base": c.elmbase}, func(unmtchdkey string) bool {
+					if argsm == nil {
+						argsm = map[string]interface{}{}
+					}
+					argsm["p-root"] = c.root
+					argsm["p-base"] = c.base
+					argsm["p-e-root"] = c.root
+					argsm["p-e-base"] = c.base
+					return ioext.MapReplaceReader(inrd, argsm, func(unmtchdkey string) bool {
 						return c.m.cntntprsngs[c.m.prsix].noncode()
 					}, validNameChar, "[#", "#]")
 				}
