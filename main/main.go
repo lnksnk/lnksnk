@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ import (
 func main() {
 	chn := make(chan bool, 1)
 	var mltyfsys fs.MultiFileSystem = nil
-	mltyfsys = active.AciveFileSystem(func(fsys fs.MultiFileSystem, cde ...interface{}) (prgm interface{}, err error) {
+	var compileprogram = func(fsys fs.MultiFileSystem, cde ...interface{}) (prgm interface{}, err error) {
 		return es.CompileProgram(fsys, func(refscriptormod interface{}, modspecifier string) (rlsvdmodrec interface{}, rslvderr error) {
 			if chdapi, _ := fsys.(interface {
 				CachedInfo(path string) (chdfi active.CachedInfo, err error)
@@ -43,13 +44,13 @@ func main() {
 			}
 			return
 		}, cde...)
-	})
+	}
+	mltyfsys = active.AciveFileSystem(compileprogram)
 	mltyfsys.CacheExtensions(".html", ".js", ".css", ".svg", ".woff2", ".woff", ".ttf", ".eot", ".sql")
 	mltyfsys.DefaultExtensions(".html", ".js", ".json", ".css")
 	mltyfsys.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
 	mltyfsys.Map("/etl", "C:/projects/cim", true)
 	mltyfsys.Map("/media", "C:/movies", true)
-	//mltyfsys.Set("/embedding/embed.html", `<h2><@print("embed");@></h2>`)
 	//mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
 	glbldbms := dbms.NewDBMS(mltyfsys)
 	dbdrivers := map[string][]interface{}{}
@@ -113,6 +114,10 @@ func main() {
 						return
 					})
 					vm.Set("$", ssn)
+					if out := ssn.Out(); out != nil {
+						vm.Set("print", out.Print)
+						vm.Set("println", out.Println)
+					}
 					return sessioning.InvokeVM(vm, ssn)
 				}
 				sa.RunProgram = func(prgrm interface{}, prgout io.Writer) {
@@ -120,14 +125,16 @@ func main() {
 						out := ssn.Out()
 						if eprg, _ := prgrm.(*es.Program); eprg != nil {
 							if evm, _ := vm.VM().(*es.Runtime); evm != nil {
-								defer func() {
-									if out != nil {
-										vm.Set("print", out.Print)
-										vm.Set("println", out.Println)
-									}
-								}()
-								vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
-								vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
+								if out != prgout {
+									defer func() {
+										if out != nil && prgout != out {
+											vm.Set("print", out.Print)
+											vm.Set("println", out.Println)
+										}
+									}()
+									vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
+									vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
+								}
 								rslt, err := evm.RunProgram(eprg)
 								if err != nil && out != nil {
 									out.Println("err:" + err.Error())
@@ -163,6 +170,54 @@ func main() {
 							vm.Set("println", out.Println)
 						}
 					})
+				}
+
+				sa.Eval = func(arg interface{}, a ...map[string]interface{}) (err error) {
+					var fi, _ = arg.(fs.FileInfo)
+					if fi == nil {
+						if s, sk := arg.(string); sk && s != "" {
+							ext := filepath.Ext(s)
+							fi = mltyfsys.Stat(s)
+							if fi == nil && ext == "" {
+								fi = mltyfsys.Stat(s + ".html")
+							} else {
+								fi = mltyfsys.Stat(s)
+							}
+						}
+					}
+					if fi != nil {
+						if len(a) == 0 {
+							active.ProcessActiveFile(mltyfsys, fi, ssn.Out(), nil, sa.RunProgram)
+							return
+						}
+						cntnt, cde, _, _, prserr := active.ParseOnly(mltyfsys, fi, a...)
+						defer func() {
+							if !cntnt.Empty() {
+								cntnt.Close()
+							}
+							if !cde.Empty() {
+								cde.Close()
+							}
+						}()
+						if prserr != nil {
+							err = prserr
+						}
+						out := ssn.Out()
+						if out != nil && !cntnt.Empty() {
+							cntnt.WriteTo(out)
+						}
+						if !cde.Empty() {
+							prgm, prgmerr := compileprogram(mltyfsys, cde)
+							if prgmerr != nil {
+								err = prgmerr
+								return
+							}
+							if prgm != nil {
+								sa.RunProgram(prgm, out)
+							}
+						}
+					}
+					return
 				}
 			})
 
