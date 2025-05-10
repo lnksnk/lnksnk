@@ -425,6 +425,42 @@ func internsync(fsys fs.MultiFileSystem, chdinfos CachedInfos, path string, unma
 	}
 }
 
+func ParseOnly(fsys fs.MultiFileSystem, fi fs.FileInfo, args ...map[string]interface{}) (cntnt *ioext.Buffer, cde *ioext.Buffer, finfos map[string]fs.FileInfo, unmatched map[string]bool, err error) {
+	if fi == nil {
+		return
+	}
+	mrkptmplt := template.MarkupTemplate(fsys, fi)
+	chdfi, _ := fi.(*cachedinfo)
+	actvfsys, _ := fsys.(*activeFileSystem)
+	if chdfi != nil {
+		mrkptmplt.Parse(chdfi.Buffer)
+	} else if fi != nil {
+		if actvfsys != nil {
+			if chdfis := actvfsys.chdfis; chdfis != nil {
+				if chf, _ := chdfis.Get(fi.Path()); chf != nil {
+					if chdfi, _ = chf.(*cachedinfo); chdfi != nil {
+						mrkptmplt.Parse(chdfi.Buffer, args...)
+					} else {
+						mrkptmplt.Parse(fi.Reader(), args...)
+					}
+				} else {
+					mrkptmplt.Parse(fi.Reader(), args...)
+				}
+			} else {
+				mrkptmplt.Parse(fi.Reader(), args...)
+			}
+		} else {
+			mrkptmplt.Parse(fi.Reader(), args...)
+		}
+	}
+	mrkptmplt.Wrapup()
+	cntnt = mrkptmplt.Content()
+	cde = mrkptmplt.Code()
+	finfos = mrkptmplt.ValidElements()
+	unmatched = mrkptmplt.InvalidElements()
+	return
+}
+
 func internparse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi CachedInfo, compile func(...interface{}) (interface{}, error)) {
 	if chdfi, _ := fi.(*cachedinfo); chdfi != nil {
 		mrkptmplt := template.MarkupTemplate(fsys, fi)
