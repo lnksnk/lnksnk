@@ -452,9 +452,12 @@ func (c *contentparsing) matchPost() (reset bool) {
 			ext := filepath.Ext(fullpath)
 			if ext == "" {
 				ext = c.fi.Ext()
+			} else {
+				fullpath = fullpath[:len(fullpath)-len(ext)]
 			}
 			if fullpath[0] == '/' {
 				if fullpath[len(fullpath)-1] == '/' {
+
 					if fifnd = c.fsys.Stat(fullpath + "index" + ext); fifnd != nil {
 						return
 					}
