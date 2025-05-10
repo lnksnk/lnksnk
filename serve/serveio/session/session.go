@@ -320,5 +320,5 @@ type SessionAPI struct {
 	InvodeDB   func() dbms.DBMSHandler
 	InvokeVM   func(Session) SessionVM
 	RunProgram func(interface{}, io.Writer)
-	Eval       func(...interface{}) error
+	Eval       func(interface{}, ...map[string]interface{}) error
 }
