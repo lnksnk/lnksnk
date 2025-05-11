@@ -544,7 +544,7 @@ function _parseEval(){
             }
         } else if(typeof arguments[0] === "object" && !Array.isArray(arguments[0])) {
             Object.entries(arguments[0]).forEach((entry)=>{
-                if(entry[0]==="target"||entry[0]=="formref"||entry[0]==="urlref"||entry[0]==="template"||entry[0]==="jsonref") {
+                if(entry[0]==="target"||entry[0]=="formref"||entry[0]==="urlref"||entry[0]==="template"||entry[0]==="jsonref"||entry[0]==="headers") {
                     settings[entry[0]]=entry[1];
                 }
             });
@@ -565,6 +565,10 @@ function _parseEval(){
     var jsonref=settings["jsonref"]!==undefined&&settings["jsonref"]!==null?settings["jsonref"]:sourceElm!==null?sourceElm.getAttribute("jsonref"):null;
     if (jsonref!==undefined&&jsonref!==null&&typeof jsonref==="object") {
         jsonref=JSON.parse(JSON.stringify(jsonref));
+    }
+    var headers=settings["headers"]!==undefined&&settings["headers"]!==null?settings["headers"]:sourceElm!==null?sourceElm.getAttribute("headers"):null;
+    if (headers!==undefined&&headers!==null&&typeof headers==="object") {
+        headers=JSON.parse(JSON.stringify(headers));
     }
     var formsrefs=settings["formref"]!==undefined&&settings["formref"]!==null?settings["formref"]:sourceElm!==null?sourceElm.getAttribute("formref"):"";
     if (formsrefs!==undefined&&formsrefs!==null){
@@ -648,6 +652,11 @@ function _parseEval(){
             }
             if(frmdata!==null||jsonref!==null) {
                 xhttp.open("POST",urlrf,true);
+                if(headers!==undefined&&headers!==null&&typeof headers==="object"&&!Array.isArray(headers)) {
+                    for(h in headers) {
+                        xhttp.setRequestHeader(h,headers[h]);
+                    }
+                }
                 if (jsonref!==null){
                     xhttp.setRequestHeader("Content-Type", "application/json; charset=UTF-8");
                     xhttp.send(jsonref);
@@ -656,6 +665,11 @@ function _parseEval(){
                 }
             } else {
                 xhttp.open("GET",urlrf,true);
+                if(headers!==undefined&&headers!==null&&typeof headers==="object"&&!Array.isArray(headers)) {
+                    for(h in headers) {
+                        xhttp.setRequestHeader(h,headers[h]);
+                    }
+                }
                 xhttp.send();
             }
         });
