@@ -418,7 +418,19 @@ func (c *contentparsing) matchPost() (reset bool) {
 		return
 	}
 	if attrbs := c.attrbs; attrbs != nil {
-		tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+		if tstlvl == ElemStart || tstlvl == ElemSingle {
+			tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+		} else if tstlvl == ElemEnd {
+			if c.m.prsix == 0 {
+				tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+			} else {
+				tstname = []rune(ioext.MapReplaceReader(tstname, c.m.cntntprsngs[c.m.prsix-1].attrbs, func(attnme string) (cnflsh bool) {
+					_, cnflsh = c.attrbs[attnme]
+					return
+				}, validNameChar, "::", "::").Runes())
+				tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+			}
+		}
 	}
 	c.tstname = nil
 	c.tstlvl = ElemUnkown
@@ -582,6 +594,9 @@ func (c *contentparsing) matchPost() (reset bool) {
 			c.m.Parse(ioext.MapReplaceReader(cbf.Reader(true), attrbs, func(unmtchdkey string) bool {
 				return c.m.cntntprsngs[c.m.prsix].noncode()
 			}, validNameChar, "[#", "#]"))
+			if cde := c.cde; cde != nil {
+				cde.flushPsv()
+			}
 			cbf = c.cbf
 			c.cbf = nil
 			c.elmlvl = ElemSingle
