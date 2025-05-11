@@ -86,8 +86,8 @@ func (m *markuptemplate) Parse(in interface{}, args ...map[string]interface{}) {
 					}
 					argsm["p-root"] = c.root
 					argsm["p-base"] = c.base
-					argsm["p-e-root"] = c.root
-					argsm["p-e-base"] = c.base
+					argsm["p-e-root"] = c.elmroot
+					argsm["p-e-base"] = c.elmbase
 					return ioext.MapReplaceReader(inrd, argsm, func(unmtchdkey string) bool {
 						return c.m.cntntprsngs[c.m.prsix].noncode()
 					}, validNameChar, "[#", "#]")
