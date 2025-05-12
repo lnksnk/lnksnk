@@ -639,6 +639,13 @@ function _parseEval(){
             xhttp.onerror==function(){
                 
             };
+            if (typeof urlrf ==="string") {
+                if (urlrf.lastIndexOf("?")>-1) {
+                    urlrf+="&"+uniqueId("");
+                } else {
+                    urlrf+="?"+uniqueId("");
+                }
+            }
             if (jsonref!==null) {
                 if (jsonref instanceof HTMLInputElement || jsonref instanceof HTMLTextAreaElement) {
                     jsonref=jsonref.value;
