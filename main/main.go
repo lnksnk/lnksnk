@@ -176,12 +176,16 @@ func main() {
 					var fi, _ = arg.(fs.FileInfo)
 					if fi == nil {
 						if s, sk := arg.(string); sk && s != "" {
-							ext := filepath.Ext(s)
-							fi = mltyfsys.Stat(s)
-							if fi == nil && ext == "" {
-								fi = mltyfsys.Stat(s + ".html")
-							} else {
-								fi = mltyfsys.Stat(s)
+							if fi = mltyfsys.Stat(s); fi == nil {
+								if ext := filepath.Ext(s); ext != "" {
+									if fi = mltyfsys.Stat(s); fi == nil {
+										return
+									}
+								} else {
+									if fi = mltyfsys.Stat(s + ext); fi == nil {
+										return
+									}
+								}
 							}
 						}
 					}
