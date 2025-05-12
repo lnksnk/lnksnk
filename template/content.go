@@ -46,6 +46,10 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 			"p-e-root": c.elmroot,
 			"p-base":   c.base,
 			"p-root":   c.root}
+		c.attrbs["root"] = c.root
+		c.attrbs["base"] = c.base
+		c.attrbs["e-base"] = c.elmbase
+		c.attrbs["e-root"] = c.elmroot
 	}
 	ext := fi.Ext()
 	if ext != "" {
