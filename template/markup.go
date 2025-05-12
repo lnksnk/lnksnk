@@ -74,21 +74,15 @@ func (m *markuptemplate) Parse(in interface{}, args ...map[string]interface{}) {
 		return
 	}
 	var nxtrdr = func(inrd interface{}) (nxrnr io.RuneReader) {
-		var argsm map[string]interface{}
-		if len(args) > 0 && len(args[0]) > 0 {
-			argsm = args[0]
-		}
 		if m.prsix == 0 {
 			if c, ck := m.cntntprsngs[m.prsix]; ck {
 				if c != nil {
-					if argsm == nil {
-						argsm = map[string]interface{}{}
+					if len(args) > 0 && len(args[0]) > 0 {
+						for k, v := range args[0] {
+							c.attrbs[k] = v
+						}
 					}
-					argsm["p-root"] = c.root
-					argsm["p-base"] = c.base
-					argsm["p-e-root"] = c.elmroot
-					argsm["p-e-base"] = c.elmbase
-					return ioext.MapReplaceReader(inrd, argsm, func(unmtchdkey string) bool {
+					return ioext.MapReplaceReader(inrd, c.attrbs, func(unmtchdkey string) bool {
 						return c.m.cntntprsngs[c.m.prsix].noncode()
 					}, validNameChar, "[#", "#]")
 				}
