@@ -433,26 +433,51 @@ func ParseOnly(fsys fs.MultiFileSystem, fi fs.FileInfo, args ...map[string]inter
 	chdfi, _ := fi.(*cachedinfo)
 	actvfsys, _ := fsys.(*activeFileSystem)
 	if chdfi != nil {
-		mrkptmplt.Parse(chdfi.Buffer)
-	} else if fi != nil {
-		if actvfsys != nil {
-			if chdfis := actvfsys.chdfis; chdfis != nil {
-				if chf, _ := chdfis.Get(fi.Path()); chf != nil {
-					if chdfi, _ = chf.(*cachedinfo); chdfi != nil {
-						mrkptmplt.Parse(chdfi.Buffer, args...)
-					} else {
-						mrkptmplt.Parse(fi.Reader(), args...)
-					}
-				} else {
-					mrkptmplt.Parse(fi.Reader(), args...)
-				}
-			} else {
-				mrkptmplt.Parse(fi.Reader(), args...)
-			}
-		} else {
-			mrkptmplt.Parse(fi.Reader(), args...)
-		}
+		mrkptmplt.Parse(chdfi.Buffer, args...)
+		mrkptmplt.Wrapup()
+		cntnt = mrkptmplt.Content()
+		cde = mrkptmplt.Code()
+		finfos = mrkptmplt.ValidElements()
+		unmatched = mrkptmplt.InvalidElements()
+		return
 	}
+	if actvfsys != nil {
+		if chdfis := actvfsys.chdfis; chdfis != nil {
+			if chf, _ := chdfis.Get(fi.Path()); chf != nil {
+				if chdfi, _ = chf.(*cachedinfo); chdfi != nil {
+					mrkptmplt.Parse(chdfi.Buffer, args...)
+					mrkptmplt.Wrapup()
+					cntnt = mrkptmplt.Content()
+					cde = mrkptmplt.Code()
+					finfos = mrkptmplt.ValidElements()
+					unmatched = mrkptmplt.InvalidElements()
+					return
+				}
+				mrkptmplt.Parse(fi.Reader(), args...)
+				mrkptmplt.Wrapup()
+				cntnt = mrkptmplt.Content()
+				cde = mrkptmplt.Code()
+				finfos = mrkptmplt.ValidElements()
+				unmatched = mrkptmplt.InvalidElements()
+				return
+			}
+			mrkptmplt.Parse(fi.Reader(), args...)
+			mrkptmplt.Wrapup()
+			cntnt = mrkptmplt.Content()
+			cde = mrkptmplt.Code()
+			finfos = mrkptmplt.ValidElements()
+			unmatched = mrkptmplt.InvalidElements()
+			return
+		}
+		mrkptmplt.Parse(fi.Reader(), args...)
+		mrkptmplt.Wrapup()
+		cntnt = mrkptmplt.Content()
+		cde = mrkptmplt.Code()
+		finfos = mrkptmplt.ValidElements()
+		unmatched = mrkptmplt.InvalidElements()
+		return
+	}
+	mrkptmplt.Parse(fi.Reader(), args...)
 	mrkptmplt.Wrapup()
 	cntnt = mrkptmplt.Content()
 	cde = mrkptmplt.Code()
