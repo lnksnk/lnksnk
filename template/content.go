@@ -48,6 +48,7 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 			"p-root":   c.root}
 		c.attrbs["root"] = c.root
 		c.attrbs["base"] = c.base
+		c.attrbs["e-name"] = c.elmname
 		c.attrbs["e-base"] = c.elmbase
 		c.attrbs["e-root"] = c.elmroot
 	}
@@ -522,6 +523,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 			if attrbs == nil {
 				attrbs = map[string]interface{}{
 					"cntnt":    "",
+					"e-name":   nxtc.elmname,
 					"e-root":   nxtc.elmroot,
 					"e-base":   nxtc.elmbase,
 					"root":     nxtc.root,
@@ -532,6 +534,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 					"p-base":   pgec.base}
 				nxtc.attrbs = attrbs
 			} else {
+				attrbs["e-name"] = nxtc.elmname
 				attrbs["e-root"] = nxtc.elmroot
 				attrbs["e-base"] = nxtc.elmbase
 				attrbs["root"] = nxtc.root
