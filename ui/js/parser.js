@@ -639,6 +639,21 @@ function _parseEval(){
             xhttp.onerror==function(){
                 
             };
+            if (typeof urlrf==="string") {
+                if (urlrf.lastIndexOf("?")>-1) {
+                    
+                    var urls=urlrf.substring(urlrf.lastIndexOf("?")+1).split("&")
+                    urlrf=urlrf.substring(0,urlrf.lastIndexOf("?")+1);
+                    urls.forEach((urf,uri)=>{
+                        if (urf.indexOf("=")>0){
+                            urf=encodeURIComponent(urf.substring(0,urf.indexOf("=")))+"="+encodeURIComponent(urf.substring(urf.indexOf("=")+1));
+                        } else {
+                            urf=encodeURIComponent(urf);
+                        }
+                        urlrf+=urf+(uri<urls.length-1?"&":"");
+                    });
+                }
+            }
             if (typeof urlrf ==="string") {
                 if (urlrf.lastIndexOf("?")>-1) {
                     urlrf+="&"+uniqueId("");
@@ -657,6 +672,10 @@ function _parseEval(){
                     jsonref=null;
                 }
             }
+            if(headers===undefined||headers===null) {
+                headers={"Cache-Control": "no-cache, no-store, max-age=0","Pragma":"no-cache"};
+            }
+            //alert(JSON.stringify(headers));
             if(frmdata!==null||jsonref!==null) {
                 xhttp.open("POST",urlrf,true);
                 if(headers!==undefined&&headers!==null&&typeof headers==="object"&&!Array.isArray(headers)) {
