@@ -24,6 +24,7 @@ type Reader interface {
 	HttpR() *http.Request
 	Path() string
 	IsMobile() bool
+	IsTablet() bool
 	RemoteAddr() string
 	LocalAddr() string
 	Method() string
