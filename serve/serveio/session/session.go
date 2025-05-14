@@ -52,7 +52,25 @@ func (s *session) VM() (vm SessionVM) {
 	if vm = s.vm; vm == nil {
 		if api := s.api; api != nil {
 			if api.InvokeVM != nil {
-				s.vm = api.InvokeVM(s)
+				if s.vm = api.InvokeVM(s); s.vm != nil {
+					if s.in != nil {
+						var ismobile = s.in.IsMobile()
+						var istablet = s.in.IsTablet()
+						s.vm.Set("isMobile", func() bool {
+							return ismobile
+						})
+						s.vm.Set("isTablet", func() bool {
+							return istablet
+						})
+					} else {
+						s.vm.Set("isMobile", func() bool {
+							return false
+						})
+						s.vm.Set("isTablet", func() bool {
+							return false
+						})
+					}
+				}
 				return s.vm
 			}
 		}
