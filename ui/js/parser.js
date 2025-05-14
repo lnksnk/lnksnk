@@ -673,7 +673,7 @@ function _parseEval(){
                 }
             }
             if(headers===undefined||headers===null) {
-                headers={"Cache-Control": "no-cache, no-store, max-age=0","Pragma":"no-cache"};
+                headers={"Cache-Control": "no-cache, no-store, max-age=0","Pragma":"no-cache","Global-Uid":GlobalUniqueID};
             }
             //alert(JSON.stringify(headers));
             if(frmdata!==null||jsonref!==null) {
@@ -763,3 +763,5 @@ function processContent(template) {
 function uniqueId(prefix){
     return `${prefix}${new Date().getTime()}`;
 }
+
+var GlobalUniqueID=uniqueId("UID");
