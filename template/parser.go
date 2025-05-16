@@ -19,7 +19,6 @@ type ParseAPI interface {
 }
 
 type Parsing struct {
-	lnkdprsr          *Parsing
 	readRune          func() (rune, int, error)
 	bufdrns           []rune
 	prelbl            []rune
