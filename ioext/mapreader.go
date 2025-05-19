@@ -72,8 +72,39 @@ var (
 	})}
 )
 
-func MapReplaceReader(in interface{}, mp map[string]interface{}, flshunmtchd func(string) bool, a ...interface{}) (mprdr MapReader) {
+func MapReplaceReader(in interface{}, mp map[string]interface{}, a ...interface{}) (mprdr MapReader) {
 	var readrune, _ = in.(func() (rune, int, error))
+	var flshunmtchd func(string) bool
+	var cptrkeyval CaptureKeyValueFunc
+	ai := 0
+	al := len(a)
+	for ai < al {
+		if fshchd, unmtchk := a[ai].(func(string) bool); unmtchk {
+			if flshunmtchd == nil && fshchd != nil {
+				flshunmtchd = fshchd
+			}
+			a = append(a[:ai], a[ai+1:]...)
+			al--
+			continue
+		}
+		if cprdkvd, cptrdk := a[ai].(func(string, interface{}) (interface{}, bool)); cptrdk {
+			if cptrkeyval == nil && cprdkvd != nil {
+				cptrkeyval = cprdkvd
+			}
+			a = append(a[:ai], a[ai+1:]...)
+			al--
+			continue
+		}
+		if cprdkvd, cptrdk := a[ai].(CaptureKeyValueFunc); cptrdk {
+			if cptrkeyval == nil && cprdkvd != nil {
+				cptrkeyval = cprdkvd
+			}
+			a = append(a[:ai], a[ai+1:]...)
+			al--
+			continue
+		}
+		ai++
+	}
 	if readrune == nil {
 		if r, rk := in.(io.Reader); rk {
 			rdr, _ := r.(io.RuneReader)
@@ -168,8 +199,13 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, flshunmtchd fun
 			return true
 		}
 	}
+	if cptrkeyval == nil {
+		cptrkeyval = func(k string, orgv interface{}) (interface{}, bool) {
+			return orgv, true
+		}
+	}
 	if len(prepost) == 0 {
-		return &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}
+		return &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune, cptrkeyval: cptrkeyval}
 	}
 	if len(prepost) > 0 && prepost[0] != "" && prepost[1] != "" {
 		if flshunmtchd == nil {
@@ -177,9 +213,15 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, flshunmtchd fun
 				return false
 			}
 		}
-		return &mapprepostreader{mapreader: &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune}, keys: keys, mnklen: mnklen, mxklen: mxklen, pre: []rune(prepost[0]), prel: len([]rune(prepost[0])), post: []rune(prepost[1]), postl: len([]rune(prepost[1])), flshunmtchd: flshunmtchd}
+		return &mapprepostreader{mapreader: &mapreader{mp: mp, keys: keys, orgreadrne: readrune, vldchr: validatnamerune, cptrkeyval: cptrkeyval}, keys: keys, mnklen: mnklen, mxklen: mxklen, pre: []rune(prepost[0]), prel: len([]rune(prepost[0])), post: []rune(prepost[1]), postl: len([]rune(prepost[1])), flshunmtchd: flshunmtchd}
 	}
 	return
+}
+
+type CaptureKeyValueFunc func(string, interface{}) (interface{}, bool)
+
+func (cptrkvfunc CaptureKeyValueFunc) CaptureKeyValue(key string, orgval interface{}) (interface{}, bool) {
+	return cptrkvfunc(key, orgval)
 }
 
 type mapreader struct {
@@ -190,6 +232,7 @@ type mapreader struct {
 	mp         map[string]interface{}
 	keys       [][]rune
 	vldchr     func(rune, rune) bool
+	cptrkeyval CaptureKeyValueFunc
 }
 
 // Close implements MapReader.
@@ -240,6 +283,43 @@ func (m *mapreader) capture(key string) bool {
 		return false
 	}
 	if v, vk := m.mp[key]; vk {
+		if cptrkeyval := m.cptrkeyval; cptrkeyval != nil {
+			if prps, prpk := v.(string); prpk {
+				if prps != "" {
+					v, vk = cptrkeyval(key, prps)
+					if vk {
+						return tobuf(m, v)
+					}
+				}
+				return false
+			}
+			if prpint32, prpk := v.([]int32); prpk {
+				if len(prpint32) == 0 {
+					return false
+				}
+				v, vk = cptrkeyval(key, string(prpint32))
+				if vk {
+					return tobuf(m, v)
+				}
+				return false
+			}
+			if prpbf, prpk := v.(*Buffer); prpk {
+				if prpbf.Empty() {
+					return false
+				}
+				v, vk = cptrkeyval(key, prpbf)
+				if vk {
+					return tobuf(m, v)
+				}
+				return false
+			}
+			if rdr, rdrk := v.(io.RuneReader); rdrk {
+				return tobuf(m, rdr)
+			}
+			if r, rk := v.(io.Reader); rk {
+				return tobuf(m, bufio.NewReader(r))
+			}
+		}
 		return tobuf(m, v)
 	}
 	return false
@@ -403,10 +483,10 @@ type mapprepostreader struct {
 	postl       int
 	tstkeyrns   []rune
 	flshunmtchd func(string) bool
-	//unmatchd    func(interface{}) interface{}
-	keys   [][]rune
-	mnklen int
-	mxklen int
+	prepkeyval  func(string, interface{}) interface{}
+	keys        [][]rune
+	mnklen      int
+	mxklen      int
 }
 
 func (mppr *mapprepostreader) Close() (err error) {
