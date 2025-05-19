@@ -1,6 +1,8 @@
 package template
 
 import (
+	"io"
+
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
@@ -118,6 +120,29 @@ func (cde *codeparsing) reset() {
 	cde.hsecde = false
 }
 
+func processInline(pre string, post string, inrdr io.RuneReader, cdebf *ioext.Buffer) {
+	if pre != "" {
+		cdebf.Print(pre)
+	}
+	New(inrdr, "{@", "@}", false, nil, func(rns ...rune) {
+		cdebf.WriteRunes(rns...)
+	}, func() {
+		cdebf.WriteRunes([]rune("${")...)
+	}, nil, func(canreset bool, rns ...rune) (reset bool) {
+		if reset = canreset; reset {
+			cdebf.WriteRunes(rns...)
+		}
+		cdebf.WriteRunes(rns...)
+		return
+	}, func() bool {
+		cdebf.WriteRunes([]rune("}")...)
+		return false
+	}).Process()
+	if post != "" {
+		cdebf.Print(post)
+	}
+}
+
 func (cde *codeparsing) flushPsv() {
 	if cde == nil {
 		return
@@ -143,55 +168,76 @@ func (cde *codeparsing) flushPsv() {
 			cdebf = ioext.NewBuffer()
 			cde.cdebf = cdebf
 		}
-		if lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
-
-			cdebf.Print("`")
+		/*if lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
 			if contnsinle {
 				if contnsinle {
-					New(psvbf.Clone(true).Reader(true), "{@", "@}", false, nil, func(rns ...rune) {
-						cdebf.WriteRunes(rns...)
-					}, func() {
-						cdebf.WriteRunes([]rune("${")...)
-					}, nil, func(canreset bool, rns ...rune) (reset bool) {
-						if reset = canreset; reset {
-							cdebf.WriteRunes(rns...)
-						}
-						cdebf.WriteRunes(rns...)
-						return
-					}, func() bool {
-						cdebf.WriteRunes([]rune("}")...)
-						return false
-					}).Process()
+					processInline("`", "`", psvbf.Clone(true).Reader(true), cdebf)
 				}
 			} else {
-				cdebf.Print(psvbf)
+				cdebf.Print("`", psvbf, "`")
 			}
-			cdebf.Print("`")
 
 			return
 		}
-		cdebf.Print("print(`")
 		if contnsinle {
 			if contnsinle {
-				New(psvbf.Clone(true).Reader(true), "{@", "@}", false, nil, func(rns ...rune) {
-					cdebf.WriteRunes(rns...)
-				}, func() {
-					cdebf.WriteRunes([]rune("${")...)
-				}, nil, func(canreset bool, rns ...rune) (reset bool) {
-					if reset = canreset; reset {
-						cdebf.WriteRunes(rns...)
-					}
-					cdebf.WriteRunes(rns...)
-					return
-				}, func() bool {
-					cdebf.WriteRunes([]rune("}")...)
-					return false
-				}).Process()
+				processInline("print(`", "`);", psvbf.Clone(true).Reader(true), cdebf)
 			}
 		} else {
-			cdebf.Print(psvbf)
+			cdebf.Print("print(`", psvbf, "`);")
+		}*/
+		texttocode(cde, contnsinle, psvbf.Clone(true).Reader(true))
+	}
+}
+
+func texttocode(cde *codeparsing, isinline bool, txtrdr io.RuneReader) {
+	if cde == nil {
+		return
+	}
+	cdebf := cde.cdebf
+	if cdebf == nil {
+		cdebf = ioext.NewBuffer()
+		cde.cdebf = cdebf
+	}
+	if !cde.fndcde {
+		cde.fndcde = true
+	}
+	lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte()))
+	istxt := ioext.IsTxtPar(lstr)
+	if istxt || validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
+		if istxt {
+			if lstr != '`' {
+				cdebf.Print(string(lstr) + "+")
+			}
 		}
-		cdebf.Print("`);")
+		if isinline {
+			if isinline {
+				if lstr == '`' {
+					processInline("", "", txtrdr, cdebf)
+				} else {
+					processInline("`", "`", txtrdr, cdebf)
+				}
+			}
+		} else {
+			if lstr == '`' {
+				cdebf.Print(txtrdr)
+			} else {
+				cdebf.Print("`", txtrdr, "`")
+			}
+		}
+		if istxt {
+			if lstr != '`' {
+				cdebf.Print("+" + string(lstr))
+			}
+		}
+		return
+	}
+	if isinline {
+		if isinline {
+			processInline("print(`", "`);", txtrdr, cdebf)
+		}
+	} else {
+		cdebf.Print("print(`", txtrdr, "`);")
 	}
 }
 

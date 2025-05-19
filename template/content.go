@@ -424,16 +424,16 @@ func (c *contentparsing) matchPost() (reset bool) {
 	}
 	if attrbs := c.attrbs; attrbs != nil {
 		if tstlvl == ElemStart || tstlvl == ElemSingle {
-			tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+			tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, validNameChar, "::", "::").Runes())
 		} else if tstlvl == ElemEnd {
 			if c.m.prsix == 0 {
-				tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+				tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, validNameChar, "::", "::").Runes())
 			} else {
 				tstname = []rune(ioext.MapReplaceReader(tstname, c.m.cntntprsngs[c.m.prsix-1].attrbs, func(attnme string) (cnflsh bool) {
 					_, cnflsh = c.attrbs[attnme]
 					return
 				}, validNameChar, "::", "::").Runes())
-				tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, nil, validNameChar, "::", "::").Runes())
+				tstname = []rune(ioext.MapReplaceReader(tstname, attrbs, validNameChar, "::", "::").Runes())
 			}
 		}
 	}
@@ -547,7 +547,9 @@ func (c *contentparsing) matchPost() (reset bool) {
 			}
 			mps := ioext.MapReplaceReader(fi.Reader(), attrbs, func(unmtchdkey string) bool {
 				return c.m.cntntprsngs[c.m.prsix].noncode()
-			}, validNameChar, "[#", "#]")
+			}, ioext.CaptureKeyValueFunc(func(key string, orgval interface{}) (val interface{}, capture bool) {
+				return capturekeyval(c.m.cntntprsngs[c.m.prsix], key, orgval)
+			}), validNameChar, "[#", "#]")
 			c.m.Parse(mps)
 			nxtc.Close()
 		}
@@ -615,7 +617,9 @@ func (c *contentparsing) matchPost() (reset bool) {
 			}()
 			c.m.Parse(ioext.MapReplaceReader(c.fi.Reader(), attrbs, func(unmtchdkey string) bool {
 				return c.m.cntntprsngs[c.m.prsix].noncode()
-			}, validNameChar, "[#", "#]"))
+			}, ioext.CaptureKeyValueFunc(func(key string, orgval interface{}) (val interface{}, capture bool) {
+				return capturekeyval(c.m.cntntprsngs[c.m.prsix], key, orgval)
+			}), validNameChar, "[#", "#]"))
 			c.Close()
 			return
 		}
@@ -627,6 +631,35 @@ func (c *contentparsing) matchPost() (reset bool) {
 	}
 	defer tstatrbs.Close()
 	return
+}
+
+func capturekeyval(c *contentparsing, key string, orgval interface{}) (interface{}, bool) {
+	if c.noncode() {
+		return orgval, true
+	}
+	cde := c.cde
+	if cde != nil && cde.Busy() {
+		if cde.noncode() {
+			return orgval, true
+		}
+		if vs, vsk := orgval.(string); vsk {
+			if vs == "" {
+				return "", false
+			}
+			texttocode(cde, strings.Contains(vs, "{@") && strings.Contains(vs, "@}"), strings.NewReader(vs))
+			return nil, false
+		}
+		if vbf, vbk := orgval.(*ioext.Buffer); vbk {
+			if vbf.Empty() {
+				return nil, false
+			}
+
+			texttocode(cde, vbf.Contains("{@") && vbf.Contains("@}"), vbf.Reader())
+			return nil, false
+		}
+		return orgval, true
+	}
+	return orgval, true
 }
 
 func (c *contentparsing) resetCdeParsing() {

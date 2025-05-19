@@ -83,7 +83,15 @@ func (m *markuptemplate) Parse(in interface{}, args ...map[string]interface{}) {
 						}
 					}
 					return ioext.MapReplaceReader(inrd, c.attrbs, func(unmtchdkey string) bool {
-						return c.m.cntntprsngs[c.m.prsix].noncode()
+						if c.m.cntntprsngs[c.m.prsix].noncode() {
+							return true
+						}
+						if cde := c.m.cntntprsngs[c.m.prsix].cde; cde != nil {
+							if cde.Busy() {
+								return cde.noncode()
+							}
+						}
+						return false
 					}, validNameChar, "[#", "#]")
 				}
 			}
