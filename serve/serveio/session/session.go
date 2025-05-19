@@ -340,3 +340,13 @@ type SessionAPI struct {
 	RunProgram func(interface{}, io.Writer)
 	Eval       func(interface{}, ...map[string]interface{}) error
 }
+
+type SessionHttpFunc func(http.ResponseWriter, *http.Request)
+
+func (ssnhttpfunc SessionHttpFunc) ServeHttp(w http.ResponseWriter, r *http.Request) {
+	ssnhttpfunc(w, r)
+}
+
+func (ssnhttpfunc SessionHttpFunc) Session(ownerssn Session, w http.ResponseWriter, r *http.Request, fsys fs.MultiFileSystem) Session {
+	return NewSession(ownerssn, w, r, fsys)
+}
