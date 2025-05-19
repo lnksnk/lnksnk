@@ -94,221 +94,227 @@ func main() {
 
 	var mainsession = sessioning.NewSession(nil, mltyfsys)
 	var mainsessions = mainsession.Sessions()
-	mainsessions.API(func(sa *sessioning.SessionsAPI) {
-		sa.ServeHttp = func(ssns sessioning.Sessions, ssn sessioning.Session, w http.ResponseWriter, r *http.Request) {
-			ssn.API(func(sa *sessioning.SessionAPI) {
-				sa.InvokeVM = func(s sessioning.Session) sessioning.SessionVM {
-					var vm = es.New()
+	var ssnhndlr sessioning.SessionHttpFunc
+	ssnhndlr = sessioning.SessionHttpFunc(func(w http.ResponseWriter, r *http.Request) {
+		ssn := ssnhndlr.Session(mainsession, w, r, mltyfsys)
+		mainsessions.Set(mainsessions.UniqueKey(), ssn)
+		defer func() {
+			if ssn != nil {
+				ssn.Close()
+			}
+		}()
+		ssn.API(func(sa *sessioning.SessionAPI) {
+			sa.InvokeVM = func(s sessioning.Session) sessioning.SessionVM {
+				var vm = es.New()
 
-					vm.SetFieldNameMapper(fieldmapping.NewFieldMapper(es.UncapFieldNameMapper()))
-					vm.SetImportModule(func(modname string, namedimports ...[][]string) (imported bool) {
-						if modfi := mltyfsys.Stat(modname); modfi != nil {
-							active.ProcessActiveFile(mltyfsys, modfi, nil, nil, func(pgrm interface{}, w io.Writer) {
-								imported = es.ImportModule(pgrm, vm, namedimports...)
-							})
+				vm.SetFieldNameMapper(fieldmapping.NewFieldMapper(es.UncapFieldNameMapper()))
+				vm.SetImportModule(func(modname string, namedimports ...[][]string) (imported bool) {
+					if modfi := mltyfsys.Stat(modname); modfi != nil {
+						active.ProcessActiveFile(mltyfsys, modfi, nil, nil, func(pgrm interface{}, w io.Writer) {
+							imported = es.ImportModule(pgrm, vm, namedimports...)
+						})
+					}
+					return imported
+				})
+				vm.SetRequire(func(modname string) (obj *es.Object) {
+					obj = es.RequireModuleExports(nil, vm)
+					return
+				})
+				vm.Set("$", ssn)
+				if out := ssn.Out(); out != nil {
+					vm.Set("print", out.Print)
+					vm.Set("println", out.Println)
+				}
+				return sessioning.InvokeVM(vm, ssn)
+			}
+			sa.RunProgram = func(prgrm interface{}, prgout io.Writer) {
+				if vm := ssn.VM(); vm != nil {
+					out := ssn.Out()
+					if eprg, _ := prgrm.(*es.Program); eprg != nil {
+						if evm, _ := vm.VM().(*es.Runtime); evm != nil {
+							if out != prgout {
+								defer func() {
+									if out != nil && prgout != out {
+										vm.Set("print", out.Print)
+										vm.Set("println", out.Println)
+									}
+								}()
+								vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
+								vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
+							}
+							rslt, err := evm.RunProgram(eprg)
+							if err != nil && out != nil {
+								out.Println("err:" + err.Error())
+								for lnr, ln := range strings.Split(eprg.Src(), "\n") {
+									out.Println(fmt.Sprintf("%d. %s", lnr+1, strings.TrimRightFunc(ln, ioext.IsSpace)))
+								}
+							} else {
+								if rslt != nil {
+									if exp := rslt.Export(); exp != nil && out != nil {
+										out.Print(exp)
+									}
+								}
+							}
 						}
-						return imported
-					})
-					vm.SetRequire(func(modname string) (obj *es.Object) {
-						obj = es.RequireModuleExports(nil, vm)
-						return
-					})
-					vm.Set("$", ssn)
-					if out := ssn.Out(); out != nil {
+					}
+				}
+			}
+
+			sa.InvodeDB = func() dbms.DBMSHandler {
+				return glbldbms.Handler(ssn.Params(), func(dbfsys fs.MultiFileSystem, dbfi fs.FileInfo, qryout io.Writer) {
+					if dbfi = active.ProcessActiveFile(
+						dbfsys,
+						dbfi,
+						qryout,
+						nil,
+						sa.RunProgram); dbfi != nil {
+						if qryout != nil {
+							ioext.Fprint(qryout, dbfi)
+						}
+					}
+					if vm, out := ssn.VM(), ssn.Out(); vm != nil && out != nil {
 						vm.Set("print", out.Print)
 						vm.Set("println", out.Println)
 					}
-					return sessioning.InvokeVM(vm, ssn)
-				}
-				sa.RunProgram = func(prgrm interface{}, prgout io.Writer) {
-					if vm := ssn.VM(); vm != nil {
-						out := ssn.Out()
-						if eprg, _ := prgrm.(*es.Program); eprg != nil {
-							if evm, _ := vm.VM().(*es.Runtime); evm != nil {
-								if out != prgout {
-									defer func() {
-										if out != nil && prgout != out {
-											vm.Set("print", out.Print)
-											vm.Set("println", out.Println)
-										}
-									}()
-									vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
-									vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
+				})
+			}
+
+			sa.Eval = func(arg interface{}, a ...map[string]interface{}) (err error) {
+				var fi, _ = arg.(fs.FileInfo)
+				if fi == nil {
+					if s, sk := arg.(string); sk && s != "" {
+						if fi = mltyfsys.Stat(s); fi == nil {
+							if ext := filepath.Ext(s); ext != "" {
+								if fi = mltyfsys.Stat(s); fi == nil {
+									return
 								}
-								rslt, err := evm.RunProgram(eprg)
-								if err != nil && out != nil {
-									out.Println("err:" + err.Error())
-									for lnr, ln := range strings.Split(eprg.Src(), "\n") {
-										out.Println(fmt.Sprintf("%d. %s", lnr+1, strings.TrimRightFunc(ln, ioext.IsSpace)))
-									}
-								} else {
-									if rslt != nil {
-										if exp := rslt.Export(); exp != nil && out != nil {
-											out.Print(exp)
-										}
-									}
+							} else {
+								if fi = mltyfsys.Stat(s + ext); fi == nil {
+									return
 								}
 							}
 						}
 					}
 				}
-
-				sa.InvodeDB = func() dbms.DBMSHandler {
-					return glbldbms.Handler(ssn.Params(), func(dbfsys fs.MultiFileSystem, dbfi fs.FileInfo, qryout io.Writer) {
-						if dbfi = active.ProcessActiveFile(
-							dbfsys,
-							dbfi,
-							qryout,
-							nil,
-							sa.RunProgram); dbfi != nil {
-							if qryout != nil {
-								ioext.Fprint(qryout, dbfi)
-							}
-						}
-						if vm, out := ssn.VM(), ssn.Out(); vm != nil && out != nil {
-							vm.Set("print", out.Print)
-							vm.Set("println", out.Println)
-						}
-					})
-				}
-
-				sa.Eval = func(arg interface{}, a ...map[string]interface{}) (err error) {
-					var fi, _ = arg.(fs.FileInfo)
-					if fi == nil {
-						if s, sk := arg.(string); sk && s != "" {
-							if fi = mltyfsys.Stat(s); fi == nil {
-								if ext := filepath.Ext(s); ext != "" {
-									if fi = mltyfsys.Stat(s); fi == nil {
-										return
-									}
-								} else {
-									if fi = mltyfsys.Stat(s + ext); fi == nil {
-										return
-									}
-								}
-							}
-						}
+				if fi != nil {
+					if len(a) == 0 {
+						active.ProcessActiveFile(mltyfsys, fi, ssn.Out(), nil, sa.RunProgram)
+						return
 					}
-					if fi != nil {
-						if len(a) == 0 {
-							active.ProcessActiveFile(mltyfsys, fi, ssn.Out(), nil, sa.RunProgram)
-							return
-						}
-						cntnt, cde, _, _, prserr := active.ParseOnly(mltyfsys, fi, a...)
-						defer func() {
-							if !cntnt.Empty() {
-								cntnt.Close()
-							}
-							if !cde.Empty() {
-								cde.Close()
-							}
-						}()
-						if prserr != nil {
-							err = prserr
-						}
-						out := ssn.Out()
-						if out != nil && !cntnt.Empty() {
-							cntnt.WriteTo(out)
+					cntnt, cde, _, _, prserr := active.ParseOnly(mltyfsys, fi, a...)
+					defer func() {
+						if !cntnt.Empty() {
+							cntnt.Close()
 						}
 						if !cde.Empty() {
-							prgm, prgmerr := compileprogram(mltyfsys, cde)
-							if prgmerr != nil {
-								err = prgmerr
-								return
-							}
-							if prgm != nil {
-								sa.RunProgram(prgm, out)
-							}
+							cde.Close()
+						}
+					}()
+					if prserr != nil {
+						err = prserr
+					}
+					out := ssn.Out()
+					if out != nil && !cntnt.Empty() {
+						cntnt.WriteTo(out)
+					}
+					if !cde.Empty() {
+						prgm, prgmerr := compileprogram(mltyfsys, cde)
+						if prgmerr != nil {
+							err = prgmerr
+							return
+						}
+						if prgm != nil {
+							sa.RunProgram(prgm, out)
 						}
 					}
-					return
 				}
-			})
-
-			path := ssn.Path()
-			rqfi := ssn.Fsys().Stat(path)
-			if rqfi == nil {
 				return
 			}
-			if cls, _ := rqfi.(io.Closer); cls != nil {
-				defer cls.Close()
-			}
-			if rqsize := rqfi.Size(); rqsize > 0 {
-				out := ssn.Out()
-				in := ssn.In()
-				mimetype, texttype, media := mimes.FindMimeType(rqfi.Ext())
-				if texttype {
-					if out != nil {
-						out.Header().Set("Expires", time.Now().Format(http.TimeFormat))
-					}
-				}
-				if texttype || strings.Contains(mimetype, "text/plain") {
-					mimetype += "; charset=utf-8"
-				}
+		})
+
+		path := ssn.Path()
+		rqfi := ssn.Fsys().Stat(path)
+		if rqfi == nil {
+			return
+		}
+		if cls, _ := rqfi.(io.Closer); cls != nil {
+			defer cls.Close()
+		}
+		if rqsize := rqfi.Size(); rqsize > 0 {
+			out := ssn.Out()
+			in := ssn.In()
+			mimetype, texttype, media := mimes.FindMimeType(rqfi.Ext())
+			if texttype {
 				if out != nil {
-					out.Header().Set("Content-type", mimetype)
+					out.Header().Set("Expires", time.Now().Format(http.TimeFormat))
 				}
-				actv := texttype
-				if !actv && rqfi.Active() {
-					actv = true
-				}
-				if actv {
-					if ssn != nil {
-						if rqfi = active.ProcessActiveFile(
-							mltyfsys,
-							rqfi,
-							out,
-							nil,
-							ssn.API().RunProgram); rqfi != nil && out != nil && in != nil {
-							out.Print(rqfi.Reader(in.Context()))
-						}
+			}
+			if texttype || strings.Contains(mimetype, "text/plain") {
+				mimetype += "; charset=utf-8"
+			}
+			if out != nil {
+				out.Header().Set("Content-type", mimetype)
+			}
+			actv := texttype
+			if !actv && rqfi.Active() {
+				actv = true
+			}
+			if actv {
+				if ssn != nil {
+					if rqfi = active.ProcessActiveFile(
+						mltyfsys,
+						rqfi,
+						out,
+						nil,
+						ssn.API().RunProgram); rqfi != nil && out != nil && in != nil {
+						out.Print(rqfi.Reader(in.Context()))
 					}
-					return
 				}
+				return
+			}
 
-				if !actv || (media && rqfi.Media()) {
-					rdr := rqfi.Reader()
-					if rdrsk, rangeOffset, rangeType := rdr.(io.ReadSeeker), in.RangeOffset(), in.RangeType(); rdrsk != nil && rangeOffset > -1 && rangeType == "bytes" {
-						rdrsk.Seek(rangeOffset, 0)
-						maxoffset := int64(0)
-						maxlen := int64(0)
-						if maxoffset = rangeOffset + (rqsize - rangeOffset); maxoffset > 0 {
-							maxlen = maxoffset - rangeOffset
-							maxoffset--
-						}
-
-						if maxoffset < rangeOffset {
-							maxoffset = rangeOffset
-							maxlen = 0
-						}
-						if maxlen > 1024*1024 {
-							maxlen = 1024 * 1024
-							maxoffset = rangeOffset + (maxlen - 1)
-						}
-						contentrange := fmt.Sprintf("%s %d-%d/%d", in.RangeType(), rangeOffset, maxoffset, rqsize)
-						if out != nil {
-							out.Header().Set("Content-Range", contentrange)
-							out.Header().Set("Content-Length", fmt.Sprintf("%d", maxlen))
-						}
-						rdr = io.LimitReader(rdr, maxlen)
-						out.MaxWriteSize(maxlen)
-						if out != nil {
-							out.WriteHeader(206)
-						}
-					} else {
-						if out != nil {
-							out.Header().Set("Accept-Ranges", "bytes")
-							out.Header().Set("Content-Length", fmt.Sprintf("%d", rqsize))
-						}
-						out.MaxWriteSize(rqsize)
+			if !actv || (media && rqfi.Media()) {
+				rdr := rqfi.Reader()
+				if rdrsk, rangeOffset, rangeType := rdr.(io.ReadSeeker), in.RangeOffset(), in.RangeType(); rdrsk != nil && rangeOffset > -1 && rangeType == "bytes" {
+					rdrsk.Seek(rangeOffset, 0)
+					maxoffset := int64(0)
+					maxlen := int64(0)
+					if maxoffset = rangeOffset + (rqsize - rangeOffset); maxoffset > 0 {
+						maxlen = maxoffset - rangeOffset
+						maxoffset--
 					}
-					out.BPrint(rdr)
-					return
+
+					if maxoffset < rangeOffset {
+						maxoffset = rangeOffset
+						maxlen = 0
+					}
+					if maxlen > 1024*1024 {
+						maxlen = 1024 * 1024
+						maxoffset = rangeOffset + (maxlen - 1)
+					}
+					contentrange := fmt.Sprintf("%s %d-%d/%d", in.RangeType(), rangeOffset, maxoffset, rqsize)
+					if out != nil {
+						out.Header().Set("Content-Range", contentrange)
+						out.Header().Set("Content-Length", fmt.Sprintf("%d", maxlen))
+					}
+					rdr = io.LimitReader(rdr, maxlen)
+					out.MaxWriteSize(maxlen)
+					if out != nil {
+						out.WriteHeader(206)
+					}
+				} else {
+					if out != nil {
+						out.Header().Set("Accept-Ranges", "bytes")
+						out.Header().Set("Content-Length", fmt.Sprintf("%d", rqsize))
+					}
+					out.MaxWriteSize(rqsize)
 				}
+				out.BPrint(rdr)
+				return
 			}
 		}
 	})
-	lstn = listen.NewListen(mainsessions.ServeHTTP)
+	lstn = listen.NewListen(ssnhndlr.ServeHttp)
 
 	lstn.Serve("tcp", ":1089")
 	<-chn
