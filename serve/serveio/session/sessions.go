@@ -17,12 +17,27 @@ type Sessions interface {
 	New(string, ...interface{}) Session
 	ServeHTTP(http.ResponseWriter, *http.Request)
 	API(...func(*SessionsAPI)) *SessionsAPI
+	UniqueKey(...string) string
 }
 
 type sessions struct {
 	owener Session
 	api    *SessionsAPI
 	ioext.IterateMap[string, Session]
+}
+
+// UniqueKey implements Sessions.
+func (s *sessions) UniqueKey(prepost ...string) string {
+	if s == nil {
+		return ""
+	}
+	if len(prepost) == 1 {
+		return fmt.Sprintf("%s%v", prepost[0], nextserial())
+	}
+	if len(prepost) > 1 {
+		return fmt.Sprintf("%s%v%s", prepost[0], nextserial(), prepost[0])
+	}
+	return fmt.Sprintf("%v", nextserial())
 }
 
 // API implements Sessions.
@@ -73,7 +88,7 @@ func (s *sessions) New(name string, a ...interface{}) (ssn Session) {
 		}
 		return
 	}
-	name = fmt.Sprintf("%v", nextserial())
+	name = s.UniqueKey()
 	ssn = NewSession(s.owener, a...)
 	if ssnref, _ := ssn.(*session); ssnref != nil {
 		ssnref.key = name
