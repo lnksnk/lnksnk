@@ -15,6 +15,13 @@ import (
 func Fprint(w io.Writer, a ...interface{}) (err error) {
 	if len(a) > 0 && w != nil {
 		for dn := range a {
+			if b, bok := a[dn].(bool); bok {
+				if b {
+					a[dn] = "true"
+				} else {
+					a[dn] = "false"
+				}
+			}
 			if s, sok := a[dn].(string); sok {
 				if _, err = w.Write(RunesToUTF8([]rune(s)...)); err != nil {
 					if err == io.EOF {
