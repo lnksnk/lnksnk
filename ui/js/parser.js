@@ -1,4 +1,3 @@
-
 function isMobile (opts) {
     const mobileRE = /(android|bb\d+|meego).+mobile|armv7l|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|redmi|series[46]0|samsungbrowser.*mobile|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i
     const notMobileRE = /CrOS/
@@ -326,8 +325,8 @@ function parse(options){
     var print=options["print"]!==undefined&&options["print"]!==null&&typeof options["print"] === "function"?options["print"]:function(){};
     var write=options["write"]!==undefined&&options["write"]!==null&&typeof options["write"] === "function"?options["write"]:function(){};
     var evalactive=options["eval"]!==undefined&&options["eval"]!==null&&typeof options["eval"] === "function"?options["eval"]:function(){};
-    var prepostlbl={"pre":options["prelbl"]!==undefined&&options["prelbl"]!==null&&typeof options["prelbl"] === "string"?options["prelbl"]:"<%",
-                    "post":options["postlbl"]!==undefined&&options["postlbl"]!==null&&typeof options["postlbl"] === "string"?options["postlbl"]:"%>"};
+    var prepostlbl={"pre":options["prelbl"]!==undefined&&options["prelbl"]!==null&&typeof options["prelbl"] === "string"?options["prelbl"]:"<@",
+                    "post":options["postlbl"]!==undefined&&options["postlbl"]!==null&&typeof options["postlbl"] === "string"?options["postlbl"]:"@>"};
     var unparsedcontents=options["template"]!==undefined&&options["template"]!==null&&typeof options["template"] === "string"?[options["template"]]:options["template"]!==undefined&&options["template"]!==null&&typeof options["template"] === "function"?options["template"]():options["template"]!==undefined&&options["template"]!==null?options["template"]:[];
     var activecode="";
     function doParser(){
