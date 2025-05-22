@@ -337,7 +337,7 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 		var prmnme []rune
 		var prmargvalsfnd = map[int]func() interface{}{}
 		var prmargsfnd = []int{}
-		prsng = template.New(nil, "@", "@", false, nil, func(prerns ...rune) {
+		prsng = template.New(nil, "@", "@", false, false, nil, func(prerns ...rune) {
 			qrybf.WriteRunes(prerns...)
 		}, nil, nil, func(canreset bool, rns ...rune) (reset bool) {
 			prmnme = append(prmnme, rns...)
