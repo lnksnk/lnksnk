@@ -112,6 +112,10 @@ func MapReplaceReader(in interface{}, mp map[string]interface{}, a ...interface{
 				rdr = bufio.NewReaderSize(r, 1)
 			}
 			readrune = rdr.ReadRune
+		} else if rnr, rnk := in.(io.RuneReader); rnk {
+			if rnr != nil {
+				readrune = rnr.ReadRune
+			}
 		} else if s, sk := in.(string); sk {
 			if s == "" {
 				return emptyMapReader
