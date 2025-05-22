@@ -87,7 +87,8 @@ func (attrbprsr *attributeparser) passiveRunes(rns ...rune) {
 					attrbprsr.tstvalue = nil
 					attrbprsr.tstlvl = AttribContinue
 					attrbprsr.tstprvr = 0
-					attrbprsr.txtprs = nil
+					attrbprsr.pretxtprs = nil
+					attrbprsr.posttxtprs = nil
 					attrbprsr.ParseValue(name, value, len(value) == 0)
 					continue
 				}
@@ -169,7 +170,8 @@ func (attrbprsr *attributeparser) activeDone() (reset bool) {
 		attrbprsr.tstvalue = nil
 		attrbprsr.tstlvl = AttribContinue
 		attrbprsr.tstprvr = 0
-		attrbprsr.txtprs = nil
+		attrbprsr.pretxtprs = nil
+		attrbprsr.posttxtprs = nil
 		attrbprsr.atvrnes = nil
 		attrbprsr.ParseValue(name, value, len(value) == 0)
 		return
@@ -181,7 +183,7 @@ func (attrbprsr *attributeparser) activeDone() (reset bool) {
 }
 
 func nextattrbprsr(prelbl, postlbl string, readRune func() (rune, int, error), eofrns ...rune) (attrbprsr *attributeparser) {
-	attrbprsr = &attributeparser{Parsing: nextparsing(prelbl, postlbl, &textparsing{}, readRune)}
+	attrbprsr = &attributeparser{Parsing: nextparsing(prelbl, postlbl, nil, &textparsing{}, readRune)}
 	attrbprsr.txttst = &textparsing{}
 	parsing := attrbprsr.Parsing
 	parsing.EventPostRunes = attrbprsr.activeRunes

@@ -6,6 +6,13 @@ import (
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
+const (
+	CdePre  string = "<%"
+	CdePost string = "%>"
+	PsvPre  string = "{@"
+	PsvPost string = "@}"
+)
+
 type codeparsing struct {
 	parsing *Parsing
 	m       *markuptemplate
@@ -36,8 +43,18 @@ func (cde *codeparsing) Busy() bool {
 	return cde != nil && cde.parsing.Busy()
 }
 
-func nextCodeParsing(c *contentparsing, m *markuptemplate, cdeprelbl, cdepostlbl string) (cde *codeparsing) {
-	cde = &codeparsing{m: m, c: c, parsing: nextparsing(cdeprelbl, cdepostlbl, &textparsing{}, nil)}
+func nextCodeParsing(c *contentparsing, m *markuptemplate, parsepretxt, parseposttxt bool, cdeprelbl, cdepostlbl string) (cde *codeparsing) {
+	cde = &codeparsing{m: m, c: c, parsing: nextparsing(cdeprelbl, cdepostlbl, func() *textparsing {
+		if parsepretxt {
+			return &textparsing{}
+		}
+		return nil
+	}(), func() *textparsing {
+		if parseposttxt {
+			return &textparsing{}
+		}
+		return nil
+	}(), nil)}
 	if prsng := cde.parsing; prsng != nil {
 		prsng.EventMatchedPre = cde.startCaptureCode
 		prsng.EventMatchedPost = cde.doneCaptureCode
@@ -124,7 +141,7 @@ func processInline(pre string, post string, inrdr io.RuneReader, cdebf *ioext.Bu
 	if pre != "" {
 		cdebf.Print(pre)
 	}
-	New(inrdr, "{@", "@}", false, nil, func(rns ...rune) {
+	New(inrdr, PsvPre, PsvPost, false, false, nil, func(rns ...rune) {
 		cdebf.WriteRunes(rns...)
 	}, func() {
 		cdebf.WriteRunes([]rune("${")...)
@@ -154,7 +171,7 @@ func (cde *codeparsing) flushPsv() {
 			return
 		}
 
-		contnsinle := psvbf.Contains("{@") && psvbf.Contains("@}")
+		contnsinle := psvbf.Contains(PsvPre) && psvbf.Contains(PsvPost)
 
 		if !cde.fndcde && contnsinle {
 			cde.fndcde = true

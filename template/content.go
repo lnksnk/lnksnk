@@ -8,6 +8,11 @@ import (
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
+const (
+	ArgPre  string = "[#"
+	ArgPost string = "#]"
+)
+
 type contentparsing struct {
 	parsing   *Parsing
 	m         *markuptemplate
@@ -32,7 +37,13 @@ type contentparsing struct {
 }
 
 func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFileSystem, fi fs.FileInfo, elemlvl ElemLevel) (c *contentparsing) {
-	c = &contentparsing{m: m, prvc: prvc, fsys: fsys, fi: fi, parsing: nextparsing("<", ">", &textparsing{}, nil)}
+	ext := fi.Ext()
+	c = &contentparsing{m: m, prvc: prvc, fsys: fsys, fi: fi, parsing: nextparsing("<", ">", func() *textparsing {
+		if ext == ".js" || ext == ".json" || ext == ".css" {
+			return &textparsing{}
+		}
+		return nil
+	}(), &textparsing{}, nil)}
 	c.path = fi.Path()
 	c.root = fi.Root()
 	c.base = fi.Base()
@@ -52,7 +63,7 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 		c.attrbs["e-base"] = c.elmbase
 		c.attrbs["e-root"] = c.elmroot
 	}
-	ext := fi.Ext()
+
 	if ext != "" {
 		if c.path == fi.Root()+"index"+ext {
 			c.elmname = c.elmroot
@@ -64,8 +75,7 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 	c.parsing.EventMatchedPre = c.matchPre
 	c.parsing.EventPostRunes = c.postRunes
 	c.parsing.EventMatchedPost = c.matchPost
-
-	c.cde = nextCodeParsing(c, m, func() string {
+	c.cde = nextCodeParsing(c, m, ext == ".js" || ext == ".json" || ext == ".css", true, func() string {
 		if prvc != nil {
 			if cde := prvc.cde; cde != nil {
 				if cdeprsg := cde.parsing; cdeprsg != nil {
@@ -73,7 +83,7 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 				}
 			}
 		}
-		return "<@"
+		return CdePre
 	}(), func() string {
 		if prvc != nil {
 			if cde := prvc.cde; cde != nil {
@@ -82,7 +92,7 @@ func nextContentParsing(prvc *contentparsing, m *markuptemplate, fsys fs.MultiFi
 				}
 			}
 		}
-		return "@>"
+		return CdePost
 	}())
 	c.resetCdeParsing()
 	return
@@ -549,7 +559,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 				return c.m.cntntprsngs[c.m.prsix].noncode()
 			}, ioext.CaptureKeyValueFunc(func(key string, orgval interface{}) (val interface{}, capture bool) {
 				return capturekeyval(c.m.cntntprsngs[c.m.prsix], key, orgval)
-			}), validNameChar, "[#", "#]")
+			}), validNameChar, ArgPre, ArgPost)
 			c.m.Parse(mps)
 			nxtc.Close()
 		}
@@ -602,7 +612,7 @@ func (c *contentparsing) matchPost() (reset bool) {
 			c.elmlvl = ElemStart
 			c.m.Parse(ioext.MapReplaceReader(cbf.Reader(true), attrbs, func(unmtchdkey string) bool {
 				return c.m.cntntprsngs[c.m.prsix].noncode()
-			}, validNameChar, "[#", "#]"))
+			}, validNameChar, ArgPre, ArgPost))
 			if cde := c.cde; cde != nil {
 				cde.flushPsv()
 			}
@@ -646,7 +656,7 @@ func capturekeyval(c *contentparsing, key string, orgval interface{}) (interface
 			if vs == "" {
 				return "", false
 			}
-			texttocode(cde, strings.Contains(vs, "{@") && strings.Contains(vs, "@}"), strings.NewReader(vs))
+			texttocode(cde, strings.Contains(vs, PsvPre) && strings.Contains(vs, PsvPost), strings.NewReader(vs))
 			return nil, false
 		}
 		if vbf, vbk := orgval.(*ioext.Buffer); vbk {
@@ -654,7 +664,7 @@ func capturekeyval(c *contentparsing, key string, orgval interface{}) (interface
 				return nil, false
 			}
 
-			texttocode(cde, vbf.Contains("{@") && vbf.Contains("@}"), vbf.Reader())
+			texttocode(cde, vbf.Contains(PsvPre) && vbf.Contains(PsvPost), vbf.Reader())
 			return nil, false
 		}
 		return orgval, true

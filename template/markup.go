@@ -92,7 +92,7 @@ func (m *markuptemplate) Parse(in interface{}, args ...map[string]interface{}) {
 							}
 						}
 						return false
-					}, validNameChar, "[#", "#]")
+					}, validNameChar, ArgPre, ArgPost)
 				}
 			}
 		}

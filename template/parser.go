@@ -34,7 +34,8 @@ type Parsing struct {
 	EventPostRunes    func(bool, ...rune) bool
 	EventMatchedPost  func() bool
 	EventCanPostParse func() bool
-	txtprs            *textparsing
+	pretxtprs         *textparsing
+	posttxtprs        *textparsing
 }
 
 func (prsng *Parsing) PreLabel() []rune {
@@ -57,6 +58,9 @@ func (prsng *Parsing) CanPreParse() bool {
 	if prsng == nil {
 		return false
 	}
+	if txtprs := prsng.pretxtprs; txtprs == nil || !txtprs.isText() {
+		return prsng.EventCanPreParse == nil || prsng.EventCanPreParse()
+	}
 	return prsng.EventCanPreParse == nil || prsng.EventCanPreParse()
 }
 
@@ -64,7 +68,7 @@ func (prsng *Parsing) CanPostParse() bool {
 	if prsng == nil {
 		return true
 	}
-	if txtprs := prsng.txtprs; txtprs == nil || !txtprs.isText() {
+	if txtprs := prsng.posttxtprs; txtprs == nil || !txtprs.isText() {
 		return prsng.EventCanPostParse == nil || prsng.EventCanPostParse()
 	}
 	return prsng.EventCanPostParse == nil || prsng.EventCanPostParse()
@@ -85,11 +89,12 @@ func (prsng *Parsing) Close() (err error) {
 	prsng.postlbl = nil
 	prsng.prelbl = nil
 	prsng.readRune = nil
-	prsng.txtprs = nil
+	prsng.pretxtprs = nil
+	prsng.posttxtprs = nil
 	return
 }
 
-func New(in interface{}, prelbl, postlbl string, chktext bool, canPreParse func() bool, preRunes func(...rune), matchedPre func(), canPostParse func() bool, postRunes func(bool, ...rune) bool, matchedPost func() bool) (prsng *Parsing) {
+func New(in interface{}, prelbl, postlbl string, chkpretext bool, chkposttext bool, canPreParse func() bool, preRunes func(...rune), matchedPre func(), canPostParse func() bool, postRunes func(bool, ...rune) bool, matchedPost func() bool) (prsng *Parsing) {
 	var readRune, _ = in.(func() (rune, int, error))
 	if readRune == nil {
 		if r, _ := in.(io.Reader); r != nil {
@@ -116,7 +121,12 @@ func New(in interface{}, prelbl, postlbl string, chktext bool, canPreParse func(
 	}
 prpparse:
 	if prsng = nextparsing(prelbl, postlbl, func() *textparsing {
-		if chktext {
+		if chkpretext {
+			return &textparsing{}
+		}
+		return nil
+	}(), func() *textparsing {
+		if chkposttext {
 			return &textparsing{}
 		}
 		return nil
@@ -143,8 +153,8 @@ prpparse:
 	return
 }
 
-func nextparsing(prelbl, postlbl string, txtprs *textparsing, readRune func() (rune, int, error)) (prsng *Parsing) {
-	prsng = &Parsing{prelbl: []rune(prelbl), postlbl: []rune(postlbl), prvr: rune(0), txtprs: txtprs, readRune: readRune}
+func nextparsing(prelbl, postlbl string, pretxtprs *textparsing, posttxtprs *textparsing, readRune func() (rune, int, error)) (prsng *Parsing) {
+	prsng = &Parsing{prelbl: []rune(prelbl), postlbl: []rune(postlbl), prvr: rune(0), pretxtprs: pretxtprs, posttxtprs: posttxtprs, readRune: readRune}
 	prsng.postL = len(prsng.postlbl)
 	prsng.preL = len(prsng.prelbl)
 	return
@@ -189,9 +199,16 @@ func (prsng *Parsing) Reset() {
 	prsng.prvr = 0
 }
 
-func (prsng *Parsing) parse(rs ...rune) {
-	r := rs[0]
+func (prsng *Parsing) parse(r rune) {
 	if prsng.posti == 0 && prsng.prei < prsng.preL {
+		if prsng.pretxtprs != nil && prsng.pretxtprs.Parse(r) {
+			if evtpre := prsng.EventPreRunes; evtpre != nil {
+				evtpre(r)
+				prsng.prei = 0
+				prsng.prvr = 0
+			}
+			return
+		}
 		if prsng.CanPreParse() {
 			if prsng.prei > 0 && prsng.prelbl[prsng.prei-1] == prsng.prvr && prsng.prelbl[prsng.prei] != r {
 				if evtpre := prsng.EventPreRunes; evtpre != nil {
@@ -220,15 +237,17 @@ func (prsng *Parsing) parse(rs ...rune) {
 			prsng.prvr = 0
 			return
 		}
-		prsng.prvr = r
+
 		if evtpre := prsng.EventPreRunes; evtpre != nil {
+			prsng.prvr = r
 			evtpre(r)
+			return
 		}
+		prsng.prvr = r
 		return
 	}
 	if prsng.prei == prsng.preL && prsng.posti < prsng.postL {
-
-		if prsng.txtprs != nil && prsng.txtprs.Parse(r) {
+		if prsng.posttxtprs != nil && prsng.posttxtprs.Parse(r) {
 			if evtpost := prsng.EventPostRunes; evtpost != nil {
 				if evtpost(false, r) {
 					prsng.posti = 0
@@ -294,110 +313,8 @@ func (prsng *Parsing) Parse(rns ...rune) {
 		prsng.bufdrns = nil
 		rns = append(bufdrns, rns...)
 	}
-	//prse:
-	for _, r := range rns {
-		/*if prsng.posti == 0 && prsng.prei < prsng.preL {
-			if prsng.CanPreParse() {
-				if prsng.prei > 0 && prsng.prelbl[prsng.prei-1] == prsng.prvr && prsng.prelbl[prsng.prei] != r {
-					if evtpre := prsng.EventPreRunes; evtpre != nil {
-						evtpre(prsng.prelbl[:prsng.prei]...)
-					}
-					prsng.prei = 0
-					prsng.prvr = 0
-					rns = rns[rn:]
-					goto prse
-				}
-				if prsng.prelbl[prsng.prei] == r {
-					prsng.prei++
-					if prsng.prei == prsng.preL {
-						if evtmtchpre := prsng.EventMatchedPre; evtmtchpre != nil {
-							evtmtchpre()
-						}
-						rns = rns[rn+1:]
-						goto prse
-					}
-					prsng.prvr = r
-					rns = rns[rn+1:]
-					goto prse
-				}
-			}
-			if prsng.prei > 0 {
-				if evtpre := prsng.EventPreRunes; evtpre != nil {
-					evtpre(append(prsng.prelbl[:prsng.prei], r)...)
-				}
-				prsng.prei = 0
-				prsng.prvr = 0
-				rns = rns[rn+1:]
-				goto prse
-			}
-			prsng.prvr = r
-			if evtpre := prsng.EventPreRunes; evtpre != nil {
-				evtpre(r)
-			}
-			rns = rns[rn+1:]
-			goto prse
-		}
-		if prsng.prei == prsng.preL && prsng.posti < prsng.postL {
 
-			if prsng.txtprs != nil && prsng.txtprs.Parse(r) {
-				if evtpost := prsng.EventPostRunes; evtpost != nil {
-					if evtpost(false, r) {
-						prsng.posti = 0
-						prsng.prei = 0
-						prsng.prvr = 0
-					}
-				}
-				rns = rns[rn+1:]
-				goto prse
-			}
-			if prsng.CanPostParse() && prsng.postlbl[prsng.posti] == r {
-				prsng.posti++
-				if prsng.posti == prsng.postL {
-					if evtmtchpost := prsng.EventMatchedPost; evtmtchpost != nil {
-						evtmtchpost()
-					}
-					prsng.posti = 0
-					prsng.prei = 0
-					prsng.prvr = 0
-					rns = rns[rn+1:]
-					goto prse
-				}
-				rns = rns[rn+1:]
-				goto prse
-			}
-			if prsng.posti > 0 {
-				if evtpost := prsng.EventPostRunes; evtpost != nil {
-					if evtpost(true, prsng.postlbl[:prsng.posti]...) {
-						prsng.posti = 0
-						prsng.prei = 0
-						prsng.prvr = 0
-						rns = rns[rn:]
-						rns[rn] = r
-						goto prse
-					}
-					prsng.posti = 0
-					prsng.prei = 0
-					prsng.prvr = 0
-					rns = rns[rn+1:]
-					goto prse
-				}
-				prsng.posti = 0
-				prsng.prei = 0
-				prsng.prvr = 0
-				rns = rns[rn+1:]
-				goto prse
-			}
-			if evtpost := prsng.EventPostRunes; evtpost != nil {
-				if evtpost(false, r) {
-					prsng.posti = 0
-					prsng.prei = 0
-					prsng.prvr = 0
-					rns = rns[rn+1:]
-					goto prse
-				}
-			}
-			continue
-		}*/
+	for _, r := range rns {
 		prsng.parse(r)
 	}
 }
