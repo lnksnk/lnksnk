@@ -204,9 +204,9 @@ func (prsng *Parsing) Reset() {
 
 func (prsng *Parsing) parse(r rune) {
 	if prsng.posti == 0 && prsng.prei < prsng.preL {
-		if prsng.pretxtprs != nil && prsng.pretxtprs.Parse(r) {
+		if pretxtprs := prsng.pretxtprs; pretxtprs != nil && pretxtprs.Parse(r) {
 			if evtpre := prsng.EventPreRunes; evtpre != nil {
-				evtpre(r)
+				evtpre(pretxtprs.lstr)
 				prsng.prei = 0
 				prsng.prvr = 0
 			}
@@ -250,9 +250,9 @@ func (prsng *Parsing) parse(r rune) {
 		return
 	}
 	if prsng.prei == prsng.preL && prsng.posti < prsng.postL {
-		if prsng.posttxtprs != nil && prsng.posttxtprs.Parse(r) {
+		if posttxtprs := prsng.posttxtprs; posttxtprs != nil && posttxtprs.Parse(r) {
 			if evtpost := prsng.EventPostRunes; evtpost != nil {
-				if evtpost(false, r) {
+				if evtpost(false, posttxtprs.lstr) {
 					prsng.posti = 0
 					prsng.prei = 0
 					prsng.prvr = 0
