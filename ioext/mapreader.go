@@ -404,9 +404,10 @@ rdnxt:
 						}
 						goto rdnxt
 					}
-					m.orgrnes = append(m.orgrnes, keys[kn][1:kl]...)
 					m.orgrnes = append(m.orgrnes, rk)
-					goto rdnxt
+					m.orgrnes = append(m.orgrnes, keys[kn][ki:kl]...)
+
+					return r, size, nil, false
 				}
 				keys = append(keys[:kn], keys[kn+1:]...)
 				ksfndl--
@@ -442,18 +443,85 @@ func (m *mapreader) ReadRune() (r rune, size int, err error) {
 			size = utf8.RuneLen(r)
 			return
 		}
-
-		cptrdk := false
-		for {
-			if r, size, err, cptrdk = m.readKey(); cptrdk {
-				goto rdbf
+	rdorg:
+		r, size, err = m.OrgRune()
+		if size > 0 {
+			var mtchkeys [][]rune
+			for mn := range len(m.keys) {
+				if m.keys[mn][0] == r {
+					mtchkeys = append(mtchkeys, m.keys[mn])
+				}
 			}
+			mtckl := len(mtchkeys)
+			if mtckl == 0 {
+				return r, size, err
+			}
+			var tstnrs = []rune{r}
+			var lstkey []rune
+			mkn := 0
+		chnxtr:
+			for mkn < mtckl {
+				if mkl := len(mtchkeys[mkn]); mkl >= len(tstnrs) && string(mtchkeys[mkn][:len(tstnrs)]) == string(tstnrs) {
+					if mkl == len(tstnrs) {
+						lstkey = mtchkeys[mkn]
+						mtchkeys = append(mtchkeys[:mkn], mtchkeys[mkn+1:]...)
+						mtckl--
+						goto rdnextr
+					}
+					mkn++
+					continue
+				}
+				mtchkeys = append(mtchkeys[:mkn], mtchkeys[mkn+1:]...)
+				mtckl--
+			}
+		rdnextr:
+			if mtckl == 0 {
+				lstkl := len(lstkey)
+				if lstkl == 0 {
+					m.bfrnes = append(m.bfrnes, tstnrs[0])
+					m.orgrnes = append(m.orgrnes, tstnrs[1:]...)
+					goto rdbf
+				}
+				if lstkl < len(tstnrs) {
+					m.orgrnes = append(m.orgrnes, tstnrs[lstkl:]...)
+				}
+				tstnrs = nil
+				if m.capture(string(lstkey)) {
+					lstkey = nil
+					goto rdbf
+				}
+				lstkey = nil
+				goto rdnextr
+			}
+			r, size, err = m.OrgRune()
 			if size > 0 {
-				return r, size, nil
+				tstnrs = append(tstnrs, r)
+				mkn = 0
+				goto chnxtr
 			}
-			m.Close()
-			return 0, 0, err
+			if err != nil && err != io.EOF {
+				return
+			}
+			if lstkl := len(lstkey); lstkl > 0 {
+				if lstkl < len(tstnrs) {
+					m.orgrnes = append(m.orgrnes, tstnrs[lstkl:]...)
+				}
+				tstnrs = nil
+				if m.capture(string(lstkey)) {
+					lstkey = nil
+					goto rdbf
+				}
+				lstkey = nil
+				if len(m.orgrnes) > 0 {
+					goto rdorg
+				}
+			}
+			return 0, 0, io.EOF
 		}
+		if err == nil {
+			err = io.EOF
+		}
+		return
 	}
 	return 0, 0, err
 }
@@ -715,6 +783,11 @@ func (mppr *mapprepostreader) ReadRune() (r rune, size int, err error) {
 
 func init() {
 
+	/*tst := MapReplaceReader(`org:where id = {@$.params().get("id").join("")@}`, map[string]interface{}{"`": "\\`", "${": "\\$\\{"}, func(string) bool {
+		return true
+	})
+	fmt.Println(tst.String())
+	fmt.Println()*/
 	/*for {
 		tst := MapReplaceReader("{@dat@}{@dat@} {@dat@}{@dat@} {@dat@}", map[string]interface{}{
 			"{@": "${", "@}": "}", "@}{@": "}${"})
