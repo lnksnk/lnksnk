@@ -105,6 +105,9 @@ func New(in interface{}, prelbl, postlbl string, chkpretext bool, chkposttext bo
 			readRune = rdnr.ReadRune
 			goto prpparse
 		}
+		if rdnr, _ := in.(io.RuneReader); rdnr != nil {
+			readRune = rdnr.ReadRune
+		}
 	}
 	if readRune == nil {
 		if s, sk := in.(string); sk {
