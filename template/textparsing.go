@@ -19,8 +19,8 @@ func (txtprs *textparsing) Parse(r rune) bool {
 			return txtprs.isText()
 		}
 		if txtprs.txtr == r {
-			txtprs.lstr = r
 			if txtprs.prvr != '\\' {
+				txtprs.lstr = r
 				if txtprs.alttxtr > 0 {
 					txtprs.lstr = txtprs.alttxtr
 					txtprs.alttxtr = 0
@@ -29,9 +29,9 @@ func (txtprs *textparsing) Parse(r rune) bool {
 				txtprs.prvr = 0
 				return true
 			}
-			txtprs.lstr = r
-			txtprs.prvr = r
 		}
+		txtprs.lstr = r
+		txtprs.prvr = r
 	}
 	return txtprs.isText()
 }
