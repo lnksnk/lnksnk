@@ -185,24 +185,6 @@ func (cde *codeparsing) flushPsv() {
 			cdebf = ioext.NewBuffer()
 			cde.cdebf = cdebf
 		}
-		/*if lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte())); validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
-			if contnsinle {
-				if contnsinle {
-					processInline("`", "`", psvbf.Clone(true).Reader(true), cdebf)
-				}
-			} else {
-				cdebf.Print("`", psvbf, "`")
-			}
-
-			return
-		}
-		if contnsinle {
-			if contnsinle {
-				processInline("print(`", "`);", psvbf.Clone(true).Reader(true), cdebf)
-			}
-		} else {
-			cdebf.Print("print(`", psvbf, "`);")
-		}*/
 		texttocode(cde, contnsinle, psvbf.Clone(true).Reader(true))
 	}
 }
@@ -211,6 +193,7 @@ func texttocode(cde *codeparsing, isinline bool, txtrdr io.RuneReader) {
 	if cde == nil {
 		return
 	}
+
 	cdebf := cde.cdebf
 	if cdebf == nil {
 		cdebf = ioext.NewBuffer()
@@ -221,41 +204,63 @@ func texttocode(cde *codeparsing, isinline bool, txtrdr io.RuneReader) {
 	}
 	lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte()))
 	istxt := ioext.IsTxtPar(lstr)
-	if istxt || validLastCdeRune(rune(cdebf.LastByte(true))) && (lstr != '/' || (lstr == '/' && !isspace)) {
+
+	if istxt || (validLastCdeRune(lstr) && (lstr != '/' || (lstr == '/' && !isspace))) {
+		txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
 		if istxt {
 			if lstr != '`' {
-				cdebf.Print(string(lstr) + "+")
+				if isinline {
+					r, s, _ := txtrdr.ReadRune()
+					if s > 0 {
+						cde.cdebf = cdebf.SubBuffer(0, cdebf.Size()-1)
+						cdebf = cde.cdebf
+						processInline("`", "", ioext.ReadRuneFunc(func() (rune, int, error) {
+							if r > 0 {
+								tr := r
+								r = 0
+								return tr, s, nil
+							}
+							return txtrdr.ReadRune()
+						}), cdebf)
+						if posttxtprs := cde.parsing.posttxtprs; posttxtprs != nil {
+							posttxtprs.alttxtr = '`'
+						}
+						return
+					}
+					return
+				}
+				cdebf.Print(txtrdr)
+				return
 			}
+			if isinline {
+				processInline("", "", txtrdr, cdebf)
+				return
+			}
+			cdebf.Print(txtrdr)
+			return
 		}
 		if isinline {
-			if isinline {
-				if lstr == '`' {
-					processInline("", "", txtrdr, cdebf)
-				} else {
-					processInline("`", "`", txtrdr, cdebf)
-				}
-			}
-		} else {
 			if lstr == '`' {
-				cdebf.Print(txtrdr)
+				processInline("", "", txtrdr, cdebf)
 			} else {
-				cdebf.Print("`", txtrdr, "`")
+				processInline("`", "`", txtrdr, cdebf)
 			}
+			return
 		}
-		if istxt {
-			if lstr != '`' {
-				cdebf.Print("+" + string(lstr))
-			}
+		if lstr == '`' {
+			cdebf.Print(txtrdr)
+		} else {
+			cdebf.Print("`", txtrdr, "`")
 		}
 		return
 	}
 	if isinline {
-		if isinline {
-			processInline("print(`", "`);", txtrdr, cdebf)
-		}
-	} else {
-		cdebf.Print("print(`", txtrdr, "`);")
+		txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
+		processInline("print(`", "`);", txtrdr, cdebf)
+		return
 	}
+	txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
+	cdebf.Print("print(`", txtrdr, "`);")
 }
 
 func validLastCdeRune(cr rune) bool {
