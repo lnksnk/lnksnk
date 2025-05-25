@@ -505,11 +505,8 @@ function prepTargetContent(targetelem, cntnttoprep){
             return
         }
     }
-    if (targetelem instanceof HTMLElement) {
-        
-        
-        prepElementInnerHtml(targetelem,cntnttoprep)
-                
+    if (targetelem instanceof HTMLElement) {        
+        prepElementInnerHtml(targetelem,cntnttoprep);
     } else if (targetelem===undefined||targetelem===null||targetelem==="") {
         
     }
