@@ -106,7 +106,6 @@ func main() {
 		ssn.API(func(sa *sessioning.SessionAPI) {
 			sa.InvokeVM = func(s sessioning.Session) sessioning.SessionVM {
 				var vm = es.New()
-
 				vm.SetFieldNameMapper(fieldmapping.NewFieldMapper(es.UncapFieldNameMapper()))
 				vm.SetImportModule(func(modname string, namedimports ...[][]string) (imported bool) {
 					if modfi := mltyfsys.Stat(modname); modfi != nil {
@@ -121,37 +120,39 @@ func main() {
 					return
 				})
 				vm.Set("$", ssn)
-				if out := ssn.Out(); out != nil {
-					vm.Set("print", out.Print)
-					vm.Set("println", out.Println)
-				}
-				return sessioning.InvokeVM(vm, ssn)
+
+				ssnvm := sessioning.InvokeVM(vm, ssn)
+				vm.Set("print", ssnvm.Print)
+				vm.Set("println", ssnvm.Println)
+				return ssnvm
 			}
 			sa.RunProgram = func(prgrm interface{}, prgout io.Writer) {
 				if vm := ssn.VM(); vm != nil {
-					out := ssn.Out()
 					if eprg, _ := prgrm.(*es.Program); eprg != nil {
 						if evm, _ := vm.VM().(*es.Runtime); evm != nil {
-							if out != prgout {
-								defer func() {
-									if out != nil && prgout != out {
-										vm.Set("print", out.Print)
-										vm.Set("println", out.Println)
-									}
-								}()
-								vm.Set("print", func(a ...interface{}) { ioext.Fprint(prgout, a...) })
-								vm.Set("println", func(a ...interface{}) { ioext.Fprintln(prgout, a...) })
+							if prgout != nil {
+								vm.SetWriter(prgout)
 							}
+							defer func() {
+								if prgout != nil {
+									vm.SetWriter(nil)
+								}
+							}()
+
 							rslt, err := evm.RunProgram(eprg)
-							if err != nil && out != nil {
-								out.Println("err:" + err.Error())
-								for lnr, ln := range strings.Split(eprg.Src(), "\n") {
-									out.Println(fmt.Sprintf("%d. %s", lnr+1, strings.TrimRightFunc(ln, ioext.IsSpace)))
+							if err != nil {
+								if out := ssn.Out(); out != nil {
+									out.Println("err:" + err.Error())
+									for lnr, ln := range strings.Split(eprg.Src(), "\n") {
+										out.Println(fmt.Sprintf("%d. %s", lnr+1, strings.TrimRightFunc(ln, ioext.IsSpace)))
+									}
 								}
 							} else {
 								if rslt != nil {
-									if exp := rslt.Export(); exp != nil && out != nil {
-										out.Print(exp)
+									if exp := rslt.Export(); exp != nil {
+										if prgout != nil {
+											vm.Print(exp)
+										}
 									}
 								}
 							}
@@ -172,14 +173,42 @@ func main() {
 							ioext.Fprint(qryout, dbfi)
 						}
 					}
-					if vm, out := ssn.VM(), ssn.Out(); vm != nil && out != nil {
-						vm.Set("print", out.Print)
-						vm.Set("println", out.Println)
-					}
 				})
 			}
 
-			sa.Eval = func(arg interface{}, a ...map[string]interface{}) (err error) {
+			sa.MarshalEval = func(arg interface{}, a ...interface{}) (result interface{}, err error) {
+				bf := ioext.NewBuffer()
+				defer bf.Close()
+				if err = sa.Eval(arg, append(a, bf)...); err == nil {
+					result, err = bf.Marshal()
+				}
+				return
+			}
+
+			sa.Eval = func(arg interface{}, a ...interface{}) (err error) {
+				var argmps []map[string]interface{}
+				var altout io.Writer
+				ai := 0
+				al := len(a)
+				for ai < al {
+					if altoutd, altoutk := a[ai].(io.Writer); altoutk {
+						if altout == nil && altoutd != nil {
+							altout = altoutd
+						}
+						a = append(a[:ai], a[ai+1:]...)
+						al--
+						continue
+					}
+					if argmp, argmpk := a[ai].(map[string]interface{}); argmpk {
+						if len(argmp) > 0 {
+							argmps = append(argmps, argmp)
+						}
+						a = append(a[:ai], a[ai+1:]...)
+						al--
+						continue
+					}
+					ai++
+				}
 				var fi, _ = arg.(fs.FileInfo)
 				if fi == nil {
 					if s, sk := arg.(string); sk && s != "" {
@@ -196,12 +225,21 @@ func main() {
 						}
 					}
 				}
+				if altout == nil {
+					if vm := ssn.VM(); vm != nil {
+						if altout = vm.Writer(); altout == nil {
+							altout = ssn.Out()
+						}
+					} else {
+						altout = ssn.Out()
+					}
+				}
 				if fi != nil {
 					if len(a) == 0 {
-						active.ProcessActiveFile(mltyfsys, fi, ssn.Out(), nil, sa.RunProgram)
+						active.ProcessActiveFile(mltyfsys, fi, altout, nil, sa.RunProgram)
 						return
 					}
-					cntnt, cde, _, _, prserr := active.ParseOnly(mltyfsys, fi, a...)
+					cntnt, cde, _, _, prserr := active.ParseOnly(mltyfsys, fi, argmps...)
 					defer func() {
 						if !cntnt.Empty() {
 							cntnt.Close()
@@ -213,9 +251,9 @@ func main() {
 					if prserr != nil {
 						err = prserr
 					}
-					out := ssn.Out()
-					if out != nil && !cntnt.Empty() {
-						cntnt.WriteTo(out)
+
+					if altout != nil && !cntnt.Empty() {
+						cntnt.WriteTo(altout)
 					}
 					if !cde.Empty() {
 						prgm, prgmerr := compileprogram(mltyfsys, cde)
@@ -224,7 +262,7 @@ func main() {
 							return
 						}
 						if prgm != nil {
-							sa.RunProgram(prgm, out)
+							sa.RunProgram(prgm, altout)
 						}
 					}
 				}
