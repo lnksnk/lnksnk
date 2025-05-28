@@ -366,7 +366,7 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 	chdinfo = createcachedfileinfo(chdinfos, fi, fsys, compile)
 prschd:
 	if chdinfo != nil {
-		if chdinfo.CodeSize() == fi.Size() && chdinfo.CodeSize() == 0 {
+		if chdinfo.ContentSize() == fi.Size() && chdinfo.CodeSize() == 0 {
 			return
 		}
 		chdpsv := chdinfo.Content()
