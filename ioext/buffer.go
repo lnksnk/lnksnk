@@ -1863,71 +1863,69 @@ func nextReaderBytes(bufr *BuffReader) (bts []byte, lastBytes bool) {
 
 // Read - refer io.Reader
 func (bufr *BuffReader) Read(p []byte) (n int, err error) {
-	if pl := len(p); pl > 0 {
+	if pl := len(p); bufr != nil && pl > 0 {
 		rl := 0
-		if bufr != nil {
-			if ctx := bufr.ctx; ctx != nil {
-				select {
-				case <-ctx.Done():
-					if err = ctx.Err(); err != nil {
-						if err == context.Canceled {
-							err = io.EOF
-						}
-						bufr.Close()
-						return
+		if ctx := bufr.ctx; ctx != nil {
+			select {
+			case <-ctx.Done():
+				if err = ctx.Err(); err != nil {
+					if err == context.Canceled {
+						err = io.EOF
 					}
-				default:
+					bufr.Close()
+					return
 				}
+			default:
 			}
-			if bufr.MaxRead > 0 || bufr.MaxRead == -1 {
-				for n < pl && (bufr.MaxRead > 0 || bufr.MaxRead == -1) {
-					if len(bufr.rbytes) == 0 || (len(bufr.rbytes) > 0 && len(bufr.rbytes) == bufr.rbytesi) {
-						if bufr.bufcur.curOffset == -1 {
-							bts, btslst := nextReaderBytes(bufr)
-							if len(bts) > 0 {
-								bufr.rbytes = bts[:]
-								bufr.rbytesi = 0
-								continue
-							}
-							if btslst {
-								break
-							}
-							continue
-						}
+		}
+		if bufr.MaxRead > 0 || bufr.MaxRead == -1 {
+			for n < pl && (bufr.MaxRead > 0 || bufr.MaxRead == -1) {
+				if len(bufr.rbytes) == 0 || (len(bufr.rbytes) > 0 && len(bufr.rbytes) == bufr.rbytesi) {
+					if bufr.bufcur.curOffset == -1 {
 						bts, btslst := nextReaderBytes(bufr)
 						if len(bts) > 0 {
 							bufr.rbytes = bts[:]
 							bufr.rbytesi = 0
-							if btslst {
-								btslst = false
-							}
+							continue
 						}
 						if btslst {
 							break
 						}
 						continue
 					}
-
-					for (bufr.MaxRead > 0 || bufr.MaxRead == -1) && (pl > n) && (len(bufr.rbytes) > bufr.rbytesi) {
-						rbtsl := len(bufr.rbytes)
-						if bufr.MaxRead > 0 {
-							if ln := int64(rbtsl - bufr.rbytesi); ln > bufr.MaxRead {
-								rl = int(bufr.MaxRead)
-							} else {
-								rl = int(ln)
-							}
-							if (rl + bufr.rbytesi) < rbtsl {
-								rbtsl = (rl + bufr.rbytesi)
-							}
+					bts, btslst := nextReaderBytes(bufr)
+					if len(bts) > 0 {
+						bufr.rbytes = bts[:]
+						bufr.rbytesi = 0
+						if btslst {
+							btslst = false
 						}
-						var cl = 0
-						for n < pl && bufr.rbytesi < rbtsl {
-							if cl, n, bufr.rbytesi = copyBytes(p[:pl], n, bufr.rbytes[:rbtsl], bufr.rbytesi); cl > 0 {
-								if bufr.MaxRead > 0 {
-									bufr.MaxRead -= int64(cl)
-									if bufr.MaxRead < 0 {
-										bufr.MaxRead = 0
-									}
+					}
+					if btslst {
+						break
+					}
+					continue
+				}
+
+				for (bufr.MaxRead > 0 || bufr.MaxRead == -1) && (pl > n) && (len(bufr.rbytes) > bufr.rbytesi) {
+					rbtsl := len(bufr.rbytes)
+					if bufr.MaxRead > 0 {
+						if ln := int64(rbtsl - bufr.rbytesi); ln > bufr.MaxRead {
+							rl = int(bufr.MaxRead)
+						} else {
+							rl = int(ln)
+						}
+						if (rl + bufr.rbytesi) < rbtsl {
+							rbtsl = (rl + bufr.rbytesi)
+						}
+					}
+					var cl = 0
+					for n < pl && bufr.rbytesi < rbtsl {
+						if cl, n, bufr.rbytesi = copyBytes(p[:pl], n, bufr.rbytes[:rbtsl], bufr.rbytesi); cl > 0 {
+							if bufr.MaxRead > 0 {
+								bufr.MaxRead -= int64(cl)
+								if bufr.MaxRead < 0 {
+									bufr.MaxRead = 0
 								}
 							}
 						}
@@ -1935,14 +1933,16 @@ func (bufr *BuffReader) Read(p []byte) (n int, err error) {
 				}
 			}
 		}
+
 		if n == 0 {
 			err = io.EOF
 			if dspbuf, dsprdr := bufr.DisposeBuffer, bufr.DisposeReader; dspbuf || dsprdr {
 				bufr.Close()
 			}
 		}
+		return
 	}
-	return
+	return 0, io.EOF
 }
 
 // SubString - return buffer as string value based on offset ...int64
@@ -2182,7 +2182,9 @@ decde:
 	dec := json.NewDecoder(r)
 	tkn, tknerr := dec.Token()
 	if tknerr != nil {
-		err = tknerr
+		if tknerr != io.EOF {
+			err = tknerr
+		}
 		return
 	}
 	if tkn == json.Delim('[') {
@@ -2254,167 +2256,6 @@ decde:
 		err = fltverr
 		return
 	}
-	/*
-		n := 0
-		dec := json.NewDecoder(bufr)
-		var lvltps = []string{}
-		var lvlkeys = map[int]string{}
-		var lvlvals = []interface{}{}
-		for err == nil {
-			tkn, tknerr := dec.Token()
-			if tknerr == nil {
-				if tkn == json.Delim('[') {
-					lvltps = append(lvltps, "arr")
-					lvlvals = append(lvlvals, []interface{}{})
-					n++
-					continue
-				}
-				if tkn == json.Delim('{') {
-					lvltps = append(lvltps, "obj")
-					lvlvals = append(lvlvals, map[string]interface{}{})
-					n++
-					continue
-				}
-				if tkn == json.Delim(']') {
-					n--
-					tmpv := lvlvals[n]
-					lvlvals = lvlvals[:n]
-					lvltps = lvltps[:n]
-					if n > 0 {
-						if lvltps[n-1] == "arr" {
-							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), tmpv)
-							continue
-						}
-						if lvltps[n-1] == "obj" {
-							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = tmpv
-							delete(lvlkeys, n-1)
-							continue
-						}
-					}
-					result = tmpv
-					continue
-				}
-				if tkn == json.Delim('}') {
-					n--
-					tmpv := lvlvals[n]
-					lvlvals = lvlvals[:n]
-					lvltps = lvltps[:n]
-					if n > 0 {
-						if lvltps[n-1] == "arr" {
-							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), tmpv)
-							continue
-						}
-						if lvltps[n-1] == "obj" {
-							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = tmpv
-							delete(lvlkeys, n-1)
-							continue
-						}
-					}
-					result = tmpv
-					continue
-				}
-				if sv, svok := tkn.(string); svok {
-					if n > 0 {
-						if lvltps[n-1] == "obj" {
-							if lvlkeys[n-1] == "" {
-								lvlkeys[n-1] = sv
-								continue
-							}
-							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = sv
-							delete(lvlkeys, n-1)
-							continue
-						}
-						if lvltps[n-1] == "arr" {
-							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), sv)
-							continue
-						}
-					}
-					result = sv
-					continue
-				}
-				if nr, nrok := tkn.(json.Number); nrok {
-					if n > 0 {
-						if lvltps[n-1] == "obj" {
-							if intv, intverr := nr.Int64(); intverr == nil {
-								lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = intv
-								delete(lvlkeys, n-1)
-								continue
-							}
-							if ftlv, ftlverr := nr.Float64(); ftlverr == nil {
-								lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = ftlv
-								delete(lvlkeys, n-1)
-								continue
-							}
-						}
-						if lvltps[n-1] == "arr" {
-							if intv, intverr := nr.Int64(); intverr == nil {
-								lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), intv)
-								continue
-							}
-							if ftlv, ftlverr := nr.Float64(); ftlverr == nil {
-								lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), ftlv)
-								continue
-							}
-							continue
-						}
-					}
-					if intv, intverr := nr.Int64(); intverr == nil {
-						result = intv
-						continue
-					}
-					if ftlv, ftlverr := nr.Float64(); ftlverr == nil {
-						result = ftlv
-						continue
-					}
-					continue
-				}
-				if fltv, fltok := tkn.(float64); fltok {
-					var nrv interface{} = nil
-					if fltv == float64(int64(fltv)) {
-						nrv = int64(fltv)
-					} else {
-						nrv = fltv
-					}
-					if n > 0 {
-						if lvltps[n-1] == "obj" {
-							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = nrv
-							delete(lvlkeys, n-1)
-							continue
-						}
-						if lvltps[n-1] == "arr" {
-							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), nrv)
-							continue
-						}
-					}
-					result = nrv
-					continue
-				}
-				if blnv, blnok := tkn.(bool); blnok {
-					if n > 0 {
-						if lvltps[n-1] == "obj" {
-							lvlvals[n-1].(map[string]interface{})[lvlkeys[n-1]] = blnv
-							delete(lvlkeys, n-1)
-							continue
-						}
-						if lvltps[n-1] == "arr" {
-							lvlvals[n-1] = append(lvlvals[n-1].([]interface{}), blnv)
-							continue
-						}
-					}
-					result = blnv
-					continue
-				}
-				continue
-			}
-			if n > 0 {
-				err = tknerr
-				break
-			}
-			if tknerr != io.EOF {
-				err = tknerr
-			}
-			break
-		}*/
 	return
 }
 
