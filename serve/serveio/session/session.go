@@ -335,10 +335,11 @@ func nextserial() (nxsrl int64) {
 }
 
 type SessionAPI struct {
-	InvodeDB   func() dbms.DBMSHandler
-	InvokeVM   func(Session) SessionVM
-	RunProgram func(interface{}, io.Writer)
-	Eval       func(interface{}, ...map[string]interface{}) error
+	InvodeDB    func() dbms.DBMSHandler
+	InvokeVM    func(Session) SessionVM
+	RunProgram  func(interface{}, io.Writer)
+	Eval        func(interface{}, ...interface{}) error
+	MarshalEval func(interface{}, ...interface{}) (interface{}, error)
 }
 
 type SessionHttpFunc func(http.ResponseWriter, *http.Request)
