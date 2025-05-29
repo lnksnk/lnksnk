@@ -235,8 +235,16 @@ func main() {
 					}
 				}
 				if fi != nil {
-					if len(a) == 0 {
-						active.ProcessActiveFile(mltyfsys, fi, altout, nil, sa.RunProgram)
+					if len(argmps) == 0 {
+						if prcfi := active.ProcessActiveFile(mltyfsys, fi, altout, nil, sa.RunProgram); prcfi != nil && altout != nil {
+							if prnt, prtk := altout.(interface{ Print(...interface{}) error }); prtk {
+								if prnt != nil {
+									prnt.Print(prcfi)
+								}
+								return
+							}
+							ioext.Fprint(altout, prcfi)
+						}
 						return
 					}
 					cntnt, cde, _, _, prserr := active.ParseOnly(mltyfsys, fi, argmps...)
