@@ -204,9 +204,8 @@ func texttocode(cde *codeparsing, isinline bool, txtrdr io.RuneReader) {
 	}
 	lstr, isspace := rune(cdebf.LastByte(true)), ioext.IsSpace(rune(cdebf.LastByte()))
 	istxt := ioext.IsTxtPar(lstr)
-
+	txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
 	if istxt || (validLastCdeRune(lstr) && (lstr != '/' || (lstr == '/' && !isspace))) {
-		txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
 		if istxt {
 			if lstr != '`' {
 				if isinline {
@@ -240,26 +239,16 @@ func texttocode(cde *codeparsing, isinline bool, txtrdr io.RuneReader) {
 			return
 		}
 		if isinline {
-			if lstr == '`' {
-				processInline("", "", txtrdr, cdebf)
-			} else {
-				processInline("`", "`", txtrdr, cdebf)
-			}
+			processInline("`", "`", txtrdr, cdebf)
 			return
 		}
-		if lstr == '`' {
-			cdebf.Print(txtrdr)
-		} else {
-			cdebf.Print("`", txtrdr, "`")
-		}
+		cdebf.Print("`", txtrdr, "`")
 		return
 	}
 	if isinline {
-		txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
 		processInline("print(`", "`);", txtrdr, cdebf)
 		return
 	}
-	txtrdr = ioext.MapReplaceReader(txtrdr, map[string]interface{}{"`": "\\`", "${": "\\$\\{"})
 	cdebf.Print("print(`", txtrdr, "`);")
 }
 
