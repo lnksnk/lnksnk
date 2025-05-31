@@ -44,7 +44,7 @@ type statement struct {
 	driver    string
 	initquery string
 	query     []string
-	queryargs [][]interface{}
+	queryargs map[int][]interface{}
 	fsys      fs.MultiFileSystem
 	fireader  func(fs.MultiFileSystem, fs.FileInfo, io.Writer)
 	params    parameters.Parameters
@@ -154,14 +154,19 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 			qryl, query, queryargs := len(s.query), s.query, s.queryargs
 			if qryl == 0 && s.initquery != "" {
 				query = append(query, s.initquery)
-				queryargs = append(queryargs, []interface{}{})
 				s.query = query
-				s.queryargs = queryargs
 				qryl++
 			}
 			if qryl == 1 {
 				if db != nil {
-					dbrows, dbrowserr := db.QueryContext(ctx, query[0], queryargs[0]...)
+					dbrows, dbrowserr := db.QueryContext(ctx, query[0], func() []interface{} {
+						if len(queryargs) > 0 {
+							if qargs, qragsk := queryargs[0]; qragsk {
+								return qargs
+							}
+						}
+						return nil
+					}()...)
 					if err = dbrowserr; err == nil {
 						s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
 						rdr = &reader{stmnt: s, rws: s.rows}
@@ -169,10 +174,14 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 					return
 				}
 				if dbcn != nil {
-					if len(queryargs) == 0 {
-						queryargs = append(queryargs, []interface{}{})
-					}
-					dbrows, dbrowserr := dbcn.QueryContext(ctx, query[0], queryargs[0]...)
+					dbrows, dbrowserr := dbcn.QueryContext(ctx, query[0], func() []interface{} {
+						if len(queryargs) > 0 {
+							if qargs, qragsk := queryargs[0]; qragsk {
+								return qargs
+							}
+						}
+						return nil
+					}()...)
 					if err = dbrowserr; err == nil {
 						s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
 						rdr = &reader{stmnt: s, rws: s.rows}
@@ -181,23 +190,36 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 				return
 			}
 			if dbcn != nil {
-				for qryn, qry := range query {
-					if qryn == qryl-1 {
-						dbrows, dbrowserr := dbcn.QueryContext(ctx, qry, queryargs[qryn]...)
-						if err = dbrowserr; err != nil {
-							break
+				var exeargs []interface{}
+				var qryargs []interface{}
+				if len(queryargs) > 0 {
+					for qryn := range qryl {
+						if len(queryargs[qryn]) == 0 {
+							continue
 						}
-						if dbrows != nil {
-							s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
-							rdr = &reader{stmnt: s, rws: s.rows}
+						if qrags, qragsk := queryargs[qryn]; qragsk {
+							if qryn < qryl-1 {
+								exeargs = append(exeargs, qrags...)
+								continue
+							}
+							qryargs = append(qryargs, qrags...)
 						}
-						return
-					}
-					_, exeerr := dbcn.ExecContext(ctx, qry, queryargs[qryn]...)
-					if err = exeerr; err != nil {
-						break
 					}
 				}
+				_, exeerr := dbcn.ExecContext(ctx, strings.Join(query[:qryl-1], ""), exeargs...)
+				if err = exeerr; err != nil {
+					return
+				}
+
+				dbrows, dbrowserr := dbcn.QueryContext(ctx, query[qryl-1], queryargs[qryl-1]...)
+				if err = dbrowserr; err != nil {
+					return
+				}
+				if dbrows != nil {
+					s.rows = &rows{IRows: &dbirows{dbrows: dbrows}}
+					rdr = &reader{stmnt: s, rws: s.rows}
+				}
+				return
 			}
 		}
 		return
@@ -205,7 +227,7 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 	return
 }
 
-func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpdargs [][]interface{}, err error) {
+func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpdargs map[int][]interface{}, err error) {
 	if s == nil || s.prssqlarg == nil {
 		return
 	}
@@ -444,19 +466,21 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 
 		for or := range orgrqry {
 			if or == ';' {
-				if prds := strings.TrimFunc(qrybf.Clone(true).Reader(true).SubString(0), ioext.IsSpace); prds != "" {
+				prds := qrybf.Clone(true).Reader(true).SubString(0)
+				if prds != "" {
 					prds += ";"
 					prpdqry = append(prpdqry, prds)
-				}
-				if fndl := len(prmargsfnd); fndl > 0 {
-					prpargsi := len(prpdargs)
-					prpdargs = append(prpdargs, make([]interface{}, fndl))
-					for fn, ids := range prmargsfnd {
-						prpdargs[prpargsi][fn] = prmargvalsfnd[ids]()
+					if fndl := len(prmargsfnd); fndl > 0 {
+						prpargsi := len(prpdqry) - 1
+						if prpdargs == nil {
+							prpdargs = map[int][]interface{}{}
+						}
+						prpdargs[prpargsi] = make([]interface{}, fndl)
+						for fn, ids := range prmargsfnd {
+							prpdargs[prpargsi][fn] = prmargvalsfnd[ids]()
+						}
+						prmargsfnd = nil
 					}
-					prmargsfnd = nil
-				} else {
-					prpdargs = append(prpdargs, []interface{}{})
 				}
 				continue
 			}
@@ -468,18 +492,19 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 		}
 		fndl := len(prmargsfnd)
 		if fndl > 0 {
-			prpargsi := len(prpdargs)
-			prpdargs = append(prpdargs, make([]interface{}, fndl))
+			prpargsi := len(prpdqry)
+			if prpdargs == nil {
+				prpdargs = map[int][]interface{}{}
+			}
+			prpdargs[prpargsi] = make([]interface{}, fndl)
 			for fn, ids := range prmargsfnd {
 				prpdargs[prpargsi][fn] = prmargvalsfnd[ids]()
 			}
 			prmargsfnd = nil
-		} else {
-			prpdargs = append(prpdargs, []interface{}{})
 		}
 	}
 	if !qrybf.Empty() {
-		if prds := strings.TrimFunc(qrybf.Reader(true).SubString(0), ioext.IsSpace); prds != "" && prds != ";" {
+		if prds := qrybf.Reader(true).SubString(0); prds != "" && prds != ";" {
 			prpdqry = append(prpdqry, prds)
 		}
 	}
@@ -512,7 +537,12 @@ func nextstatement(db *sql.DB, driver Driver, query string, fsys fs.MultiFileSys
 		if dvrfsys := driver.FSys(); dvrfsys != nil {
 			s = &statement{db: db, driver: driver.Name(), prssqlarg: driver.ParseSqlArg, initquery: query, fsys: fsys}
 			s.query = append(s.query, s.initquery)
-			s.queryargs = append(s.queryargs, append(a, dvrfsys))
+			queryargs := s.queryargs
+			if queryargs == nil {
+				s.queryargs = map[int][]interface{}{}
+				queryargs = s.queryargs
+			}
+			queryargs[len(s.query)-1] = append(a, dvrfsys)
 		}
 	}
 	return
