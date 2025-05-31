@@ -211,7 +211,7 @@ func (s *statement) QueryContext(ctx context.Context, a ...interface{}) (rdr Rea
 					return
 				}
 
-				dbrows, dbrowserr := dbcn.QueryContext(ctx, query[qryl-1], queryargs[qryl-1]...)
+				dbrows, dbrowserr := dbcn.QueryContext(ctx, query[qryl-1], qryargs...)
 				if err = dbrowserr; err != nil {
 					return
 				}
@@ -371,18 +371,6 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 				if tstnme == "" {
 					return
 				}
-				for ak, av := range s.args {
-					if strings.EqualFold(ak, tstnme) {
-						prmfndl := len(prmargsfnd)
-						prmargsfnd = append(prmargsfnd, prmfndl)
-						prmargvalsfnd[prmfndl] = func() interface{} {
-							return av
-						}
-						qrybf.Print(s.prssqlarg(prmfndl))
-						prmnme = nil
-						return
-					}
-				}
 				if params := s.params; params != nil {
 					for _, pnme := range params.Keys() {
 						if strings.EqualFold(pnme, tstnme) {
@@ -456,7 +444,9 @@ func prepairSqlStatement(s *statement, a ...interface{}) (prpdqry []string, prpd
 					prmargvalsfnd[prmfndl] = func() interface{} {
 						return dflsv
 					}
+					qrybf.Print(s.prssqlarg(prmfndl))
 					prmnme = nil
+					return
 				}
 				qrybf.Print(`null`)
 				prmnme = nil
