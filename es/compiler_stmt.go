@@ -453,7 +453,7 @@ func (c *compiler) compileLabeledForInOfStatement(into ast.ForInto, source ast.E
 		c.popScope()
 	}
 	if iter {
-		c.emit(iterateP)
+		c.emit(iterateGen)
 	} else {
 		c.emit(enumerate)
 	}
