@@ -611,73 +611,30 @@ func (vm *vm) halted() bool {
 }
 
 func (vm *vm) run() {
-	//if vm.profTracker != nil && !vm.runWithProfiler() {
-	//	return
-	//}
-	//count := 0
-	interrupted := false
+
 	for {
-		//if count == 0 {
-		//if atomic.LoadInt32(&globalProfiler.enabled) == 1 && !vm.runWithProfiler() {
-		//	return
-		//}
-		//count = 100
-		//goto dorun
-		//}
-		//dorun:
-		//	count--
-		if interrupted = atomic.LoadUint32(&vm.interrupted) != 0; interrupted {
-			vm.interruptLock.Lock()
-			v := &InterruptedError{
-				iface: vm.interruptVal,
-			}
-			v.stack = vm.captureStack(nil, 0)
-			vm.interruptLock.Unlock()
-			panic(v)
-		}
-		pc := vm.pc
-		if pc < 0 || pc >= len(vm.prg.code) {
+		if !vmexec(vm, vm.pc) {
 			break
 		}
-		vm.prg.code[pc].exec(vm)
 	}
 }
 
-/*func (vm *vm) runWithProfiler() bool {
-	pt := vm.profTracker
-	if pt == nil {
-		pt = globalProfiler.p.registerVm()
-		vm.profTracker = pt
-		defer func() {
-			atomic.StoreInt32(&vm.profTracker.finished, 1)
-			vm.profTracker = nil
-		}()
+func vmexec(vm *vm, pc int) bool {
+	if atomic.LoadUint32(&vm.interrupted) != 0 {
+		vm.interruptLock.Lock()
+		v := &InterruptedError{
+			iface: vm.interruptVal,
+		}
+		v.stack = vm.captureStack(nil, 0)
+		vm.interruptLock.Unlock()
+		panic(v)
 	}
-	interrupted := false
-	for {
-		if interrupted = atomic.LoadUint32(&vm.interrupted) != 0; interrupted {
-			return true
-		}
-		pc := vm.pc
-		if pc < 0 || pc >= len(vm.prg.code) {
-			break
-		}
-		vm.prg.code[pc].exec(vm)
-		req := atomic.LoadInt32(&pt.req)
-		if req == profReqStop {
-			return true
-		}
-		if req == profReqDoSample {
-			pt.stop = time.Now()
-
-			pt.numFrames = len(vm.r.CaptureCallStack(len(pt.frames), pt.frames[:0]))
-			pt.frames[0].pc = pc
-			atomic.StoreInt32(&pt.req, profReqSampleReady)
-		}
+	if pc < 0 || pc >= len(vm.prg.code) {
+		return false
 	}
-
-	return false
-}*/
+	vm.prg.code[pc].exec(vm)
+	return true
+}
 
 func (vm *vm) Interrupt(v interface{}) {
 	vm.interruptLock.Lock()
@@ -5208,6 +5165,7 @@ func (_enumPopClose) exec(vm *vm) {
 	vm.iterStack = vm.iterStack[:l]
 	if iter := item.iter; iter != nil {
 		iter.returnIter()
+		iter.close()
 	}
 	vm.pc++
 }
