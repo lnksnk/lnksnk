@@ -3,7 +3,6 @@ package es
 import (
 	"iter"
 	"reflect"
-	"runtime"
 )
 
 type _iterateGen struct{}
@@ -38,88 +37,95 @@ func (_iterateGen) exec(vm *vm) {
 		return
 	}
 	if psblitr := obj.Export(); psblitr != nil {
-
 		var itertpe = reflect.TypeOf(psblitr)
 		if itertpe.Kind() == reflect.Func && itertpe.NumOut() == 1 && itertpe.Out(0).CanSeq() {
-
 			if rslt := reflect.ValueOf(psblitr).Call(nil); len(rslt) > 0 {
+				var done = false
+				iter := func() *iteratorRecord {
+					iter := vm.r.toObject(vm.r.ToValue(&_iterseq{seq: rslt[0].Seq(), fin: func() {
+						done = true
+					}}))
 
-				next, stop := iter.Pull(rslt[0].Seq())
-				if next != nil && stop != nil {
-					var strctseq = &SeqIter{next: next, stop: stop}
-					runtime.SetFinalizer(strctseq, func(strctseqf *SeqIter) {
-						go func() {
-							runtime.SetFinalizer(strctseqf, nil)
-							strctseqf.next = nil
-							strctseqf.Value = nil
-							stop := strctseqf.stop
-							strctseqf.stop = nil
-							if stop != nil {
-								stop()
-							}
-						}()
-					})
+					var next func(FunctionCall) Value
 
-					iter := func() *iteratorRecord {
-						iter := vm.r.toObject(vm.r.ToValue(strctseq))
-
-						var next func(FunctionCall) Value
-
-						if obj, ok := iter.self.getStr("next", nil).(*Object); ok {
-							if call, ok := obj.self.assertCallable(); ok {
-								next = call
-							}
+					if obj, ok := iter.self.getStr("next", nil).(*Object); ok {
+						if call, ok := obj.self.assertCallable(); ok {
+							next = call
 						}
+					}
 
-						return &iteratorRecord{
-							iterator: iter,
-							next:     next,
-						}
-					}()
-					vm.iterStack = append(vm.iterStack, iterStackItem{iter: iter})
-					vm.sp--
-					vm.pc++
-					return
+					return &iteratorRecord{
+						iterator: iter,
+						next:     next}
+				}()
+
+				vm.iterStack = append(vm.iterStack, iterStackItem{iter: iter})
+				vm.sp--
+				vm.pc++
+				for vmexec(vm, vm.pc) {
+					if done {
+						return
+					}
 				}
+				return
 			}
 		}
 	}
 	panic(vm.r.NewTypeError("object is not iterable"))
 }
 
-type SeqIter struct {
-	Value interface{}
-	Done  bool
-	next  func() (reflect.Value, bool)
-	stop  func()
+type _iterseq struct {
+	seq    iter.Seq[reflect.Value]
+	Value  interface{}
+	Done   bool
+	nxtval chan interface{}
+	nxtrd  chan bool
+	fin    func()
 }
 
-var doneseqiter = &SeqIter{Value: nil, Done: true}
-
-func (seqitr *SeqIter) Stop() {
-	if seqitr == nil {
-		return
+func (itrsq *_iterseq) Next() *_iterseq {
+	if itrsq == nil {
+		return itrsq
 	}
-	if stop := seqitr.stop; stop != nil {
-		runtime.SetFinalizer(seqitr, nil)
-		seqitr.next = nil
-		seqitr.stop = nil
-		stop()
+	if seq := itrsq.seq; seq != nil {
+		itrsq.seq = nil
+		itrsq.nxtrd = make(chan bool, 1)
+		itrsq.nxtval = make(chan interface{}, 1)
+		go func(v chan interface{}, nxt chan bool) {
+			for rflctv := range seq {
+				v <- rflctv.Interface()
+				itrsq.Done = false
+				if <-nxt {
+					continue
+				}
+				return
+			}
+			itrsq.Done = true
+			v <- nil
+		}(itrsq.nxtval, itrsq.nxtrd)
+		itrsq.Value = <-itrsq.nxtval
+	} else {
+		itrsq.nxtrd <- true
+		itrsq.Value = <-itrsq.nxtval
 	}
+	if fin := itrsq.fin; fin != nil && itrsq.Done {
+		itrsq.fin = nil
+		fin()
+	}
+	return itrsq
 }
 
-func (seqitr *SeqIter) Next() *SeqIter {
-	if seqitr == nil {
-		return doneseqiter
+func (itrsq *_iterseq) Return() *_iterseq {
+	if itrsq == nil {
+		return itrsq
 	}
-	if next := seqitr.next; next != nil {
-		rfltvl, rflcvk := next()
-		if rflcvk {
-			seqitr.Value = rfltvl.Interface()
-			seqitr.Done = !rflcvk
-			return seqitr
-		}
+	itrsq.nxtrd <- false
+	itrsq.Done = true
+	itrsq.Value = nil
+	fin := itrsq.fin
+	itrsq.fin = nil
+	if fin != nil {
+		fin()
 	}
-	seqitr.Stop()
-	return doneseqiter
+	return itrsq
 }
