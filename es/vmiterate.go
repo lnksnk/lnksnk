@@ -41,10 +41,17 @@ func (_iterateGen) exec(vm *vm) {
 		if itertpe.Kind() == reflect.Func && itertpe.NumOut() == 1 && itertpe.Out(0).CanSeq() {
 			if rslt := reflect.ValueOf(psblitr).Call(nil); len(rslt) > 0 {
 				var done = false
+				var itrsq *_iterseq
+				defer func() {
+					if itrsq != nil {
+						itrsq.Close()
+					}
+				}()
 				iter := func() *iteratorRecord {
-					iter := vm.r.toObject(vm.r.ToValue(&_iterseq{seq: rslt[0].Seq(), fin: func() {
+					itrsq = &_iterseq{seq: rslt[0].Seq(), fin: func() {
 						done = true
-					}}))
+					}}
+					iter := vm.r.toObject(vm.r.ToValue(itrsq))
 
 					var next func(FunctionCall) Value
 
@@ -64,6 +71,8 @@ func (_iterateGen) exec(vm *vm) {
 				vm.pc++
 				for vmexec(vm, vm.pc) {
 					if done {
+						itrsq.Close()
+						itrsq = nil
 						return
 					}
 				}
@@ -83,6 +92,30 @@ type _iterseq struct {
 	fin    func()
 }
 
+func (itrsq *_iterseq) Close() (err error) {
+	if itrsq == nil {
+		return
+	}
+	fin := itrsq.fin
+	itrsq.fin = nil
+	itrsq.Value = nil
+	itrsq.Done = false
+	nxtrd := itrsq.nxtrd
+	itrsq.nxtrd = nil
+	nxtval := itrsq.nxtval
+	itrsq.nxtval = nil
+	if fin != nil {
+		fin()
+	}
+	if nxtrd != nil {
+		close(nxtrd)
+	}
+	if nxtval != nil {
+		close(nxtval)
+	}
+	return
+}
+
 func (itrsq *_iterseq) Next() *_iterseq {
 	if itrsq == nil {
 		return itrsq
@@ -92,6 +125,9 @@ func (itrsq *_iterseq) Next() *_iterseq {
 		itrsq.nxtrd = make(chan bool, 1)
 		itrsq.nxtval = make(chan interface{}, 1)
 		go func(v chan interface{}, nxt chan bool) {
+			defer func() {
+
+			}()
 			for rflctv := range seq {
 				v <- rflctv.Interface()
 				itrsq.Done = false
@@ -127,5 +163,9 @@ func (itrsq *_iterseq) Return() *_iterseq {
 	if fin != nil {
 		fin()
 	}
+	close(itrsq.nxtrd)
+	itrsq.nxtrd = nil
+	close(itrsq.nxtval)
+	itrsq.nxtval = nil
 	return itrsq
 }
