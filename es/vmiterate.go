@@ -84,12 +84,12 @@ func (_iterateGen) exec(vm *vm) {
 }
 
 type _iterseq struct {
-	seq    iter.Seq[reflect.Value]
-	Value  interface{}
-	Done   bool
-	nxtval chan interface{}
-	nxtrd  chan bool
-	fin    func()
+	itrnext func() (interface{}, bool)
+	itrstop func()
+	seq     iter.Seq[reflect.Value]
+	Value   interface{}
+	Done    bool
+	fin     func()
 }
 
 func (itrsq *_iterseq) Close() (err error) {
@@ -100,18 +100,14 @@ func (itrsq *_iterseq) Close() (err error) {
 	itrsq.fin = nil
 	itrsq.Value = nil
 	itrsq.Done = false
-	nxtrd := itrsq.nxtrd
-	itrsq.nxtrd = nil
-	nxtval := itrsq.nxtval
-	itrsq.nxtval = nil
+	itrstop := itrsq.itrstop
+	itrsq.itrstop = nil
+	itrsq.itrnext = nil
 	if fin != nil {
 		fin()
 	}
-	if nxtrd != nil {
-		close(nxtrd)
-	}
-	if nxtval != nil {
-		close(nxtval)
+	if itrstop != nil {
+		itrstop()
 	}
 	return
 }
@@ -121,29 +117,30 @@ func (itrsq *_iterseq) Next() *_iterseq {
 		return itrsq
 	}
 	if seq := itrsq.seq; seq != nil {
-		itrsq.seq = nil
-		itrsq.nxtrd = make(chan bool, 1)
-		itrsq.nxtval = make(chan interface{}, 1)
-		go func(v chan interface{}, nxt chan bool) {
-			defer func() {
-
-			}()
-			for rflctv := range seq {
-				v <- rflctv.Interface()
-				itrsq.Done = false
-				if <-nxt {
-					continue
-				}
+		itrnext, itrstop := iter.Pull(seq)
+		itrsq.itrnext = func() (val interface{}, vld bool) {
+			val, vld = itrnext()
+			if vld {
+				vld = !vld
+				val = val.(reflect.Value).Interface()
 				return
 			}
-			itrsq.Done = true
-			v <- nil
-		}(itrsq.nxtval, itrsq.nxtrd)
-		itrsq.Value = <-itrsq.nxtval
-	} else {
-		itrsq.nxtrd <- true
-		itrsq.Value = <-itrsq.nxtval
+			val = nil
+			vld = true
+			return
+		}
+		itrsq.itrstop = itrstop
+		itrsq.seq = nil
 	}
+	if itrnext := itrsq.itrnext; itrnext != nil {
+		itrsq.Value, itrsq.Done = itrnext()
+		if fin := itrsq.fin; fin != nil && itrsq.Done {
+			itrsq.fin = nil
+			fin()
+		}
+		return itrsq
+	}
+	itrsq.Value, itrsq.Done = nil, true
 	if fin := itrsq.fin; fin != nil && itrsq.Done {
 		itrsq.fin = nil
 		fin()
@@ -155,17 +152,17 @@ func (itrsq *_iterseq) Return() *_iterseq {
 	if itrsq == nil {
 		return itrsq
 	}
-	itrsq.nxtrd <- false
-	itrsq.Done = true
 	itrsq.Value = nil
+	itrsq.Done = true
+	itrsq.itrnext = nil
+	if itrstop := itrsq.itrstop; itrstop != nil {
+		itrsq.itrstop = nil
+		itrstop()
+	}
 	fin := itrsq.fin
 	itrsq.fin = nil
 	if fin != nil {
 		fin()
 	}
-	close(itrsq.nxtrd)
-	itrsq.nxtrd = nil
-	close(itrsq.nxtval)
-	itrsq.nxtval = nil
 	return itrsq
 }
