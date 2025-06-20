@@ -350,7 +350,7 @@ func Parse(fsys fs.MultiFileSystem, chdinfos CachedInfos, fi fs.FileInfo, out io
 	tstpath := fi.Path()
 	chkfnd := false
 	if chdinfo, chkfnd = chdinfos.Get(tstpath); chkfnd && chdinfo != nil {
-		if chdinfo.ModTime() == fi.ModTime() {
+		if chdinfo.ModTime().Equal(fi.ModTime()) {
 			go func(reffsys fs.MultiFileSystem, reffi fs.FileInfo, chdfios CachedInfos, chdfi CachedInfo) {
 				if !chdfi.Valid() {
 					reftstpath := chdinfo.Path()
