@@ -535,7 +535,7 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 				for k, v := range mltyfsys.dfltexts {
 					fss.defaultexts[k] = v
 				}
-				if async && pthl == 2 {
+				if fsys.Syncable() && async && pthl == 2 {
 					mltyfsys.AutoSync(path[pthl-1].(string), fsys)
 					if ntfyfunc != nil {
 						fsys.AutoSync("/", ntfyfunc)
@@ -588,8 +588,11 @@ func (mltyfsys *multifilesys) AutoSync(path string, fsys FileSystem) {
 		wtchr = mltyfsys.wtchr
 	}
 	wtchdfsys := mltyfsys.wtchdfsys
-	if wtchr.Add(path) {
-		wtchdfsys.Set(path, fsys)
+	if fsys.Syncable() {
+		if wtchr.Add(path) {
+			wtchdfsys.Set(path, fsys)
+		}
+		return
 	}
 }
 

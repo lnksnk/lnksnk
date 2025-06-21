@@ -17,6 +17,7 @@ import (
 type FileSystem interface {
 	Path() string
 	AutoSync(string, ...func(FileInfo, Notify))
+	Syncable() bool
 	CacheExtensions(...string)
 	ActiveExtensions(...string)
 	DefaultExtensions(...string)
@@ -36,6 +37,7 @@ type FileSystem interface {
 type filesys struct {
 	mltypath string
 	root     string
+	archfls  map[string]*ArchiveFile
 	embed    map[string]*embedfile
 	cachexts map[string]bool
 	//cachedfiles *sync.Map
@@ -43,6 +45,14 @@ type filesys struct {
 	defaultexts map[string]bool
 	activexts   map[string]bool
 	mltyfsys    MultiFileSystem
+}
+
+// Syncable implements FileSystem.
+func (fsys *filesys) Syncable() (cansnc bool) {
+	if fsys == nil {
+		return
+	}
+	return len(fsys.archfls) == 0
 }
 
 // Path implements FileSystem.
@@ -266,6 +276,10 @@ func (fsys *filesys) Exist(path string) bool {
 				return ek
 			}
 		}
+		if archfls := fsys.archfls; len(archfls) > 0 {
+			_, archok := archfls[path]
+			return archok
+		}
 		if fi, _ := os.Stat(fsys.root + path); fi != nil {
 			return true
 		}
@@ -428,26 +442,6 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 		nmsi++
 	}
 	for _, name := range names {
-		/*if path == "/" {
-			for _, emd := range fsys.embed {
-				vldfi := emd.FileInfo
-				if vldfi.Root() == fsys.mltypath+path[1:] {
-					if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
-						fis = append(fis, vldfi)
-					}
-				}
-			}
-			for _, chdf := range fsys.cachedfiles {
-				vldfi := chdf.FileInfo
-				if vldfi.Root() == fsys.mltypath+path[1:] {
-					if vld := isvalid(fsys.mltypath+path[1:], name, vldfi.Root(), vldfi.Name(), vldfi.Path()); vld {
-						fis = append(fis, vldfi)
-					}
-				}
-			}
-			fis = append(fis, findosfinfos(path, name)...)
-			continue
-		}*/
 		for _, emd := range fsys.embed {
 			vldfi := emd.FileInfo
 			if vldfi.Root() == fsys.mltypath+path[1:] {
@@ -464,6 +458,19 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 				}
 			}
 		}
+		if archfls := fsys.archfls; len(archfls) > 0 {
+			for _, archfi := range archfls {
+				if fsys.mltypath+archfi.Root() == fsys.mltypath+path[1:] {
+					if vld := isvalid(fsys.mltypath+path[1:], name, fsys.mltypath+archfi.Root(), archfi.Name(), archfi.Path()); vld {
+						finfo := archiveFileInfo(archfi, fsys.mltypath, fsys.activexts)
+						if finfo != nil {
+							fis = append(fis, finfo)
+						}
+					}
+				}
+			}
+			continue
+		}
 		fis = append(fis, findosfinfos(path, name)...)
 		continue
 	}
@@ -479,8 +486,10 @@ func syncPath(fsys *filesys, path string, nftyfunc func(FileInfo, Notify)) {
 	if fsys == nil {
 		return
 	}
-	var syncthis func(sncpath string)
 	cachexts, cachedfiles := fsys.cachexts, fsys.cachedfiles
+
+	var syncthis func(sncpath string)
+
 	syncthis = func(sncpath string) {
 		if sncpath == "" {
 			return
@@ -517,7 +526,7 @@ func syncPath(fsys *filesys, path string, nftyfunc func(FileInfo, Notify)) {
 				if chdst == nil {
 					goto loadchdsts
 				}
-				if chdst.ModTime() == sncfi.ModTime() {
+				if chdst.ModTime().Equal(sncfi.ModTime()) {
 					return
 				}
 				if nftyfunc != nil {
@@ -599,7 +608,24 @@ func (fsys *filesys) Close() (err error) {
 }
 
 func NewFileSystem(root string) FileSystem {
-	return &filesys{root: strings.Replace(root, "\\", "/", -1), cachedfiles: map[string]*cachedstat{}, cachexts: map[string]bool{}, activexts: map[string]bool{}, defaultexts: map[string]bool{}}
+	root = strings.Replace(root, "\\", "/", -1)
+	var archfls map[string]*ArchiveFile
+
+	for ext := range lklzpexts {
+		if strings.Contains(root, ext) {
+			archpath := root[:strings.Index(root, ext)+len(ext)]
+			rmngroot := root[len(root[:strings.Index(root, ext)+len(ext)]):]
+
+			if arcfls, _ := ArchiveFiles(archpath, rmngroot); len(arcfls) > 0 {
+				archfls = map[string]*ArchiveFile{}
+				for _, arcf := range arcfls {
+					archfls[arcf.Path()] = arcf
+				}
+			}
+			break
+		}
+	}
+	return &filesys{root: root, archfls: archfls, cachedfiles: map[string]*cachedstat{}, cachexts: map[string]bool{}, activexts: map[string]bool{}, defaultexts: map[string]bool{}}
 }
 
 func (fsys *filesys) CacheExtensions(extns ...string) {
@@ -761,18 +787,32 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 		return emdfi.FileInfo
 	}
 	var fi fs.FileInfo
+	archfls := fsys.archfls
 	if path == "" && pthroot[len(pthroot)-1] == '/' {
-		fi, _ := os.Stat(fsys.root + pthroot + path)
-		if fi != nil && fi.IsDir() {
-			for dlftext := range fsys.defaultexts {
-				if fi, _ = os.Stat(fsys.root + pthroot + "index" + dlftext); fi != nil {
-					path = fi.Name()
-					pthext = filepath.Ext(path)
-					break
+		if len(archfls) > 0 {
+			archf := archfls[pthroot+path]
+			if archf != nil {
+				if archf.IsDir() {
+					for dlftext := range fsys.defaultexts {
+						if archf = archfls[pthroot+path+"index"+dlftext]; archf != nil {
+							return archiveFileInfo(archf, fsys.mltypath, fsys.activexts)
+						}
+					}
 				}
 			}
-			if fi == nil {
-				return nil
+		} else {
+			fi, _ := os.Stat(fsys.root + pthroot + path)
+			if fi != nil && fi.IsDir() {
+				for dlftext := range fsys.defaultexts {
+					if fi, _ = os.Stat(fsys.root + pthroot + "index" + dlftext); fi != nil {
+						path = fi.Name()
+						pthext = filepath.Ext(path)
+						break
+					}
+				}
+				if fi == nil {
+					return nil
+				}
 			}
 		}
 	}
@@ -787,27 +827,14 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 		if chdstt != nil {
 			return chdstt.FileInfo
 		}
-		/*go func() {
-			if f, _ := os.Open(fsys.root + pthroot + path); f != nil {
-				bf := ioext.NewBuffer(f)
-				chdstt = &cachedstat{Buffer: bf, FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
-					if pthroot != "" && pthroot[0] == '/' {
-						return pthroot[1:]
-					}
-					return pthroot
-				}()+path, fsys.mltypath, func(ctx ...context.Context) io.Reader {
-					return bf.Reader(func() context.Context {
-						if len(ctx) > 0 {
-							return ctx[0]
-						}
-						return nil
-					}())
-				})}
-				fsys.cachedfiles[pthroot+path] = chdstt
-			}
-		}()*/
 	}
 
+	if len(archfls) > 0 {
+		if archf := archfls[pthroot+path]; archf != nil {
+			return archiveFileInfo(archf, fsys.mltypath, fsys.activexts)
+		}
+		return
+	}
 	fi, _ = os.Stat(fsys.root + pthroot + path)
 	if fi != nil && !fi.IsDir() {
 		_, _, media = mimes.FindMimeType(fi.Name())
