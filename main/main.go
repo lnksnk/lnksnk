@@ -49,6 +49,8 @@ func main() {
 	mltyfsys.CacheExtensions(".html", ".js", ".css", ".svg", ".woff2", ".woff", ".ttf", ".eot", ".sql")
 	mltyfsys.DefaultExtensions(".html", ".js", ".json", ".css")
 	mltyfsys.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
+	mltyfsys.Map("/monaco", "C:/Users/evert/Downloads/monaco-editor-0.52.2.gz")
+	mltyfsys.Map("/threejs", "C:/Users/evert/Downloads/three.js-master.zip/three.js-master", true)
 	mltyfsys.Map("/etl", "C:/projects/cim", true)
 	mltyfsys.Map("/media", "C:/movies", true)
 	//mltyfsys.Map("/datafiles", "C:/projects/datafiles", true)
@@ -313,14 +315,27 @@ func main() {
 						out,
 						nil,
 						ssn.API().RunProgram); rqfi != nil && out != nil && in != nil {
-						out.Print(rqfi.Reader(in.Context()))
+						if rdr := rqfi.Reader(in.Context()); rdr != nil {
+							clsr, _ := rdr.(io.Closer)
+							defer func() {
+								if clsr != nil {
+									clsr.Close()
+								}
+							}()
+							out.Print(rdr)
+						}
 					}
 				}
 				return
 			}
-
 			if !actv || (media && rqfi.Media()) {
 				rdr := rqfi.Reader()
+				clsr, _ := rdr.(io.Closer)
+				defer func() {
+					if clsr != nil {
+						clsr.Close()
+					}
+				}()
 				if rdrsk, rangeOffset, rangeType := rdr.(io.ReadSeeker), in.RangeOffset(), in.RangeType(); rdrsk != nil && rangeOffset > -1 && rangeType == "bytes" {
 					rdrsk.Seek(rangeOffset, 0)
 					maxoffset := int64(0)
@@ -329,7 +344,6 @@ func main() {
 						maxlen = maxoffset - rangeOffset
 						maxoffset--
 					}
-
 					if maxoffset < rangeOffset {
 						maxoffset = rangeOffset
 						maxlen = 0
