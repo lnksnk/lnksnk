@@ -26,10 +26,25 @@ func ArchiveFiles(archivepath string, rmngroot string) (archfiles []*ArchiveFile
 			return
 		}
 		defer zpr.Close()
-
+		ziparchdirpath := archivepath[strings.LastIndex(archivepath, "/")+1:]
+		ziparchdirpath = ziparchdirpath[:len(ziparchdirpath)-len(arcext)]
 		for _, zpf := range zpr.File {
 			zpfh := zpf.FileHeader
-			if zpfnmel := len(zpfh.Name); zpfnmel >= rnmgrtl && "/"+zpfh.Name[:rnmgrtl-1] == rmngroot {
+			if ziparchdirpath != "" {
+				if zpfh.Name == ziparchdirpath+"/" {
+					if zpfh.FileInfo().IsDir() {
+						if rmngroot == "" {
+							rmngroot = "/" + ziparchdirpath
+						} else {
+							rmngroot = "/" + ziparchdirpath + rmngroot
+						}
+						rnmgrtl = len(rmngroot)
+					}
+					ziparchdirpath = ""
+					continue
+				}
+			}
+			if zpfnmel := len(zpfh.Name); rmngroot == "" || (zpfnmel >= rnmgrtl && "/"+zpfh.Name[:rnmgrtl-1] == rmngroot) {
 				lkppath := zpfh.Name
 				lkproot := ""
 				if spi := strings.LastIndex(lkppath, "/"); spi > -1 {
@@ -147,7 +162,7 @@ func ArchiveFiles(archivepath string, rmngroot string) (archfiles []*ArchiveFile
 				if trhead != nil {
 					switch trhead.Typeflag {
 					case tar.TypeReg, tar.TypeDir:
-						if trfnmel := len(trhead.Name); trfnmel >= rnmgrtl && "/"+trhead.Name[:rnmgrtl-1] == rmngroot {
+						if trfnmel := len(trhead.Name); rmngroot == "" || (trfnmel >= rnmgrtl && "/"+trhead.Name[:rnmgrtl-1] == rmngroot) {
 							lkppath := trhead.Name
 							lkproot := ""
 							if spi := strings.LastIndex(lkppath, "/"); spi > -1 {
