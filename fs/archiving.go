@@ -43,6 +43,7 @@ func ArchiveFiles(archivepath string, rmngroot string) (archfiles []*ArchiveFile
 					ziparchdirpath = ""
 					continue
 				}
+				ziparchdirpath = ""
 			}
 			if zpfnmel := len(zpfh.Name); rmngroot == "" || (zpfnmel >= rnmgrtl && "/"+zpfh.Name[:rnmgrtl-1] == rmngroot) {
 				lkppath := zpfh.Name
@@ -269,7 +270,7 @@ func archiveFileInfo(archfi *ArchiveFile, base string, activexts map[string]bool
 		} else {
 			ext = ""
 		}
-		atv := ext != "" && activexts[ext]
+		atv := ext != "" && len(activexts) > 0 && activexts[ext]
 		archpath := archfi.Path()
 		if archpath != "" && archpath[0] == '/' {
 			archpath = archpath[1:]
