@@ -35,6 +35,7 @@ type FileSystem interface {
 }
 
 type filesys struct {
+	raw      bool
 	mltypath string
 	root     string
 	archfls  map[string]*ArchiveFile
@@ -405,7 +406,7 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 					return path
 				}(), mask, fipthroot, osfi.Name(), fipath); vld {
 					_, _, media := mimes.FindMimeType(osfi.Name())
-					osfis = append(osfis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), osfi.IsDir(), osfi.Sys(), fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath[len(fsys.mltypath):], fsys.mltypath, func(ctx ...context.Context) io.Reader {
+					osfis = append(osfis, &fsysfinfo{ctx: nil, FileInfo: NewFileInfo(osfi.Name(), osfi.Size(), osfi.Mode(), osfi.ModTime(), osfi.IsDir(), osfi.Sys(), !fsys.raw && fsys.activexts[filepath.Ext(osfi.Name())], true, media, fipath[len(fsys.mltypath):], fsys.mltypath, func(ctx ...context.Context) io.Reader {
 						if f, _ := os.Open(fsys.root + fipath); f != nil {
 							return ContextReader(f, func() context.Context {
 								if len(ctx) > 0 {
@@ -462,7 +463,12 @@ func (fsys *filesys) List(path string) (fis []FileInfo) {
 			for _, archfi := range archfls {
 				if fsys.mltypath+archfi.Root() == fsys.mltypath+path[1:] {
 					if vld := isvalid(fsys.mltypath+path[1:], name, fsys.mltypath+archfi.Root(), archfi.Name(), archfi.Path()); vld {
-						finfo := archiveFileInfo(archfi, fsys.mltypath, fsys.activexts)
+						var finfo FileInfo
+						if fsys.raw {
+							finfo = archiveFileInfo(archfi, fsys.mltypath, nil)
+						} else {
+							finfo = archiveFileInfo(archfi, fsys.mltypath, fsys.activexts)
+						}
 						if finfo != nil {
 							fis = append(fis, finfo)
 						}
@@ -542,6 +548,9 @@ func syncPath(fsys *filesys, path string, nftyfunc func(FileInfo, Notify)) {
 						defer f.Close()
 						bf := ioext.NewBuffer(f)
 						atv := fsys.activexts[sncext]
+						if fsys.raw {
+							atv = false
+						}
 						_, _, media := mimes.FindMimeType(sncext, sncext)
 						chdst = &cachedstat{Buffer: bf, FileInfo: NewFileInfo(sncfi.Name(), sncfi.Size(), sncfi.Mode(), sncfi.ModTime(), sncfi.IsDir(), sncfi.Sys(), atv, !atv, media, sncpath, fsys.mltypath, func(ctx ...context.Context) io.Reader { return bf.Reader(ctx) })}
 						cachedfiles[sncpath] = chdst
@@ -607,7 +616,7 @@ func (fsys *filesys) Close() (err error) {
 	return
 }
 
-func NewFileSystem(root string) FileSystem {
+func NewFileSystem(root string, raw bool) FileSystem {
 	root = strings.Replace(root, "\\", "/", -1)
 	var archfls map[string]*ArchiveFile
 
@@ -625,7 +634,7 @@ func NewFileSystem(root string) FileSystem {
 			break
 		}
 	}
-	return &filesys{root: root, archfls: archfls, cachedfiles: map[string]*cachedstat{}, cachexts: map[string]bool{}, activexts: map[string]bool{}, defaultexts: map[string]bool{}}
+	return &filesys{root: root, raw: raw, archfls: archfls, cachedfiles: map[string]*cachedstat{}, cachexts: map[string]bool{}, activexts: map[string]bool{}, defaultexts: map[string]bool{}}
 }
 
 func (fsys *filesys) CacheExtensions(extns ...string) {
@@ -791,15 +800,18 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 	if path == "" && pthroot[len(pthroot)-1] == '/' {
 		if len(archfls) > 0 {
 			archf := archfls[pthroot+path]
-			if archf != nil {
-				if archf.IsDir() {
-					for dlftext := range fsys.defaultexts {
-						if archf = archfls[pthroot+path+"index"+dlftext]; archf != nil {
-							return archiveFileInfo(archf, fsys.mltypath, fsys.activexts)
+			//if archf != nil {
+			if (archf == nil && (pthroot+path) == "/") || (archf != nil && archf.IsDir()) {
+				for dlftext := range fsys.defaultexts {
+					if archf = archfls[pthroot+path+"index"+dlftext]; archf != nil {
+						if fsys.raw {
+							return archiveFileInfo(archf, fsys.mltypath, nil)
 						}
+						return archiveFileInfo(archf, fsys.mltypath, fsys.activexts)
 					}
 				}
 			}
+			//}
 		} else {
 			fi, _ := os.Stat(fsys.root + pthroot + path)
 			if fi != nil && fi.IsDir() {
@@ -816,10 +828,9 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 			}
 		}
 	}
-	actv := fsys.activexts[pthext]
+	actv := !fsys.raw && fsys.activexts[pthext]
 	media := false
 	raw := !actv
-
 	if chble := func() bool {
 		return pthext != "" && fsys.cachexts != nil && fsys.cachexts[pthext]
 	}(); chble {
@@ -831,6 +842,9 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 
 	if len(archfls) > 0 {
 		if archf := archfls[pthroot+path]; archf != nil {
+			if fsys.raw {
+				return archiveFileInfo(archf, fsys.mltypath, nil)
+			}
 			return archiveFileInfo(archf, fsys.mltypath, fsys.activexts)
 		}
 		return
@@ -838,7 +852,7 @@ func (fsys *filesys) StatContext(ctx context.Context, path string) (fifnd FileIn
 	fi, _ = os.Stat(fsys.root + pthroot + path)
 	if fi != nil && !fi.IsDir() {
 		_, _, media = mimes.FindMimeType(fi.Name())
-		fifnd = &fsysfinfo{ctx: ctx, FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), false, fi.Sys(), fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
+		fifnd = &fsysfinfo{ctx: ctx, FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), false, fi.Sys(), !fsys.raw && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
 			if pthroot != "" && pthroot[0] == '/' {
 				return pthroot[1:]
 			}
@@ -903,7 +917,7 @@ func (fsys *filesys) OpenContext(ctx context.Context, path string) File {
 			}
 		}
 	}
-	actv := fsys.activexts[pthext]
+	actv := !fsys.raw && fsys.activexts[pthext]
 	media := false
 	raw := !actv
 
@@ -917,7 +931,7 @@ func (fsys *filesys) OpenContext(ctx context.Context, path string) File {
 		go func() {
 			if f, _ := os.Open(fsys.root + pthroot + path); f != nil {
 				bf := ioext.NewBuffer(f)
-				chdstt = &cachedstat{Buffer: ioext.NewBuffer(f), FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
+				chdstt = &cachedstat{Buffer: ioext.NewBuffer(f), FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fsys.raw && !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
 					if pthroot != "" && pthroot[0] == '/' {
 						return pthroot[1:]
 					}
@@ -938,7 +952,7 @@ func (fsys *filesys) OpenContext(ctx context.Context, path string) File {
 	fi, _ = os.Stat(fsys.root + pthroot + path)
 	if fi != nil && !fi.IsDir() {
 		_, _, media = mimes.FindMimeType(fi.Name())
-		return &file{ctx: ctx, fullpath: fsys.root + pthroot + path, FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
+		return &file{ctx: ctx, fullpath: fsys.root + pthroot + path, FileInfo: NewFileInfo(fi.Name(), fi.Size(), fi.Mode(), fi.ModTime(), fi.IsDir(), fi.Sys(), !fsys.raw && !fi.IsDir() && fsys.activexts[filepath.Ext(fi.Name())], raw, media, func() string {
 			if pthroot != "" && pthroot[0] == '/' {
 				return pthroot[1:]
 			}

@@ -508,12 +508,16 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 		if fsys, _ = fsystms.Get(path[0].(string)); fsys != nil {
 			return
 		}
+		raw := strings.Contains(path[0].(string), "/raw:")
+		if raw {
+			path[0] = strings.Replace(path[0].(string), "/raw:", "", 1)
+		}
 		if fsys = NewFileSystem(func() string {
 			if len(path) <= 1 {
 				return ""
 			}
 			return path[1].(string)
-		}()); fsys != nil {
+		}(), raw); fsys != nil {
 			if ntfyfsysfunc != nil && ntfyfunc == nil {
 				ntfyfunc = func(fi FileInfo, n Notify) {
 					ntfyfsysfunc(fsys, fi, n)
