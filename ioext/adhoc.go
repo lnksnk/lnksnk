@@ -637,3 +637,9 @@ type ReadFunc func(p []byte) (n int, err error)
 func (rdfunc ReadFunc) Read(p []byte) (n int, err error) {
 	return rdfunc(p)
 }
+
+type WriteFunc func(p []byte) (n int, err error)
+
+func (wrtfunc WriteFunc) Write(p []byte) (n int, err error) {
+	return wrtfunc(p)
+}
