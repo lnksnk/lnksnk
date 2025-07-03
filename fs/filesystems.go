@@ -32,6 +32,17 @@ func (f *filesystems) Close() {
 	}
 }
 
+// Empty implements FileSystems.
+func (f *filesystems) Empty() bool {
+	if f == nil {
+		return true
+	}
+	if itr := f.IterateMap; itr != nil {
+		return itr.Empty()
+	}
+	return true
+}
+
 // Contains implements FileSystems.
 func (f *filesystems) Contains(name string) bool {
 	if f == nil {
