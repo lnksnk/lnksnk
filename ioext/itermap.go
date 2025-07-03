@@ -20,6 +20,7 @@ type IterateMap[K comparable, V any] interface {
 	Clear()
 	Close()
 	Contains(name K) bool
+	Empty() bool
 	Iterate() func(func(K, V) bool)
 	Events() IterateMapEvents[K, V]
 }
@@ -84,13 +85,31 @@ func finalizeItermap[K comparable, V any](imp *itermap[K, V]) {
 	imp.Close()
 }
 
+// Empty implements IterateMap.
+func (imp *itermap[K, V]) Empty() (empty bool) {
+	if imp == nil {
+		return true
+	}
+	empty = true
+	if orgsncmp := imp.orgsncmp; orgsncmp != nil {
+		orgsncmp.Range(func(key, value any) bool {
+			empty = false
+			return false
+		})
+	}
+	return
+}
+
 // Contains implements IterateMap.
 func (imp *itermap[K, V]) Contains(name K) bool {
 	if imp == nil {
 		return false
 	}
-	_, ok := imp.orgsncmp.Load(name)
-	return ok
+	if orgsncmp := imp.orgsncmp; orgsncmp != nil {
+		_, ok := orgsncmp.Load(name)
+		return ok
+	}
+	return false
 }
 
 // Clear implements IterateMap.
