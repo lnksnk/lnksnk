@@ -18,6 +18,16 @@ type watcher struct {
 	wtchng     *sync.Map
 }
 
+func (wtchr *watcher) Remove(path string) bool {
+	if wtchr == nil || path == "" {
+		return false
+	}
+	if fswtchr := wtchr.fswtchr; fswtchr != nil {
+		return fswtchr.Remove(path) == nil
+	}
+	return false
+}
+
 func (wtchr *watcher) Add(path string) bool {
 	if wtchr == nil || path == "" {
 		return false
