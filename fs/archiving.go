@@ -295,6 +295,22 @@ type ArchiveFile struct {
 	prepBuf     func() error
 }
 
+func (arcf *ArchiveFile) Close() (err error) {
+	if arcf == nil {
+		return
+	}
+
+	bf := arcf.bf
+	arcf.prepBuf = nil
+	arcf.FileInfo = nil
+	arcf.finfo = nil
+	arcf.bf = nil
+	if bf != nil {
+		bf.Close()
+	}
+	return
+}
+
 func (arcf *ArchiveFile) Name() string {
 	if arcf == nil {
 		return ""
