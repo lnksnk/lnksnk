@@ -585,7 +585,7 @@ func (fsys *filesys) Close() (err error) {
 	if fsys == nil {
 		return
 	}
-	mltyfsys, activexts, cachexts, defaultexts, cachedfiles := fsys.mltyfsys, fsys.activexts, fsys.cachexts, fsys.defaultexts, fsys.cachedfiles
+	mltyfsys, activexts, cachexts, defaultexts, cachedfiles, archfls := fsys.mltyfsys, fsys.activexts, fsys.cachexts, fsys.defaultexts, fsys.cachedfiles, fsys.archfls
 	fsys.mltyfsys = nil
 	if mltsys, _ := mltyfsys.(*multifilesys); mltsys != nil {
 		if root := fsys.root; root != "" {
@@ -597,6 +597,7 @@ func (fsys *filesys) Close() (err error) {
 	fsys.defaultexts = nil
 	fsys.cachexts = nil
 	fsys.activexts = nil
+	fsys.archfls = nil
 	if activexts != nil {
 		clear(activexts)
 		activexts = nil
@@ -613,6 +614,12 @@ func (fsys *filesys) Close() (err error) {
 		value.Close()
 		delete(cachedfiles, key)
 	}
+	go func() {
+		for archfk, archfv := range archfls {
+			archfv.Close()
+			delete(archfls, archfk)
+		}
+	}()
 	return
 }
 
