@@ -1,12 +1,15 @@
 package dbms
 
 import (
+	"database/sql"
+
 	"github.com/lnksnk/lnksnk/ioext"
 )
 
 type Drivers interface {
 	ioext.IterateMap[string, Driver]
-	ioext.IterateMapEvents[string, Driver]
+	Empty() bool
+	Exist(string) bool
 	Register(string, ...interface{}) Driver
 	DefaultInvokable(func(string) (InvokeDB InvokeDBFunc, ParseSqlParam ParseSqlArgFunc))
 }
@@ -14,6 +17,29 @@ type Drivers interface {
 type drivers struct {
 	ioext.IterateMap[string, Driver]
 	dfltinvkbl func(string) (InvokeDB InvokeDBFunc, ParseSqlParam ParseSqlArgFunc)
+}
+
+// Empty implements Drivers.
+// Subtle: this method shadows the method (IterateMap).Empty of drivers.IterateMap.
+func (dvrs *drivers) Empty() bool {
+	if dvrs == nil {
+		return true
+	}
+	if itr := dvrs.IterateMap; itr != nil {
+		return itr.Empty()
+	}
+	return true
+}
+
+// Exist implements Drivers.
+func (dvrs *drivers) Exist(name string) bool {
+	if dvrs == nil {
+		return true
+	}
+	if itr := dvrs.IterateMap; itr != nil {
+		return itr.Contains(name)
+	}
+	return true
 }
 
 // DefaultInvokable implements Drivers.
@@ -31,41 +57,55 @@ func (dvrs *drivers) Register(alias string, a ...interface{}) (dvr Driver) {
 	if dvrs == nil {
 		return nil
 	}
-	if dfltinvkbl := dvrs.dfltinvkbl; dfltinvkbl != nil {
-		dbinvk, prssqlarg := dfltinvkbl(alias)
-		if dbinvk != nil {
-			if itr := dvrs.IterateMap; itr != nil {
-				dvr = NewDriver(alias, dbinvk, prssqlarg, a...)
-				itr.Set(alias, dvr)
+	if itr := dvrs.IterateMap; itr != nil {
+		var dbinvk InvokeDBFunc
+		var prssqlarg ParseSqlArgFunc
+		if len(a) > 0 {
+			for _, d := range a {
+				if ainvkdb, ainvkdbk := d.(InvokeDBFunc); ainvkdbk {
+					if dbinvk == nil {
+						dbinvk = ainvkdb
+					}
+					continue
+				}
+				if ainvkdb, ainvkdbk := d.(func(string, ...interface{}) (*sql.DB, error)); ainvkdbk {
+					if dbinvk == nil {
+						dbinvk = ainvkdb
+					}
+					continue
+				}
+				if aprsarg, aprsargk := d.(ParseSqlArgFunc); aprsargk {
+					if prssqlarg == nil {
+						prssqlarg = aprsarg
+					}
+					continue
+				}
+				if aprsarg, aprsargk := d.(func(int) string); aprsargk {
+					if prssqlarg == nil {
+						prssqlarg = aprsarg
+					}
+					continue
+				}
 			}
+		} else if dfltinvkbl := dvrs.dfltinvkbl; dfltinvkbl != nil {
+			dbinvk, prssqlarg = dfltinvkbl(alias)
+		}
+		if dbinvk != nil {
+			dvr = NewDriver(alias, dbinvk, prssqlarg, a...)
+			itr.Set(alias, dvr)
 		}
 	}
 	return
 }
 
-// Add implements Drivers.
-func (dvrs *drivers) Add(string, Driver) {
-
-}
-
-// Changed implements Drivers.
-func (dvrs *drivers) Changed(string, Driver, Driver) {
-
-}
-
-// Deleted implements Drivers.
-func (dvrs *drivers) Deleted(map[string]Driver) {
-
-}
-
-// Disposed implements Drivers.
-func (dvrs *drivers) Disposed(map[string]Driver) {
-
-}
-
 // Clear implements Drivers.
 func (dvrs *drivers) Clear() {
-
+	if dvrs == nil {
+		return
+	}
+	if iter := dvrs.IterateMap; iter != nil {
+		iter.Clear()
+	}
 }
 
 // Close implements Drivers.
@@ -89,16 +129,6 @@ func (dvrs *drivers) Contains(name string) bool {
 		return itr.Contains(name)
 	}
 	return false
-}
-
-// Delete implements Drivers.
-func (dvrs *drivers) Delete(name ...string) {
-	if dvrs == nil {
-		return
-	}
-	if itr := dvrs.IterateMap; itr != nil {
-
-	}
 }
 
 // Events implements Drivers.
@@ -136,23 +166,7 @@ func (dvrs *drivers) Iterate() func(func(string, Driver) bool) {
 	}
 }
 
-// Set implements Drivers.
-func (dvrs *drivers) Set(name string, value Driver) {
-	/*if dvrs == nil {
-		return
-	}
-	if itr := dvrs.IterateMap; itr != nil {
-		itr.Set(name, value)
-	}*/
-}
-
 func NewDrivers() Drivers {
 	drvs := &drivers{IterateMap: ioext.MapIterator[string, Driver]()}
-	if itrevnts, _ := drvs.Events().(*ioext.MapIterateEvents[string, Driver]); itrevnts != nil {
-		itrevnts.EventChanged = drvs.Changed
-		itrevnts.EventDeleted = drvs.Deleted
-		itrevnts.EventDisposed = drvs.Disposed
-		itrevnts.EventAdd = drvs.Add
-	}
 	return drvs
 }
