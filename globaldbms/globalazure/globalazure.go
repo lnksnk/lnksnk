@@ -6,5 +6,5 @@ import (
 )
 
 func init() {
-	globaldbms.MapDriver("azuresql", mssql.InvokeDBAzure, mssql.ParseSqlParam)
+	globaldbms.DRIVERS.Register("azuresql", mssql.InvokeDBAzure, mssql.ParseSqlParam)
 }
