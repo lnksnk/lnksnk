@@ -26,10 +26,10 @@ var HTTPSessionHandler sessioning.SessionHttpFunc
 
 func init() {
 
-	MAINSESSSION = sessioning.NewSession(nil, globalfs.GLOBALFS)
+	MAINSESSSION = sessioning.NewSession(nil, globalfs.FSYS)
 	SESSIONS = MAINSESSSION.Sessions()
 	HTTPSessionHandler = sessioning.SessionHttpFunc(func(w http.ResponseWriter, r *http.Request) {
-		ssn := HTTPSessionHandler.Session(MAINSESSSION, w, r, globalfs.GLOBALFS)
+		ssn := HTTPSessionHandler.Session(MAINSESSSION, w, r, globalfs.FSYS)
 		SESSIONS.Set(SESSIONS.UniqueKey(), ssn)
 		defer func() {
 			if ssn != nil {
@@ -41,8 +41,8 @@ func init() {
 				var vm = es.New()
 				vm.SetFieldNameMapper(fieldmapping.NewFieldMapper(es.UncapFieldNameMapper()))
 				vm.SetImportModule(func(modname string, namedimports ...[][]string) (imported bool) {
-					if modfi := globalfs.GLOBALFS.Stat(modname); modfi != nil {
-						active.ProcessActiveFile(globalfs.GLOBALFS, modfi, nil, nil, func(pgrm interface{}, w io.Writer) {
+					if modfi := globalfs.FSYS.Stat(modname); modfi != nil {
+						active.ProcessActiveFile(globalfs.FSYS, modfi, nil, nil, func(pgrm interface{}, w io.Writer) {
 							imported = es.ImportModule(pgrm, vm, namedimports...)
 						})
 					}
@@ -145,13 +145,13 @@ func init() {
 				var fi, _ = arg.(fs.FileInfo)
 				if fi == nil {
 					if s, sk := arg.(string); sk && s != "" {
-						if fi = globalfs.GLOBALFS.Stat(s); fi == nil {
+						if fi = globalfs.FSYS.Stat(s); fi == nil {
 							if ext := filepath.Ext(s); ext != "" {
-								if fi = globalfs.GLOBALFS.Stat(s); fi == nil {
+								if fi = globalfs.FSYS.Stat(s); fi == nil {
 									return
 								}
 							} else {
-								if fi = globalfs.GLOBALFS.Stat(s + ext); fi == nil {
+								if fi = globalfs.FSYS.Stat(s + ext); fi == nil {
 									return
 								}
 							}
@@ -169,7 +169,7 @@ func init() {
 				}
 				if fi != nil {
 					if len(argmps) == 0 {
-						if prcfi := active.ProcessActiveFile(globalfs.GLOBALFS, fi, altout, nil, sa.RunProgram); prcfi != nil && altout != nil {
+						if prcfi := active.ProcessActiveFile(globalfs.FSYS, fi, altout, nil, sa.RunProgram); prcfi != nil && altout != nil {
 							if prnt, prtk := altout.(interface{ Print(...interface{}) error }); prtk {
 								if prnt != nil {
 									prnt.Print(prcfi)
@@ -180,7 +180,7 @@ func init() {
 						}
 						return
 					}
-					cntnt, cde, _, _, prserr := active.ParseOnly(globalfs.GLOBALFS, fi, argmps...)
+					cntnt, cde, _, _, prserr := active.ParseOnly(globalfs.FSYS, fi, argmps...)
 					defer func() {
 						if !cntnt.Empty() {
 							cntnt.Close()
@@ -197,7 +197,7 @@ func init() {
 						cntnt.WriteTo(altout)
 					}
 					if !cde.Empty() {
-						prgm, prgmerr := globalfs.CompileProgram(globalfs.GLOBALFS, cde)
+						prgm, prgmerr := globalfs.CompileProgram(globalfs.FSYS, cde)
 						if prgmerr != nil {
 							err = prgmerr
 							return
@@ -234,14 +234,11 @@ func init() {
 			if out != nil {
 				out.Header().Set("Content-type", mimetype)
 			}
-			actv := texttype
-			if !actv && rqfi.Active() {
-				actv = true
-			}
+			actv := rqfi.Active()
 			if actv {
 				if ssn != nil {
 					if rqfi = active.ProcessActiveFile(
-						globalfs.GLOBALFS,
+						globalfs.FSYS,
 						rqfi,
 						out,
 						nil,
