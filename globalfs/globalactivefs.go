@@ -24,13 +24,13 @@ func CompileProgram(fsys fs.MultiFileSystem, cde ...interface{}) (prgm interface
 	}, cde...)
 }
 
-var GLOBALFS fs.MultiFileSystem
+var FSYS fs.MultiFileSystem
 
 func init() {
-	GLOBALFS = active.AciveFileSystem(CompileProgram)
-	GLOBALFS.CacheExtensions(".html", ".js", ".css", ".svg", ".woff2", ".woff", ".ttf", ".eot", ".sql")
-	GLOBALFS.DefaultExtensions(".html", ".js", ".json", ".css")
-	GLOBALFS.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
-	fonts.ImportFonts(GLOBALFS)
-	ui.ImportUiJS(GLOBALFS)
+	FSYS = active.AciveFileSystem(CompileProgram)
+	FSYS.CacheExtensions(".html", ".js", ".css", ".svg", ".woff2", ".woff", ".ttf", ".eot", ".sql")
+	FSYS.DefaultExtensions(".html", ".js", ".json", ".css")
+	FSYS.ActiveExtensions(".html", ".js", ".svg", ".json", ".xml", ".sql")
+	fonts.ImportFonts(FSYS)
+	ui.ImportUiJS(FSYS)
 }
