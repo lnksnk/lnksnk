@@ -8,7 +8,7 @@ import (
 )
 
 type DBMS interface {
-	LoadDBMS(...interface{})
+	Load(...interface{})
 	Unload(...interface{})
 	Drivers() Drivers
 	Handler(...interface{}) DBMSHandler
@@ -170,8 +170,8 @@ func (d *dbms) Unload(a ...interface{}) {
 	}
 }
 
-// LoadDBMS implements DBMS.
-func (d *dbms) LoadDBMS(a ...interface{}) {
+// Load implements DBMS.
+func (d *dbms) Load(a ...interface{}) {
 	if d == nil {
 		return
 	}
