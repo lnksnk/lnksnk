@@ -12,6 +12,8 @@ import (
 )
 
 type MultiFileSystem interface {
+	Load(a ...interface{})
+	Unload(a ...interface{})
 	Open(string) File
 	OpenContext(context.Context, string) File
 	List(...string) []FileInfo
@@ -58,6 +60,157 @@ type multifilesys struct {
 	chdexts   map[string]bool
 	actvexts  map[string]bool
 	dfltexts  map[string]bool
+}
+
+// Unload implements MultiFileSystem.
+func (mltyfsys *multifilesys) Unload(a ...interface{}) {
+	if mltyfsys == nil {
+		return
+	}
+	var mltyfsconfig []interface{}
+	fsystms, wtchdfsys, wtchr := mltyfsys.fsystms, mltyfsys.wtchdfsys, mltyfsys.wtchr
+	var eventsfsysms *ioext.MapIterateEvents[string, FileSystem]
+	ctxfsysms, cnclfsysms := context.WithCancel(context.Background())
+	defer cnclfsysms()
+	if fsystms != nil {
+		eventsfsysms = fsystms.Events().(*ioext.MapIterateEvents[string, FileSystem])
+	}
+	var eventswtchdfys *ioext.MapIterateEvents[string, FileSystem]
+	ctxwtchdfsys, cnclwtchdfsys := context.WithCancel(context.Background())
+	defer cnclwtchdfsys()
+	if wtchdfsys != nil {
+		eventswtchdfys = wtchdfsys.Events().(*ioext.MapIterateEvents[string, FileSystem])
+	}
+	al := len(a)
+	if al > 0 {
+		var delfsys []string
+		in, _ := ioext.NewBuffer(a...).Reader(true).Marshal()
+		if arrs, arrk := in.([]string); arrk {
+			for _, as := range arrs {
+				if as != "" {
+					mltyfsconfig = append(mltyfsconfig, as)
+				}
+			}
+		} else if arri, arrik := in.([]interface{}); arrik {
+			if len(arri) > 0 {
+				mltyfsconfig = arri
+			}
+		}
+
+		if len(mltyfsconfig) > 0 {
+			for _, fsnd := range mltyfsconfig {
+				if as, ask := fsnd.(string); ask && as != "" {
+					delfsys = append(delfsys, as)
+				}
+			}
+		}
+		if len(delfsys) > 0 {
+			if fsystms != nil {
+				eventsfsysms.EventDeleted = func(dlmp map[string]FileSystem) {
+					defer cnclfsysms()
+					for _, dlfsys := range dlmp {
+						dlfsys.Close()
+					}
+				}
+				fsystms.Delete(delfsys...)
+				<-ctxfsysms.Done()
+			}
+			if wtchdfsys != nil {
+				eventswtchdfys.EventDeleted = func(dlmp map[string]FileSystem) {
+					defer cnclwtchdfsys()
+					for dlwtchpth, dlwtchfsys := range dlmp {
+						if wtchr != nil {
+							wtchr.Remove(dlwtchpth)
+						}
+						dlwtchfsys.Close()
+					}
+				}
+				wtchdfsys.Delete(delfsys...)
+				<-ctxwtchdfsys.Done()
+				if wtchdfsys.Empty() {
+					mltyfsys.wtchr = nil
+					wtchr.Close()
+				}
+			}
+		}
+		return
+	}
+	if fsystms != nil {
+		eventsfsysms.EventDisposed = func(dlmp map[string]FileSystem) {
+			defer cnclfsysms()
+			for _, dlfsys := range dlmp {
+				dlfsys.Close()
+			}
+		}
+		fsystms.Close()
+		<-ctxfsysms.Done()
+	}
+	if wtchdfsys != nil {
+		eventswtchdfys.EventDisposed = func(dlmp map[string]FileSystem) {
+			defer cnclwtchdfsys()
+			for dlwtchpth, dlwtchfsys := range dlmp {
+				if wtchr != nil {
+					wtchr.Remove(dlwtchpth)
+				}
+				dlwtchfsys.Close()
+			}
+		}
+		wtchdfsys.Close()
+		<-ctxwtchdfsys.Done()
+		if wtchdfsys.Empty() {
+			mltyfsys.wtchr = nil
+			wtchr.Close()
+		}
+	}
+}
+
+// Load implements MultiFileSystem.
+func (mltyfsys *multifilesys) Load(a ...interface{}) {
+	if mltyfsys == nil || len(a) == 0 {
+		return
+	}
+	var filesysconf map[string]interface{}
+	ai := 0
+	if al := len(a); al > 0 {
+		for ai < al {
+			if confd, confdk := a[ai].(map[string]interface{}); confdk {
+				if len(confd) > 0 {
+					if filesysconf == nil {
+						filesysconf = confd
+					} else {
+						for ck, cv := range confd {
+							filesysconf[ck] = cv
+						}
+					}
+				}
+				a = append(a[:ai], a[ai+1:]...)
+				al--
+				continue
+			}
+			ai++
+		}
+		if al > 0 {
+			in, _ := ioext.NewBuffer(a...).Reader(true).Marshal()
+			if cnfd, cnfk := in.(map[string]interface{}); cnfk {
+				if len(cnfd) > 0 {
+					if filesysconf == nil {
+						filesysconf = cnfd
+					} else {
+						for ck, cv := range cnfd {
+							filesysconf[ck] = cv
+						}
+					}
+				}
+			}
+		}
+	}
+	if len(filesysconf) == 0 {
+		return
+	}
+	for path, pthv := range filesysconf {
+		pths, _ := pthv.(string)
+		mltyfsys.Map(path, pths)
+	}
 }
 
 // Notify implements MultiFileSystem.
@@ -505,13 +658,18 @@ func (mltyfsys *multifilesys) Map(path ...interface{}) (fsys FileSystem) {
 		return
 	}
 	if fsystms := mltyfsys.fsystms; fsystms != nil {
-		if fsys, _ = fsystms.Get(path[0].(string)); fsys != nil {
-			return
-		}
 		raw := strings.Contains(path[0].(string), "/raw:")
 		if raw {
 			path[0] = strings.Replace(path[0].(string), "/raw:", "", 1)
 		}
+		async = strings.Contains(path[0].(string), "/sync:")
+		if async {
+			path[0] = strings.Replace(path[0].(string), "/sync:", "", 1)
+		}
+		if fsys, _ = fsystms.Get(path[0].(string)); fsys != nil {
+			return
+		}
+
 		if fsys = NewFileSystem(func() string {
 			if len(path) <= 1 {
 				return ""
