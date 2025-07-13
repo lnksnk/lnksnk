@@ -20,16 +20,16 @@ import (
 	sessioning "github.com/lnksnk/lnksnk/serve/serveio/session"
 )
 
-var MAINSESSSION sessioning.Session
+var MAINSESSION sessioning.Session
 var SESSIONS sessioning.Sessions
 var HTTPSessionHandler sessioning.SessionHttpFunc
 
 func init() {
 
-	MAINSESSSION = sessioning.NewSession(nil, globalfs.FSYS)
-	SESSIONS = MAINSESSSION.Sessions()
+	MAINSESSION = sessioning.NewSession(nil, globalfs.FSYS)
+	SESSIONS = MAINSESSION.Sessions()
 	HTTPSessionHandler = sessioning.SessionHttpFunc(func(w http.ResponseWriter, r *http.Request) {
-		ssn := HTTPSessionHandler.Session(MAINSESSSION, w, r, globalfs.FSYS)
+		ssn := HTTPSessionHandler.Session(MAINSESSION, w, r, globalfs.FSYS)
 		SESSIONS.Set(SESSIONS.UniqueKey(), ssn)
 		defer func() {
 			if ssn != nil {
