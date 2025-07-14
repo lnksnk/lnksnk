@@ -281,6 +281,9 @@ func (mltyfsys *multifilesys) StatContext(ctx context.Context, path string) (fi 
 		}
 	}
 	fsystms := mltyfsys.fsystms
+	if path != "" && path[0] != '/' {
+		path = "/" + path
+	}
 	if path != "" && filepath.Ext(path) == "" && path[len(path)-1] != '/' {
 		path += "/"
 	}
